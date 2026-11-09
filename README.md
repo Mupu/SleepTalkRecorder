@@ -8,9 +8,13 @@ into the recording (6:10:00) and as the real time it happened (07:38).
 
 Recordings never leave the phone: there is no account, no network access and no cloud.
 
-## Status
+## Architecture
 
-Nothing but an empty app yet. Planning, research and the decisions so far live in the
+One Android module in Kotlin and Jetpack Compose. A foreground service records the microphone into
+15-minute WAV files in the app's private storage; a Room database keeps each sleep and its
+recordings with the UTC instant of their first sample, and every position is derived from sample
+counts. [`ARCHITECTURE.md`](ARCHITECTURE.md) describes the packages, the recording and storage
+design and the time model. Planning, research and decisions live in the
 [GitHub issues](https://github.com/Mupu/SleepTalkRecorder/issues), starting with the
 wayfinder map.
 
@@ -109,6 +113,7 @@ The same signed APK can also be copied to a phone and opened there; Android then
 ## Repository guide
 
 - [`AGENTS.md`](AGENTS.md): working rules for everyone, human or agent.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md): how the app is built.
 - [`docs/standards/`](docs/standards/code.md): how code is written and reviewed.
 - [`docs/agents/`](docs/agents/git.md): Git policy, releases, issue tracker and documentation rules.
 - [`CHANGELOG.md`](CHANGELOG.md): what changed for users; the app shows it under "What's new".

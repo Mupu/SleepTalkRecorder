@@ -1,5 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Sleep Talk Recorder</string>
-    <string name="version_label">Version %1$s</string>
+
+    <!-- Sleep names. %1$s and %2$s are days formatted with the date patterns below. -->
+    <string name="night_title">Night of %1$s to %2$s</string>
+    <string name="nap_title">Nap on %1$s</string>
+    <!-- java.time patterns: the first day of a night when both days are in the same month, a day
+         with its month, and the date above a group of sleeps in the library. -->
+    <string name="date_pattern_day" translatable="false">d</string>
+    <string name="date_pattern_day_month" translatable="false">d MMMM</string>
+    <string name="date_pattern_group" translatable="false">EEEE, d MMMM</string>
+
+    <string name="duration_seconds">%1$d s</string>
+    <string name="duration_minutes">%1$d min</string>
+    <string name="duration_hours_minutes">%1$d h %2$02d min</string>
+    <string name="time_range">%1$s–%2$s</string>
+
+    <!-- Navigation -->
+    <string name="library">Library</string>
+    <string name="settings">Settings</string>
+    <string name="back">Back</string>
+
+    <!-- Home -->
+    <string name="ready">Ready for the night</string>
+    <string name="record">Record</string>
+    <string name="stop">Stop</string>
+    <string name="starting">Starting…</string>
+    <string name="live">REC</string>
+    <string name="meter_idle">The level shows while recording</string>
+    <string name="level_dbfs">%1$d dBFS</string>
+    <string name="last_sleep">Last sleep</string>
+    <string name="problem_not_allowed">Recording needs the microphone permission.</string>
+    <string name="problem_microphone">The microphone is not available. The recording stopped.</string>
+    <string name="problem_storage">The storage is full or not writable. The recording stopped.</string>
+
+    <!-- Library -->
+    <string name="running_since">running since %1$s</string>
+    <string name="live_tag">LIVE</string>
+    <plurals name="recording_count">
+        <item quantity="one">%d recording</item>
+        <item quantity="other">%d recordings</item>
+    </plurals>
+    <string name="library_empty">No sleeps yet. Start a recording on the home screen before you go to sleep.</string>
+
+    <!-- Notification -->
+    <string name="notification_channel_recording">Recording</string>
+    <string name="notification_channel_recording_description">Shows that a sleep is being recorded, with a Stop button.</string>
+    <string name="notification_recording_title">Recording</string>
 </resources>

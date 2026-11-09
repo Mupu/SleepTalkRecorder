@@ -4,6 +4,8 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
 }
 
 // CHANGELOG.md is the single source of truth for the app version: the newest released
@@ -84,12 +86,27 @@ kotlin {
     jvmToolchain(21)
 }
 
+// Exported schemas are tracked so that, from the first real release on, every schema change can
+// be checked against them and get a Room migration.
+room {
+    schemaDirectory("$projectDir/schemas")
+}
+
 dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.kotlinx.coroutines.android)
+    ksp(libs.androidx.room.compiler)
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
 
 // An unsigned release APK cannot be installed, so say so after every release build without a key.

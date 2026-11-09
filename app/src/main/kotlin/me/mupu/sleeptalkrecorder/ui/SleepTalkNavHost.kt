@@ -1,0 +1,66 @@
+package me.mupu.sleeptalkrecorder.ui
+
+import androidx.compose.runtime.Composable
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import me.mupu.sleeptalkrecorder.AppContainer
+import me.mupu.sleeptalkrecorder.ui.home.HomeScreen
+import me.mupu.sleeptalkrecorder.ui.home.HomeViewModel
+import me.mupu.sleeptalkrecorder.ui.library.LibraryScreen
+import me.mupu.sleeptalkrecorder.ui.library.LibraryViewModel
+import me.mupu.sleeptalkrecorder.ui.settings.SettingsScreen
+import me.mupu.sleeptalkrecorder.ui.sleep.SleepScreen
+import me.mupu.sleeptalkrecorder.ui.sleep.SleepViewModel
+
+/** The app's screens. Home is the start; the others are opened from it and go back to it. */
+private object Routes {
+    const val HOME = "home"
+    const val LIBRARY = "library"
+    const val SETTINGS = "settings"
+    const val SLEEP_ID = "sleepId"
+    const val SLEEP = "sleep/{$SLEEP_ID}"
+
+    fun sleep(id: Long) = "sleep/$id"
+}
+
+/** Navigation between home, library, settings and the sleep screen. */
+@Composable
+fun SleepTalkNavHost(container: AppContainer) {
+    val navController = rememberNavController()
+
+    NavHost(navController = navController, startDestination = Routes.HOME) {
+        composable(Routes.HOME) {
+            HomeScreen(
+                viewModel = viewModel { HomeViewModel(container.recorder, container.sleepRepository) },
+                onOpenLibrary = { navController.navigate(Routes.LIBRARY) },
+                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                onOpenSleep = { navController.navigate(Routes.sleep(it)) },
+            )
+        }
+        composable(Routes.LIBRARY) {
+            LibraryScreen(
+                viewModel = viewModel { LibraryViewModel(container.recorder, container.sleepRepository) },
+                onBack = { navController.popBackStack() },
+                onOpenRunning = { navController.popBackStack(Routes.HOME, inclusive = false) },
+                onOpenSleep = { navController.navigate(Routes.sleep(it)) },
+            )
+        }
+        composable(Routes.SETTINGS) {
+            SettingsScreen(onBack = { navController.popBackStack() })
+        }
+        composable(
+            Routes.SLEEP,
+            arguments = listOf(navArgument(Routes.SLEEP_ID) { type = NavType.LongType }),
+        ) { entry ->
+            val sleepId = entry.arguments?.getLong(Routes.SLEEP_ID) ?: return@composable
+            SleepScreen(
+                viewModel = viewModel { SleepViewModel(sleepId, container.sleepRepository) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+    }
+}
