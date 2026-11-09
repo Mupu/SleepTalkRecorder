@@ -104,6 +104,17 @@ interface SleepDao {
     @Query("SELECT * FROM annotation WHERE sleep_id = :sleepId AND type = :type ORDER BY start_ms, id")
     fun annotations(sleepId: Long, type: AnnotationType): Flow<List<AnnotationEntity>>
 
+    /** The sensitivities the user set for stretches of a sleep, in the order they were set. */
+    @Query("SELECT * FROM annotation WHERE sleep_id = :sleepId AND type = 'SENSITIVITY' AND origin = 'USER' ORDER BY id")
+    suspend fun userSensitivities(sleepId: Long): List<AnnotationEntity>
+
+    /** [userSensitivities] as they change. */
+    @Query("SELECT * FROM annotation WHERE sleep_id = :sleepId AND type = 'SENSITIVITY' AND origin = 'USER' ORDER BY id")
+    fun userSensitivityFlow(sleepId: Long): Flow<List<AnnotationEntity>>
+
+    @Query("DELETE FROM annotation WHERE id IN (:ids)")
+    suspend fun deleteAnnotations(ids: List<Long>)
+
     /** Removes what [producer] found in a sleep, before it stores its new results. */
     @Query("DELETE FROM annotation WHERE sleep_id = :sleepId AND origin = :origin AND producer = :producer")
     suspend fun deleteResults(sleepId: Long, origin: AnnotationOrigin, producer: String)

@@ -18,6 +18,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -27,6 +29,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -72,19 +76,44 @@ import java.time.ZoneId
  *
  * The list highlights the event at the playhead and scrolls to it. Auto zoom, on until the user
  * pans or zooms the timeline by hand, frames that event and keeps the playhead in view.
+ *
+ * The sensitivity of the sleep is set from the app bar's menu, that around an event from the
+ * event's menu, in [SensitivitySheet].
  */
 @Composable
 fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val sensitivity by viewModel.sensitivity.collectAsStateWithLifecycle()
     val resources = LocalResources.current
     val zone = ZoneId.systemDefault()
+    val snackbars = remember { SnackbarHostState() }
 
     // Playback has no notification or lock-screen controls, so it stops with the screen.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.pause() }
 
+    LaunchedEffect(viewModel) {
+        viewModel.sensitivityApplied.collect { applied ->
+            val message = if (applied.wholeSleep) R.plurals.sensitivity_applied_sleep else R.plurals.sensitivity_applied_event
+            snackbars.showSnackbar(resources.getQuantityString(message, applied.events, applied.events))
+        }
+    }
+
     val sleep = state.sleep
     val title = sleep?.let { sleepTitle(resources, SleepDate.of(it.startedAt, zone)) }.orEmpty()
-    Scaffold(topBar = { AppBar(title, navigationIcon = { BackIcon(onBack) }) }) { padding ->
+    Scaffold(
+        topBar = {
+            AppBar(
+                title,
+                navigationIcon = { BackIcon(onBack) },
+                actions = {
+                    if (state.sensitivityAvailable) {
+                        MoreMenu(stringResource(R.string.sensitivity_sleep), onClick = { viewModel.openSensitivity(null) })
+                    }
+                },
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbars) },
+    ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             if (sleep != null) {
                 Text(
@@ -148,8 +177,43 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
                         viewModel.seekToEvent(event)
                     },
                     onTogglePlay = viewModel::togglePlayEvent,
+                    onSensitivity = if (state.sensitivityAvailable) viewModel::openSensitivity else null,
                 )
+
+                sensitivity?.let { sheet ->
+                    SensitivitySheet(
+                        state = sheet,
+                        timeline = timeline,
+                        position = player.position,
+                        onThreshold = viewModel::setSensitivity,
+                        onReset = viewModel::resetSensitivity,
+                        onListen = viewModel::listenToSensitivity,
+                        onApply = viewModel::applySensitivity,
+                        onDismiss = viewModel::closeSensitivity,
+                    )
+                }
             }
+        }
+    }
+}
+
+/** A "more options" button whose menu holds the one entry [label], with the sensitivity icon. */
+@Composable
+private fun MoreMenu(label: String, onClick: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) {
+            Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.more_options))
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text(label) },
+                leadingIcon = { Icon(painterResource(R.drawable.ic_tune), contentDescription = null) },
+                onClick = {
+                    open = false
+                    onClick()
+                },
+            )
         }
     }
 }
@@ -245,7 +309,8 @@ private fun PlaybackMode(cut: Boolean, enabled: Boolean, onCutChange: (Boolean) 
 }
 
 /**
- * The events of the sleep in order; a tap shows one on the timeline, its button plays it alone.
+ * The events of the sleep in order; a tap shows one on the timeline, its button plays it alone,
+ * and its menu opens the sensitivity around it while [onSensitivity] is given.
  * The event at the playhead is highlighted and scrolled into view.
  */
 @Composable
@@ -257,6 +322,7 @@ private fun EventList(
     playingEventId: Long?,
     onSelect: (SleepEvent) -> Unit,
     onTogglePlay: (SleepEvent) -> Unit,
+    onSensitivity: ((SleepEvent) -> Unit)?,
 ) {
     val listState = rememberLazyListState()
     LaunchedEffect(currentEventId) {
@@ -282,6 +348,7 @@ private fun EventList(
                 playing = event.id == playingEventId,
                 onSelect = onSelect,
                 onTogglePlay = onTogglePlay,
+                onSensitivity = onSensitivity,
             )
         }
         if (sleep != null && events.isEmpty()) {
@@ -306,6 +373,7 @@ private fun EventRow(
     playing: Boolean,
     onSelect: (SleepEvent) -> Unit,
     onTogglePlay: (SleepEvent) -> Unit,
+    onSensitivity: ((SleepEvent) -> Unit)?,
 ) {
     val clock = LocalClockFormatter.current
     val resources = LocalResources.current
@@ -348,6 +416,7 @@ private fun EventRow(
                 contentDescription = stringResource(if (playing) R.string.pause_event else R.string.play_event),
             )
         }
+        if (onSensitivity != null) MoreMenu(stringResource(R.string.sensitivity_here), onClick = { onSensitivity(event) })
     }
 }
 

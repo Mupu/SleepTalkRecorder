@@ -5,7 +5,9 @@ import android.util.Log
 import androidx.room.withTransaction
 import me.mupu.sleeptalkrecorder.detection.EventDetector
 import me.mupu.sleeptalkrecorder.detection.FeatureTrackFile
+import me.mupu.sleeptalkrecorder.detection.SensitivityOverride
 import me.mupu.sleeptalkrecorder.detection.SleepTrack
+import me.mupu.sleeptalkrecorder.detection.replacedBy
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
 import me.mupu.sleeptalkrecorder.playback.TimelineRecording
@@ -49,6 +51,9 @@ class SleepRepository(
     /** Serialises reading feature tracks, so a track being rebuilt is never rebuilt twice at once. */
     private val trackLock = Mutex()
 
+    /** Serialises finding events, so the last search stored is the one that read the latest settings. */
+    private val detectionLock = Mutex()
+
     /** All sleeps, the most recently started first; the running one, if any, is among them. */
     fun sleeps(): Flow<List<SleepSummary>> = dao.sleeps(DETECTOR, DETECTOR_VERSION)
 
@@ -91,17 +96,63 @@ class SleepRepository(
         }
     }
 
+    /** The sensitivities the user set for stretches of a sleep, oldest first. */
+    fun sensitivityOverrides(sleepId: Long): Flow<List<SensitivityOverride>> =
+        dao.userSensitivityFlow(sleepId).map { annotations -> annotations.map(::overrideOf) }
+
     /**
-     * Finds the events of a sleep and stores them, with the sensitivity chosen for it, in place of
-     * what the detector found before. Annotations of other origins, such as the user's, stay. Only
-     * a finished sleep is searched.
+     * Sets the sensitivity of a sleep from [start] until [end] of its audio to a start threshold
+     * of [thresholdDb] above the baseline, or, with null, takes back what the user set there, and
+     * finds the sleep's events again. The user's earlier settings that lie within the stretch are
+     * replaced; the new one counts over the others where they overlap.
+     *
+     * Returns the events now stored, or null if the sleep was not searched.
      */
-    suspend fun findEvents(sleepId: Long) {
+    suspend fun setSensitivity(sleepId: Long, start: Duration, end: Duration, thresholdDb: Float?): List<Stretch>? {
+        database.withTransaction {
+            val replaced = dao.userSensitivities(sleepId).map(::overrideOf).replacedBy(start, end)
+            dao.deleteAnnotations(replaced.map { it.id })
+            if (thresholdDb != null) {
+                dao.insertAnnotations(
+                    listOf(
+                        AnnotationEntity(
+                            sleepId = sleepId,
+                            type = AnnotationType.SENSITIVITY,
+                            startMillis = start.toMillis(),
+                            endMillis = end.toMillis(),
+                            value = thresholdDb.toDouble(),
+                            origin = AnnotationOrigin.USER,
+                        ),
+                    ),
+                )
+            }
+        }
+        return findEvents(sleepId)
+    }
+
+    private fun overrideOf(annotation: AnnotationEntity) = SensitivityOverride(
+        start = Duration.ofMillis(annotation.startMillis),
+        end = Duration.ofMillis(annotation.endMillis),
+        thresholdDb = annotation.value?.toFloat() ?: 0f,
+        id = annotation.id,
+    )
+
+    /**
+     * Finds the events of a sleep, with the sensitivities the user set for it, and stores them,
+     * with the automatic sensitivity chosen for it, in place of what the detector found before.
+     * Annotations of other origins, such as the user's, stay. Only a finished sleep is searched.
+     *
+     * Returns the events stored, or null if the sleep was not searched or changed meanwhile.
+     */
+    suspend fun findEvents(sleepId: Long): List<Stretch>? = detectionLock.withLock {
+        // One search at a time, so a search that read the user's settings before they changed
+        // never stores its events after the search that follows the change.
         val started = System.nanoTime()
-        val end = dao.findSleep(sleepId)?.endedAt ?: return
+        val end = dao.findSleep(sleepId)?.endedAt ?: return null
         val track = track(sleepId)
+        val overrides = dao.userSensitivities(sleepId).map(::overrideOf)
         val loaded = System.nanoTime()
-        val detection = withContext(Dispatchers.Default) { EventDetector.detect(track.track) }
+        val detection = withContext(Dispatchers.Default) { track.detect(overrides) }
 
         fun millis(hop: Int) = track.positionOf(hop).toMillis()
         val events = detection.events.map { event ->
@@ -118,12 +169,14 @@ class SleepRepository(
             dao.insertAnnotations(events + sensitivity)
             true
         }
-        if (!stored) return
+        if (!stored) return null
         Log.i(
             TAG,
-            "Sleep $sleepId: ${events.size} events in ${track.track.size} hops; reading the track took " +
-                "${(loaded - started) / 1_000_000} ms, finding the events ${(System.nanoTime() - loaded) / 1_000_000} ms",
+            "Sleep $sleepId: ${events.size} events in ${track.track.size} hops with ${overrides.size} sensitivities " +
+                "of the user; reading the track took ${(loaded - started) / 1_000_000} ms, finding the events " +
+                "${(System.nanoTime() - loaded) / 1_000_000} ms",
         )
+        events.map { Stretch(Duration.ofMillis(it.startMillis), Duration.ofMillis(it.endMillis)) }
     }
 
     /**

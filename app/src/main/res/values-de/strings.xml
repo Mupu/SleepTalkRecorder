@@ -78,6 +78,42 @@
     <string name="kind_event">Ereignis</string>
     <string name="play_event">Dieses Ereignis abspielen</string>
     <string name="pause_event">Dieses Ereignis anhalten</string>
+    <string name="more_options">Weitere Optionen</string>
+
+    <!-- Sensitivity sheet -->
+    <string name="sensitivity_here">Empfindlichkeit hier</string>
+    <string name="sensitivity_sleep">Empfindlichkeit für diesen Schlaf</string>
+    <string name="sensitivity_title_event">Empfindlichkeit um %1$s</string>
+    <string name="sensitivity_window">Ausschnitt %1$s–%2$s (Ereignis ±30 s)</string>
+    <string name="sensitivity_sleep_only">Gilt nur für diesen Schlaf, nicht für andere.</string>
+    <string name="sensitivity_chart">Lautstärke mit Grundpegel und Empfindlichkeit</string>
+    <string name="sensitivity_found">gefunden</string>
+    <string name="baseline">Grundpegel</string>
+    <string name="sensitivity_line">Empfindlichkeit</string>
+    <string name="less_sensitive">weniger empfindlich</string>
+    <string name="more_sensitive">empfindlicher</string>
+    <string name="sensitivity_value">Ereignis ab %1$s dB über dem Grundpegel</string>
+    <plurals name="sensitivity_result_event">
+        <item quantity="one">%1$d Ereignis in diesem Ausschnitt (vorher %2$d)</item>
+        <item quantity="other">%1$d Ereignisse in diesem Ausschnitt (vorher %2$d)</item>
+    </plurals>
+    <plurals name="sensitivity_result_sleep">
+        <item quantity="one">%1$d Ereignis in diesem Schlaf (vorher %2$d)</item>
+        <item quantity="other">%1$d Ereignisse in diesem Schlaf (vorher %2$d)</item>
+    </plurals>
+    <string name="sensitivity_scope_event">Ändert nur diesen Ausschnitt.</string>
+    <string name="sensitivity_scope_sleep">Ersetzt die Empfindlichkeit, die um einzelne Ereignisse eingestellt ist.</string>
+    <string name="listen">Anhören</string>
+    <string name="reset">Zurücksetzen</string>
+    <string name="apply">Übernehmen</string>
+    <plurals name="sensitivity_applied_event">
+        <item quantity="one">Ausschnitt neu durchsucht: %d Ereignis</item>
+        <item quantity="other">Ausschnitt neu durchsucht: %d Ereignisse</item>
+    </plurals>
+    <plurals name="sensitivity_applied_sleep">
+        <item quantity="one">Schlaf neu durchsucht: %d Ereignis</item>
+        <item quantity="other">Schlaf neu durchsucht: %d Ereignisse</item>
+    </plurals>
 
     <!-- Settings -->
     <string name="settings_appearance">Darstellung</string>

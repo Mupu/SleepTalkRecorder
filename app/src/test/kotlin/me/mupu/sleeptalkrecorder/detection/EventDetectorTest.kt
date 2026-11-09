@@ -102,8 +102,71 @@ class EventDetectorTest {
         assertEquals(11.5, events[0].end / HOPS_PER_SECOND, 0.1)
     }
 
+    @Test
+    fun `an override changes the threshold only in its stretch`() {
+        // A steady floor gets the lowest automatic threshold, 5 dB, which two sounds 4 dB above it stay
+        // below; a loud sound clears it.
+        val level = floor(minutes = 5, db = -60.0, spread = 0.5)
+            .burst(fromSecond = 60.0, seconds = 2.0, db = -56.0)
+            .burst(fromSecond = 200.0, seconds = 2.0, db = -56.0)
+            .burst(fromSecond = 250.0, seconds = 2.0, db = -40.0)
+
+        val lower = ThresholdOverride(hopsOf(fromSecond = 30.0, toSecond = 90.0), thresholdDb = 3f)
+        val higher = ThresholdOverride(hopsOf(fromSecond = 240.0, toSecond = 260.0), thresholdDb = 25f)
+        val events = EventDetector.detect(trackOf(level), overrides = listOf(lower, higher)).events
+
+        assertEquals(listOf(60.0 to 62.0), events.map { seconds(it) })
+    }
+
+    @Test
+    fun `where overrides overlap, the newer one counts`() {
+        val level = floor(minutes = 2, db = -60.0, spread = 0.5).burst(fromSecond = 60.0, seconds = 2.0, db = -56.0)
+
+        val narrow = ThresholdOverride(hopsOf(fromSecond = 50.0, toSecond = 70.0), thresholdDb = 3f)
+        val wide = ThresholdOverride(hopsOf(fromSecond = 0.0, toSecond = 120.0), thresholdDb = 10f)
+
+        // Overrides are listed oldest first.
+        assertEquals(1, EventDetector.detect(trackOf(level), overrides = listOf(wide, narrow)).events.size)
+        assertEquals(0, EventDetector.detect(trackOf(level), overrides = listOf(narrow, wide)).events.size)
+    }
+
+    @Test
+    fun `a re-scan of a range finds there what a detection with the same overrides finds`() {
+        val level = floor(minutes = 5, db = -60.0, spread = 0.5)
+            .burst(fromSecond = 60.0, seconds = 2.0, db = -56.0)
+            .burst(fromSecond = 75.0, seconds = 1.0, db = -45.0)
+            .burst(fromSecond = 200.0, seconds = 2.0, db = -56.0)
+        val track = trackOf(level)
+        val range = hopsOf(fromSecond = 30.0, toSecond = 90.0)
+        val overrides = listOf(ThresholdOverride(range, thresholdDb = 3f))
+
+        val automatic = EventDetector.detect(track)
+        val rescanned = EventDetector.rescan(automatic, range, overrides)
+
+        assertEquals(listOf(60.0 to 62.0, 75.0 to 76.0), rescanned.map { seconds(it) })
+        assertEquals(EventDetector.detect(track, overrides = overrides).events.filter { it.end > range.start && it.start < range.end }, rescanned)
+        assertEquals("the automatic detection is left as it was", listOf(75.0 to 76.0), automatic.events.map { seconds(it) })
+    }
+
+    @Test
+    fun `the threshold at a hop is that of the newest override covering it`() {
+        val detection = EventDetector.detect(trackOf(floor(minutes = 1, db = -50.0, spread = 0.5)))
+        val overrides = listOf(
+            ThresholdOverride(HopRange(100, 300), thresholdDb = 8f),
+            ThresholdOverride(HopRange(200, 400), thresholdDb = 12f),
+        )
+
+        assertEquals(detection.thresholdDb, detection.thresholdAt(50, overrides), 0f)
+        assertEquals(8f, detection.thresholdAt(150, overrides), 0f)
+        assertEquals(12f, detection.thresholdAt(250, overrides), 0f)
+        assertEquals(detection.thresholdDb, detection.thresholdAt(400, overrides), 0f)
+    }
+
     /** An event's start and end in seconds, to the nearest half second. */
     private fun seconds(range: HopRange) = halfSeconds(range.start) to halfSeconds(range.end)
+
+    private fun hopsOf(fromSecond: Double, toSecond: Double) =
+        HopRange((fromSecond * HOPS_PER_SECOND).roundToInt(), (toSecond * HOPS_PER_SECOND).roundToInt())
 
     private fun halfSeconds(hop: Int) = (hop / HOPS_PER_SECOND * 2).roundToInt() / 2.0
 

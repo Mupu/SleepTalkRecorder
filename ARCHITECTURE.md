@@ -25,7 +25,8 @@ The root package holds `MainActivity`, the only activity, and `SleepTalkApplicat
 `SettingsStore`, the `Recorder` and the `ModelLibrary`; it also keeps automatic deletion scheduled
 and starts the search for events of finished sleeps. Logic that can be tested without a device
 (`time`, `detection`, the WAV writer, the recording session, level computation, the sleep
-timeline and its audio stream, the cut plan, the timeline view of the sleep screen, the settings,
+timeline and its audio stream, the cut plan, the timeline view of the sleep screen, the
+sensitivity sheet's re-scan, the settings,
 which sleeps automatic deletion removes, the model downloads and states) is plain Kotlin behind
 small interfaces (`PcmSource`, `RecordingStore`, `Clocks`, `ByteSource`, `ModelDownloads`) and is
 unit-tested on the JVM.
@@ -138,7 +139,8 @@ Room (`SleepDatabase`) holds four tables:
 - `annotation`: every result about a stretch of a sleep, with its origin. The stretch is given in
   milliseconds of the sleep's audio (the playing axis, see [Time model](#time-model)), so it does
   not depend on the detector's hop size. The `type` says what the annotation states (`EVENT` with
-  a kind, `SENSITIVITY` with the start threshold the detector chose, in `value`,
+  a kind, `SENSITIVITY` with a start threshold in `value`: the one the detector chose for the
+  sleep, or one the user set for the stretch,
   `MICROPHONE_UNAVAILABLE` from the recorder), and `origin` (`DEVICE`, `SERVER` or `USER`),
   `producer` and `producer_version` say who stated it. Gaps between recordings take no time on
   this axis and need no annotation: they follow from the recordings' start instants and lengths.
@@ -197,7 +199,8 @@ each hop to its exact position in the sleep):
 3. The *sensitivity* is chosen per sleep: the start threshold above the baseline is the median of
    the residual (level minus baseline) plus a multiple of the noise spread, the distance from the
    residual's 16th percentile to its median, held between 5 and 25 dB. Events lie in the upper
-   tail and do not move it, so a noisy night gets a higher threshold than a quiet one.
+   tail and do not move it, so a noisy night gets a higher threshold than a quiet one. Where the
+   user set a sensitivity, their threshold replaces it (see [Sensitivity](#sensitivity)).
 4. A hysteresis state machine starts an event after 60 ms above the start threshold and ends it
    after 300 ms below a stop threshold 40 % lower. Events shorter than the minimum length are
    dropped, and events less than 1.5 s apart are joined.
@@ -205,10 +208,12 @@ each hop to its exact position in the sleep):
 Every knob is a named parameter of `DetectionParams`; one sensitivity setting from 0 to 1 sets the
 noise-spread multiple and the minimum length together.
 
-`SleepRepository.findEvents` stores the events and the chosen threshold as annotations of the
-producer `loudness`, whose version combines the detector's and the feature format's versions. It
-only stores them while the sleep is still finished as it was when the search began, so a sleep
-continued by a new recording meanwhile is searched again after that recording.
+`SleepRepository.findEvents` finds them with the sensitivities the user set and stores the events
+and the chosen threshold as annotations of the producer `loudness`, whose version combines the
+detector's and the feature format's versions. It only stores them while the sleep is still
+finished as it was when the search began, so a sleep continued by a new recording meanwhile is
+searched again after that recording. Searches run one at a time, so the last one stored always
+read the latest settings.
 `AppContainer` searches every finished sleep without annotations of the current version: after
 each recording ends and once at process start, which also covers a recording a killed process left
 behind and a detector that changed with an update.
@@ -218,6 +223,24 @@ except where an event lies, with the baseline as a dashed line. The timeline run
 (see [Time model](#time-model)), so gaps between recordings take their real width; they and the
 stretches in which the microphone was unavailable are hatched. `SleepLoudness` keeps maxima of
 16, 256 and 4 096 hops, so every column of the timeline reads only a few values at any zoom.
+
+### Sensitivity
+
+The automatic sensitivity can be overridden for one sleep, from the sleep screen's menu, or for
+the stretch from 30 s before to 30 s after an event, from the event's menu. Each override is a
+`SENSITIVITY` annotation of the user: a stretch of the sleep's audio with a start threshold above
+the baseline. It names positions, not hops or events, so every later search uses it again, also
+one by a changed detector, and re-scans never remove it, since they replace only the detector's
+own annotations. Where overrides overlap, the newer one counts; a new one replaces those that lie
+within its stretch, so the sleep's own setting replaces all others, and a reset takes back those
+of its stretch.
+
+The sensitivity sheet shows its stretch's level, baseline and threshold with the events found,
+and how many there are now and were before. The level, baseline and automatic threshold do not
+depend on the threshold, so moving the slider runs only the detector's state machine again
+(`EventDetector.rescan`) over the stretch and 30 s on either side: milliseconds even for a whole
+night, cancelled by the next move. Applying stores the override and searches the whole sleep
+again, so the stored events are exactly those a later search finds.
 
 ## Transcription models
 

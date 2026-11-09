@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.SleepRepository
 import me.mupu.sleeptalkrecorder.data.SleepSummary
+import me.mupu.sleeptalkrecorder.detection.Detection
 import me.mupu.sleeptalkrecorder.detection.EventDetector
+import me.mupu.sleeptalkrecorder.detection.SleepTrack
 import me.mupu.sleeptalkrecorder.playback.CutPlan
 import me.mupu.sleeptalkrecorder.playback.SleepPlayer
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
@@ -15,10 +17,17 @@ import me.mupu.sleeptalkrecorder.settings.SettingsStore
 import java.time.Duration
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -61,18 +70,48 @@ data class SleepUiState(
     val playingEventId: Long? = null,
     /** The event at the playhead (see [currentEvent]), which the list highlights and auto zoom frames. */
     val currentEvent: SleepEvent? = null,
+    /** Whether the sensitivity can be set: the sleep is finished, its events found and its loudness read. */
+    val sensitivityAvailable: Boolean = false,
 )
 
+/** The sensitivity sheet while it is open, for the whole sleep or around one event. */
+data class SensitivityUiState(
+    /** The event the sheet was opened from; null for the whole sleep. */
+    val event: SleepEvent?,
+    /** The stretch of the sleep's audio and the settings it is shown with. */
+    val editor: SensitivityEditor,
+    /** The start threshold the slider shows, in dB above the baseline. */
+    val thresholdDb: Float,
+    /** Whether the user changed the setting, so that it can be applied. */
+    val changed: Boolean,
+    /** How many events the stretch held when the sheet opened. */
+    val before: Int,
+    /** The stretch re-scanned with the slider's setting; null until the first re-scan is done. */
+    val chart: SensitivityChart?,
+    /** Whether the setting is being stored and the sleep searched again. */
+    val applying: Boolean,
+)
+
+/**
+ * A sensitivity was applied and the sleep searched again: [events] now lie in the stretch, which
+ * is the whole sleep if [wholeSleep].
+ */
+data class SensitivityApplied(val wholeSleep: Boolean, val events: Int)
+
 /** State and actions of the sleep screen: the sleep, its events, and their playback. */
+@OptIn(ExperimentalCoroutinesApi::class)
 class SleepViewModel(
-    sleepId: Long,
-    repository: SleepRepository,
+    private val sleepId: Long,
+    private val repository: SleepRepository,
     settings: SettingsStore,
     private val player: SleepPlayer,
 ) : ViewModel() {
 
     private val timeline = MutableStateFlow<SleepTimeline?>(null)
     private val loudness = MutableStateFlow<SleepLoudness?>(null)
+
+    /** The sleep's feature track and its curves, which the sensitivity sheet re-scans; null while being read. */
+    private val analysis = MutableStateFlow<Pair<SleepTrack, Detection>?>(null)
 
     /** Where the user is dragging the timeline to; null when not dragging. */
     private val scrubPosition = MutableStateFlow<Duration?>(null)
@@ -95,6 +134,7 @@ class SleepViewModel(
 
             val track = repository.track(sleepId)
             val detection = withContext(Dispatchers.Default) { EventDetector.detect(track.track) }
+            analysis.value = track to detection
             loudness.value = SleepLoudness(track, detection.level, detection.baseline)
         }
     }
@@ -155,8 +195,47 @@ class SleepViewModel(
             unavailable = unavailable,
             playingEventId = played.takeIf { playback.playing && playback.until != null },
             currentEvent = currentEvent(listed.events, listed.played, position),
+            sensitivityAvailable = loudness != null && sleep?.eventsFound == true && !sleep.isRunning,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SleepUiState())
+
+    private val overrides = repository.sensitivityOverrides(sleepId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** The open sensitivity sheet; null while it is closed. */
+    private val sheet = MutableStateFlow<Sheet?>(null)
+
+    /** The sheet's stretch re-scanned with its setting, off the main thread; a newer setting cancels an older re-scan. */
+    private val chart = sheet
+        .map { open -> open?.let { it.editor to it.setting } }
+        .distinctUntilChanged()
+        .mapLatest { request ->
+            request?.let { (editor, setting) -> editor to withContext(Dispatchers.Default) { editor.chart(setting, CHART_COLUMNS) } }
+        }
+
+    /** The sensitivity sheet; null while it is closed. */
+    val sensitivity: StateFlow<SensitivityUiState?> = combine(sheet, chart) { open, chart ->
+        open?.let {
+            SensitivityUiState(
+                event = it.event,
+                editor = it.editor,
+                thresholdDb = when (val setting = it.setting) {
+                    SensitivitySetting.Unchanged -> it.editor.currentDb
+                    is SensitivitySetting.Threshold -> setting.db
+                    SensitivitySetting.Inherited -> it.editor.inheritedDb
+                },
+                changed = it.setting != SensitivitySetting.Unchanged,
+                before = it.before,
+                // The chart of a sheet opened earlier is never shown.
+                chart = chart?.takeIf { (editor, _) -> editor === it.editor }?.second,
+                applying = it.applying,
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    private val applied = Channel<SensitivityApplied>(Channel.BUFFERED)
+
+    /** Each sensitivity applied, once the sleep was searched again with it. */
+    val sensitivityApplied: Flow<SensitivityApplied> = applied.receiveAsFlow()
 
     fun togglePlay() {
         if (player.state.value.playing) player.pause() else player.play()
@@ -216,6 +295,65 @@ class SleepViewModel(
         player.setSpeed(SPEEDS[(current + 1) % SPEEDS.size])
     }
 
+    /**
+     * Opens the sensitivity sheet for [event] and [SENSITIVITY_MARGIN] on either side of it, or,
+     * with null, for the whole sleep.
+     */
+    fun openSensitivity(event: SleepEvent?) {
+        val (track, detection) = analysis.value ?: return
+        val duration = timeline.value?.duration ?: return
+        val window = if (event == null) {
+            Stretch(Duration.ZERO, duration)
+        } else {
+            Stretch((event.start - SENSITIVITY_MARGIN).coerceAtLeast(Duration.ZERO), (event.end + SENSITIVITY_MARGIN).coerceAtMost(duration))
+        }
+        val before = sleepAndEvents.value.second.count { it.start < window.end && it.end > window.start }
+        val editor = SensitivityEditor(track, detection, overrides.value, window, anchor = event?.start)
+        sheet.value = Sheet(event, editor, before, SensitivitySetting.Unchanged, applying = false)
+    }
+
+    /** Previews a start threshold of [db] above the baseline for the sheet's stretch. */
+    fun setSensitivity(db: Float) {
+        sheet.value = sheet.value?.takeUnless { it.applying }?.copy(setting = SensitivitySetting.Threshold(db)) ?: return
+    }
+
+    /** Previews the sheet's stretch without the settings made for it. */
+    fun resetSensitivity() {
+        sheet.value = sheet.value?.takeUnless { it.applying }?.copy(setting = SensitivitySetting.Inherited) ?: return
+    }
+
+    /** Plays the sheet's stretch. */
+    fun listenToSensitivity() {
+        val window = sheet.value?.editor?.window ?: return
+        eventPlayed.value = null
+        player.playRange(window.start, window.end)
+    }
+
+    /** Stores the sheet's setting, finds the sleep's events again with it and closes the sheet. */
+    fun applySensitivity() {
+        val open = sheet.value?.takeUnless { it.applying } ?: return
+        val threshold = when (val setting = open.setting) {
+            SensitivitySetting.Unchanged -> return
+            is SensitivitySetting.Threshold -> setting.db
+            SensitivitySetting.Inherited -> null
+        }
+        sheet.value = open.copy(applying = true)
+        player.pause()
+        viewModelScope.launch {
+            val window = open.editor.window
+            val events = repository.setSensitivity(sleepId, window.start, window.end, threshold)
+            sheet.value = null
+            if (events != null) {
+                applied.send(SensitivityApplied(open.event == null, events.count { it.start < window.end && it.end > window.start }))
+            }
+        }
+    }
+
+    /** Closes the sensitivity sheet without a change, unless its setting is being applied. */
+    fun closeSensitivity() {
+        if (sheet.value?.applying != true) sheet.value = null
+    }
+
     override fun onCleared() {
         player.release()
     }
@@ -223,7 +361,22 @@ class SleepViewModel(
     private companion object {
         /** The speeds the speed button cycles through; they apply only until the screen closes. */
         val SPEEDS = listOf(0.75f, 1f, 1.25f, 1.5f, 2f, 2.5f, 3f)
+
+        /** How much of the sleep on either side of an event its sensitivity sheet shows and sets. */
+        val SENSITIVITY_MARGIN: Duration = Duration.ofSeconds(30)
+
+        /** The columns the sensitivity chart is computed in, about one per two pixels of a phone. */
+        const val CHART_COLUMNS = 400
     }
+
+    /** The open sensitivity sheet: what it was opened for and the setting the user made so far. */
+    private data class Sheet(
+        val event: SleepEvent?,
+        val editor: SensitivityEditor,
+        val before: Int,
+        val setting: SensitivitySetting,
+        val applying: Boolean,
+    )
 }
 
 /**

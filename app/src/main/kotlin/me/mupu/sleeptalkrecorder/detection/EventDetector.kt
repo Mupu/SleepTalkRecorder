@@ -9,7 +9,16 @@ import kotlin.math.min
 import kotlin.math.pow
 
 /** The hops [start] until [end] (exclusive) of a [FeatureTrack]. */
-data class HopRange(val start: Int, val end: Int)
+data class HopRange(val start: Int, val end: Int) {
+    /** Whether this range shares a hop with [other]. */
+    fun overlaps(other: HopRange): Boolean = start < other.end && other.start < end
+}
+
+/**
+ * A start threshold for the hops of [range] that replaces the automatic one, in dB above the
+ * baseline: what the user set for a stretch of a sleep. The stop threshold follows it.
+ */
+data class ThresholdOverride(val range: HopRange, val thresholdDb: Float)
 
 /**
  * The knobs of the [EventDetector], with the defaults of the detection design. Levels are in dB,
@@ -64,9 +73,18 @@ class Detection(
     val baseline: FloatArray,
     /** How far above the baseline a sound had to be to start an event, chosen for this track. */
     val thresholdDb: Float,
+    /** The overrides of [thresholdDb] the events were found with, oldest first. */
+    val overrides: List<ThresholdOverride>,
     /** The events in order, not overlapping. */
     val events: List<HopRange>,
-)
+) {
+    /**
+     * The start threshold at [hop] with [overrides]: that of the newest override covering it, or
+     * the automatic [thresholdDb].
+     */
+    fun thresholdAt(hop: Int, overrides: List<ThresholdOverride> = this.overrides): Float =
+        overrides.lastOrNull { hop >= it.range.start && hop < it.range.end }?.thresholdDb ?: thresholdDb
+}
 
 /**
  * Finds events in a [FeatureTrack]: stretches whose speech-band level rises clearly above the
@@ -79,6 +97,7 @@ class Detection(
  *    switching on) within a part of the window. Digital silence is left out of it.
  * 3. The start threshold above the baseline is chosen per track from the spread of the noise: the
  *    lower half of the residual (level minus baseline) is the noise, whatever the events do.
+ *    [ThresholdOverride]s replace it in the stretches the user set a sensitivity for.
  * 4. A hysteresis state machine starts an event above the start threshold and ends it after a
  *    hangover below the lower stop threshold; short events are dropped and close ones joined.
  *
@@ -89,17 +108,63 @@ object EventDetector {
     /** Identifies this detector and its rules in stored results; raise it when they change. */
     const val VERSION = "2"
 
-    /** Finds the events of [track]. */
-    fun detect(track: FeatureTrack, params: DetectionParams = DetectionParams()): Detection {
+    /**
+     * Finds the events of [track], with the automatic threshold replaced by [overrides] (oldest
+     * first; where they overlap, the newer one counts).
+     */
+    fun detect(
+        track: FeatureTrack,
+        params: DetectionParams = DetectionParams(),
+        overrides: List<ThresholdOverride> = emptyList(),
+    ): Detection {
         val speech = track.speech
         val level = smoothedLevel(speech, hops(params.smoothing))
         val baseline = baseline(speech, params)
         val threshold = automaticThreshold(speech, level, baseline, params)
-        val raw = hysteresis(level, baseline, threshold, threshold * (1 - params.hysteresisShare), params)
+        val events = events(level, baseline, threshold, overrides, HopRange(0, level.size), params)
+        return Detection(level, baseline, threshold, overrides, events)
+    }
+
+    /**
+     * The events [detect] would find in [range] with [overrides] in place of those of [detection],
+     * whole even where they reach out of the range.
+     *
+     * The level, baseline and automatic threshold do not depend on the overrides, so only the
+     * state machine runs again, over the range and [RESCAN_MARGIN] on either side: milliseconds
+     * even for a whole night, quick enough to follow a slider.
+     */
+    fun rescan(
+        detection: Detection,
+        range: HopRange,
+        overrides: List<ThresholdOverride>,
+        params: DetectionParams = DetectionParams(),
+    ): List<HopRange> {
+        val margin = hops(RESCAN_MARGIN)
+        val scanned = HopRange((range.start - margin).coerceAtLeast(0), (range.end + margin).coerceAtMost(detection.level.size))
+        return events(detection.level, detection.baseline, detection.thresholdDb, overrides, scanned, params)
+            .filter { it.overlaps(range) }
+    }
+
+    /** The hysteresis, minimum length and merge steps over the hops of [range]. */
+    private fun events(
+        level: FloatArray,
+        baseline: FloatArray,
+        automatic: Float,
+        overrides: List<ThresholdOverride>,
+        range: HopRange,
+        params: DetectionParams,
+    ): List<HopRange> {
+        val thresholds = FloatArray(range.end - range.start) { automatic }
+        for (override in overrides) {
+            // Oldest first, so a newer override is written over an older one.
+            val from = max(override.range.start, range.start)
+            val until = min(override.range.end, range.end)
+            if (from < until) thresholds.fill(override.thresholdDb, from - range.start, until - range.start)
+        }
+        val raw = hysteresis(level, baseline, thresholds, range, params)
 
         val minHops = hops(params.minLength)
-        val events = merge(raw.filter { it.end - it.start >= minHops }, hops(params.mergeGap))
-        return Detection(level, baseline, threshold, events)
+        return merge(raw.filter { it.end - it.start >= minHops }, hops(params.mergeGap))
     }
 
     /** The speech-band level averaged in power over [hops] hops centred on each hop. */
@@ -199,7 +264,18 @@ object EventDetector {
         return (median + params.spreads * spread).coerceIn(params.minThresholdDb, params.maxThresholdDb)
     }
 
-    private fun hysteresis(level: FloatArray, baseline: FloatArray, on: Float, off: Float, params: DetectionParams): List<HopRange> {
+    /**
+     * Starts an event once the level stayed [DetectionParams.minOnset] at or above the start
+     * threshold ([thresholds] holds one for each hop of [range]) and ends it once the level stayed
+     * [DetectionParams.hangover] below the stop threshold, [DetectionParams.hysteresisShare] lower.
+     */
+    private fun hysteresis(
+        level: FloatArray,
+        baseline: FloatArray,
+        thresholds: FloatArray,
+        range: HopRange,
+        params: DetectionParams,
+    ): List<HopRange> {
         val minOnset = max(1, hops(params.minOnset))
         val hangover = max(1, hops(params.hangover))
         val events = ArrayList<HopRange>()
@@ -208,7 +284,9 @@ object EventDetector {
         var above = 0
         var below = 0
 
-        for (i in level.indices) {
+        for (i in range.start until range.end) {
+            val on = thresholds[i - range.start]
+            val off = on * (1 - params.hysteresisShare)
             if (!inEvent) {
                 if (level[i] >= baseline[i] + on) {
                     above++
@@ -233,7 +311,7 @@ object EventDetector {
                 below = 0
             }
         }
-        if (inEvent) events += HopRange(start, level.size - below)
+        if (inEvent) events += HopRange(start, range.end - below)
         return events
     }
 
@@ -251,6 +329,12 @@ object EventDetector {
     }
 
     private fun hops(duration: Duration): Int = (duration.toMillis() / HOP_MILLIS).toInt()
+
+    /**
+     * How far beyond its range a re-scan runs the state machine, so that events reaching into the
+     * range start and end as in a scan of the whole track.
+     */
+    private val RESCAN_MARGIN: Duration = Duration.ofSeconds(30)
 
     /** How often the baseline percentile is evaluated, in hops: every half second. */
     private const val BASELINE_STEP = 25

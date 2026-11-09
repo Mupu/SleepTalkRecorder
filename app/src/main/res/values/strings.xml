@@ -90,6 +90,46 @@
     <string name="kind_event">Event</string>
     <string name="play_event">Play this event</string>
     <string name="pause_event">Pause this event</string>
+    <string name="more_options">More options</string>
+
+    <!-- Sensitivity sheet -->
+    <string name="sensitivity_here">Sensitivity here</string>
+    <string name="sensitivity_sleep">Sensitivity for this sleep</string>
+    <!-- Title of the sheet opened from an event: "Sensitivity around 03:14:07". -->
+    <string name="sensitivity_title_event">Sensitivity around %1$s</string>
+    <!-- The section the sheet re-scans: "Section 03:13:37–03:14:39 (event ±30 s)". -->
+    <string name="sensitivity_window">Section %1$s–%2$s (event ±30 s)</string>
+    <string name="sensitivity_sleep_only">Applies to this sleep only, not to others.</string>
+    <string name="sensitivity_chart">Loudness with the baseline and the sensitivity</string>
+    <string name="sensitivity_found">found</string>
+    <string name="baseline">Baseline</string>
+    <string name="sensitivity_line">Sensitivity</string>
+    <string name="less_sensitive">less sensitive</string>
+    <string name="more_sensitive">more sensitive</string>
+    <!-- The start threshold the slider sets: "Event from 12.5 dB above the baseline". -->
+    <string name="sensitivity_value">Event from %1$s dB above the baseline</string>
+    <!-- How many events the section holds with the slider's setting, and before. -->
+    <plurals name="sensitivity_result_event">
+        <item quantity="one">%1$d event in this section (before: %2$d)</item>
+        <item quantity="other">%1$d events in this section (before: %2$d)</item>
+    </plurals>
+    <plurals name="sensitivity_result_sleep">
+        <item quantity="one">%1$d event in this sleep (before: %2$d)</item>
+        <item quantity="other">%1$d events in this sleep (before: %2$d)</item>
+    </plurals>
+    <string name="sensitivity_scope_event">Changes this section only.</string>
+    <string name="sensitivity_scope_sleep">Replaces the sensitivity set around single events.</string>
+    <string name="listen">Listen</string>
+    <string name="reset">Reset</string>
+    <string name="apply">Apply</string>
+    <plurals name="sensitivity_applied_event">
+        <item quantity="one">Section searched again: %d event</item>
+        <item quantity="other">Section searched again: %d events</item>
+    </plurals>
+    <plurals name="sensitivity_applied_sleep">
+        <item quantity="one">Sleep searched again: %d event</item>
+        <item quantity="other">Sleep searched again: %d events</item>
+    </plurals>
 
     <!-- Settings -->
     <string name="settings_appearance">Appearance</string>

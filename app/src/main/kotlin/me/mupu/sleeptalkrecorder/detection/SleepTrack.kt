@@ -33,6 +33,20 @@ class SleepTrack private constructor(
         return (first + into).toInt().coerceAtMost(until - 1).coerceIn(0, track.size - 1)
     }
 
+    /** The hops that hold the audio from [start] until [end], held within the track. */
+    fun hopsOf(start: Duration, end: Duration): HopRange {
+        val first = hopAt(start)
+        return if (end <= start) HopRange(first, first) else HopRange(first, hopAt(end - Duration.ofNanos(1)) + 1)
+    }
+
+    /** Finds the events of the sleep with the user's [overrides] (oldest first). */
+    fun detect(overrides: List<SensitivityOverride>, params: DetectionParams = DetectionParams()): Detection =
+        EventDetector.detect(track, params, thresholdOverrides(overrides))
+
+    /** [overrides] (oldest first) on the hops of this track. */
+    fun thresholdOverrides(overrides: List<SensitivityOverride>): List<ThresholdOverride> =
+        overrides.map { ThresholdOverride(hopsOf(it.start, it.end), it.thresholdDb) }
+
     /** The recording that holds [hop]; on a boundary the later one, which starts with it. */
     private fun recordingOf(hop: Int): Int = firstHops.indexOfLast { it <= hop }.coerceAtLeast(0)
 
