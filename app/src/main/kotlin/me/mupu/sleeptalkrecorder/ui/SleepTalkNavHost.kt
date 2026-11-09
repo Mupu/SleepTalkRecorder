@@ -15,6 +15,7 @@ import me.mupu.sleeptalkrecorder.ui.home.HomeViewModel
 import me.mupu.sleeptalkrecorder.ui.library.LibraryScreen
 import me.mupu.sleeptalkrecorder.ui.library.LibraryViewModel
 import me.mupu.sleeptalkrecorder.ui.settings.SettingsScreen
+import me.mupu.sleeptalkrecorder.ui.settings.SettingsViewModel
 import me.mupu.sleeptalkrecorder.ui.sleep.SleepScreen
 import me.mupu.sleeptalkrecorder.ui.sleep.SleepViewModel
 
@@ -52,7 +53,10 @@ fun SleepTalkNavHost(container: AppContainer) {
             )
         }
         composable(Routes.SETTINGS) {
-            SettingsScreen(onBack = { navController.popBackStack() })
+            SettingsScreen(
+                viewModel = viewModel { SettingsViewModel(container.settings) },
+                onBack = { navController.popBackStack() },
+            )
         }
         composable(
             Routes.SLEEP,

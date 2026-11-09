@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sleep names: "Nacht vom 8. auf 9. November", "Mittagsschlaf am 9. November". -->
+    <string name="night_title">Nacht vom %1$s auf %2$s</string>
+    <string name="nap_title">Mittagsschlaf am %1$s</string>
+    <string name="date_pattern_day">d.</string>
+    <string name="date_pattern_day_month">d. MMMM</string>
+    <string name="date_pattern_group">EEEE, d. MMMM</string>
+
+    <string name="duration_seconds">%1$d s</string>
+    <string name="duration_minutes">%1$d min</string>
+    <string name="duration_hours_minutes">%1$d h %2$02d min</string>
+    <string name="time_range">%1$s–%2$s</string>
+
+    <!-- Navigation -->
+    <string name="library">Bibliothek</string>
+    <string name="settings">Einstellungen</string>
+    <string name="back">Zurück</string>
+    <string name="next">Weiter</string>
+
+    <!-- Home -->
+    <string name="ready">Bereit für die Nacht</string>
+    <string name="record">Aufnehmen</string>
+    <string name="stop">Stopp</string>
+    <string name="starting">Startet…</string>
+    <string name="live">REC</string>
+    <string name="meter_idle">Der Pegel erscheint während der Aufnahme</string>
+    <string name="level_dbfs">%1$d dBFS</string>
+    <string name="last_sleep">Letzter Schlaf</string>
+    <string name="problem_not_allowed">Zum Aufnehmen braucht die App die Mikrofon-Berechtigung.</string>
+    <string name="problem_microphone">Das Mikrofon ist nicht verfügbar. Die Aufnahme wurde beendet.</string>
+    <string name="problem_storage">Der Speicher ist voll oder nicht beschreibbar. Die Aufnahme wurde beendet.</string>
+
+    <!-- Library -->
+    <string name="running_since">läuft seit %1$s</string>
+    <string name="live_tag">LIVE</string>
+    <plurals name="recording_count">
+        <item quantity="one">%d Aufnahme</item>
+        <item quantity="other">%d Aufnahmen</item>
+    </plurals>
+    <string name="library_empty">Noch keine Schlafzeiten. Starte vor dem Schlafen eine Aufnahme auf dem Startbildschirm.</string>
+
+    <!-- Sleep screen -->
+    <string name="play">Abspielen</string>
+    <string name="pause">Pause</string>
+    <string name="timeline">Position im Schlaf</string>
+    <string name="position_short">Pos %1$s</string>
+    <string name="speed_value">%1$s×</string>
+    <string name="speed_hint">Tempo (bis du diesen Schlaf verlässt)</string>
+    <string name="sleep_no_audio">Dieser Schlaf enthält kein Audio, das sich abspielen lässt.</string>
+    <string name="playback_failed">Ein Teil dieses Schlafs lässt sich nicht abspielen. Seine Dateien sind vielleicht beschädigt.</string>
+
+    <!-- Settings -->
+    <string name="settings_appearance">Darstellung</string>
+    <string name="settings_theme">Design</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">Hell</string>
+    <string name="theme_dark">Dunkel</string>
+    <string name="settings_language">Sprache</string>
+    <string name="settings_time_format">Uhrzeitformat</string>
+    <string name="time_format_24">24 Stunden</string>
+    <string name="time_format_12">12 Stunden (AM/PM)</string>
+    <string name="settings_playback">Wiedergabe</string>
+    <string name="settings_lead_in">Vorlauf</string>
+    <string name="settings_lead_in_hint">Vor jedem Ereignis beim geschnittenen Abspielen</string>
+    <string name="settings_tail">Nachlauf</string>
+    <string name="settings_tail_hint">Nach jedem Ereignis beim geschnittenen Abspielen</string>
+    <string name="seconds_decimal">%1$.1f s</string>
+
+    <!-- First start -->
+    <string name="setup_welcome">Willkommen bei %1$s</string>
+    <string name="setup_language_question">Welche Sprache soll die App sprechen?</string>
+    <string name="setup_phone_language">Sprache deines Telefons</string>
+    <string name="setup_language_later">Du kannst die Sprache später in den Einstellungen ändern.</string>
+
+    <!-- Notification -->
+    <string name="notification_channel_recording">Aufnahme</string>
+    <string name="notification_channel_recording_description">Zeigt, dass ein Schlaf aufgenommen wird, mit einer Stopp-Taste.</string>
+    <string name="notification_recording_title">Aufnahme läuft</string>
+</resources>

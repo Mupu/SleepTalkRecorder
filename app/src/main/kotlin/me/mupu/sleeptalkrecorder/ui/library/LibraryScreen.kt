@@ -1,6 +1,5 @@
 package me.mupu.sleeptalkrecorder.ui.library
 
-import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -25,7 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -39,7 +37,7 @@ import me.mupu.sleeptalkrecorder.time.SleepDate
 import me.mupu.sleeptalkrecorder.time.SleepKind
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
-import me.mupu.sleeptalkrecorder.ui.format.formatClock
+import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.formatDuration
 import me.mupu.sleeptalkrecorder.ui.format.formatPosition
 import me.mupu.sleeptalkrecorder.ui.format.groupDate
@@ -56,7 +54,6 @@ fun LibraryScreen(
     onOpenSleep: (Long) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val context = LocalContext.current
     val resources = LocalResources.current
     val zone = ZoneId.systemDefault()
 
@@ -79,7 +76,7 @@ fun LibraryScreen(
                     ListItem(
                         leadingContent = { SleepKindIcon(date.kind) },
                         headlineContent = { Text(sleepTitle(resources, date)) },
-                        supportingContent = { Text(sleepSubtitle(context, sleep, zone)) },
+                        supportingContent = { Text(sleepSubtitle(sleep, zone)) },
                         trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
                         modifier = Modifier.clickable { onOpenSleep(sleep.id) },
                     )
@@ -102,12 +99,11 @@ fun LibraryScreen(
 
 @Composable
 private fun RunningSleepItem(running: RunningSleep, onClick: () -> Unit) {
-    val context = LocalContext.current
     val resources = LocalResources.current
     val zone = ZoneId.systemDefault()
     val colors = MaterialTheme.colorScheme
 
-    val since = stringResource(R.string.running_since, formatClock(context, running.sleep.startedAt, zone))
+    val since = stringResource(R.string.running_since, LocalClockFormatter.current.format(running.sleep.startedAt, zone))
     val subtitle = running.elapsed?.let { "$since · ${formatPosition(it)}" } ?: since
 
     Surface(
@@ -165,14 +161,11 @@ private fun CircleIcon(icon: Int, background: Color, tint: Color) {
 
 /** The second line of a finished sleep: "23:41–07:12 · 7 h 31 min", plus its recordings if several. */
 @Composable
-internal fun sleepSubtitle(context: Context, sleep: SleepSummary, zone: ZoneId): String {
+internal fun sleepSubtitle(sleep: SleepSummary, zone: ZoneId): String {
     val resources = LocalResources.current
-    val end = sleep.endedAt ?: return formatClock(context, sleep.startedAt, zone)
-    val range = stringResource(
-        R.string.time_range,
-        formatClock(context, sleep.startedAt, zone),
-        formatClock(context, end, zone),
-    )
+    val clock = LocalClockFormatter.current
+    val end = sleep.endedAt ?: return clock.format(sleep.startedAt, zone)
+    val range = stringResource(R.string.time_range, clock.format(sleep.startedAt, zone), clock.format(end, zone))
     val duration = formatDuration(resources, Duration.between(sleep.startedAt, end))
     val parts = listOfNotNull(
         range,

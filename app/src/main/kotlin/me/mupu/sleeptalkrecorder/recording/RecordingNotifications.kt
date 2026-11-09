@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
+import androidx.core.content.ContextCompat
 import me.mupu.sleeptalkrecorder.MainActivity
 import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.time.SleepDate
@@ -19,15 +20,18 @@ internal class RecordingNotifications(private val context: Context) {
 
     private val manager = context.getSystemService(NotificationManager::class.java)
 
+    // The texts in the per-app language, which Android 12 applies to activities only.
+    private val texts = ContextCompat.getContextForLanguage(context)
+
     /** Creates the notification channel; repeated calls keep what the user changed on it. */
     fun createChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            context.getString(R.string.notification_channel_recording),
+            texts.getString(R.string.notification_channel_recording),
             // Low: visible in the shade and the status bar, but never makes a sound at night.
             NotificationManager.IMPORTANCE_LOW,
         )
-        channel.description = context.getString(R.string.notification_channel_recording_description)
+        channel.description = texts.getString(R.string.notification_channel_recording_description)
         manager.createNotificationChannel(channel)
     }
 
@@ -48,7 +52,7 @@ internal class RecordingNotifications(private val context: Context) {
 
         val builder = Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_mic)
-            .setContentTitle(context.getString(R.string.notification_recording_title))
+            .setContentTitle(texts.getString(R.string.notification_recording_title))
             .setContentIntent(openApp)
             .setOngoing(true)
             .setCategory(Notification.CATEGORY_SERVICE)
@@ -56,14 +60,14 @@ internal class RecordingNotifications(private val context: Context) {
             .addAction(
                 Notification.Action.Builder(
                     Icon.createWithResource(context, R.drawable.ic_stop),
-                    context.getString(R.string.stop),
+                    texts.getString(R.string.stop),
                     stop,
                 ).build(),
             )
 
         if (startedAt != null) {
             builder
-                .setContentText(sleepTitle(context.resources, SleepDate.of(startedAt, ZoneId.systemDefault())))
+                .setContentText(sleepTitle(texts.resources, SleepDate.of(startedAt, ZoneId.systemDefault())))
                 .setWhen(startedAt.toEpochMilli())
                 .setShowWhen(true)
                 .setUsesChronometer(true)

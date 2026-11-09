@@ -1,15 +1,11 @@
 package me.mupu.sleeptalkrecorder.ui.format
 
-import android.content.Context
 import android.content.res.Resources
-import android.text.format.DateFormat
 import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.time.SleepDate
 import me.mupu.sleeptalkrecorder.time.SleepKind
 import java.time.Duration
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -55,15 +51,4 @@ fun formatDuration(resources: Resources, duration: Duration): String {
     } else {
         resources.getString(R.string.duration_hours_minutes, (minutes / 60).toInt(), (minutes % 60).toInt())
     }
-}
-
-/**
- * A clock time in [zone], in the 12- or 24-hour format the device is set to: "23:41", or
- * "23:41:07" with [seconds].
- */
-fun formatClock(context: Context, instant: Instant, zone: ZoneId, seconds: Boolean = false): String {
-    val minutes = if (seconds) "mm:ss" else "mm"
-    val pattern = if (DateFormat.is24HourFormat(context)) "HH:$minutes" else "h:$minutes a"
-    val locale = context.resources.configuration.locales[0]
-    return instant.atZone(zone).format(DateTimeFormatter.ofPattern(pattern, locale))
 }

@@ -23,7 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -38,7 +37,7 @@ import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.time.SleepDate
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
-import me.mupu.sleeptalkrecorder.ui.format.formatClock
+import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.formatPosition
 import me.mupu.sleeptalkrecorder.ui.format.sleepTitle
 import me.mupu.sleeptalkrecorder.ui.library.sleepSubtitle
@@ -50,7 +49,6 @@ import java.time.ZoneId
 @Composable
 fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val context = LocalContext.current
     val resources = LocalResources.current
     val zone = ZoneId.systemDefault()
 
@@ -63,7 +61,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp)) {
             if (sleep != null) {
                 Text(
-                    sleepSubtitle(context, sleep, zone),
+                    sleepSubtitle(sleep, zone),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 4.dp),
@@ -91,7 +89,7 @@ private fun Player(
     onScrubFinished: () -> Unit,
     onNextSpeed: () -> Unit,
 ) {
-    val context = LocalContext.current
+    val clock = LocalClockFormatter.current
     val zone = ZoneId.systemDefault()
     val numbers = TextStyle(fontFeatureSettings = "tnum")
 
@@ -113,7 +111,7 @@ private fun Player(
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                player.clock?.let { formatClock(context, it, zone, seconds = true) }.orEmpty(),
+                player.clock?.let { clock.format(it, zone, seconds = true) }.orEmpty(),
                 style = MaterialTheme.typography.titleLarge.merge(numbers),
             )
             Text(
@@ -143,8 +141,6 @@ private fun Player(
 /** The whole sleep as a slider; dragging shows the target position and seeks when released. */
 @Composable
 private fun Timeline(player: PlayerUiState, onScrub: (Duration) -> Unit, onScrubFinished: () -> Unit) {
-    val context = LocalContext.current
-    val zone = ZoneId.systemDefault()
     val description = stringResource(R.string.timeline)
     val seconds = player.duration.toMillis() / 1_000f
 

@@ -13,16 +13,36 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 | `recording` | The recording session, WAV chunk writer, microphone, foreground service and its notification | only in `MicrophoneSource`, `Recorder`, `RecordingService`, `RecordingNotifications` |
 | `data` | Room database, entities and the `SleepRepository` | Room |
 | `playback` | The `SleepTimeline` of a sleep's chunk files and the `SleepPlayer` that plays it | only in `SleepPlayer` (Media3) |
-| `ui` | Navigation, one sub-package per screen (`home`, `library`, `sleep`, `settings`), shared `components`, `format` and `theme` | Compose |
+| `settings` | The user's settings and the `SettingsStore` that keeps them; the app language | DataStore; AppCompat only in `AppLanguages` |
+| `ui` | Navigation, one sub-package per screen (`home`, `library`, `sleep`, `settings`, `setup`), shared `components`, `format` and `theme` | Compose |
 
 The root package holds `MainActivity`, the only activity, and `SleepTalkApplication` with the
-`AppContainer`, which wires the shared objects by hand: the database, the repository and the
-`Recorder`. Logic that can be tested without a device (`time`, the WAV writer, the recording
-session, level computation, the sleep timeline) is plain Kotlin behind small interfaces
-(`PcmSource`, `RecordingStore`, `Clocks`) and is unit-tested on the JVM.
+`AppContainer`, which wires the shared objects by hand: the database, the repository, the
+`SettingsStore` and the `Recorder`. Logic that can be tested without a device (`time`, the WAV
+writer, the recording session, level computation, the sleep timeline, the settings) is plain Kotlin
+behind small interfaces (`PcmSource`, `RecordingStore`, `Clocks`) and is unit-tested on the JVM.
 
 Screens follow unidirectional data flow: a `ViewModel` combines repository and recorder flows into
 one immutable UI state, and the screen sends user actions back as calls.
+
+## Settings
+
+`Settings` declares every setting as a typed `Setting` with its storage key and default; a new
+setting is one declaration there. `SettingsStore` keeps them in one Preferences DataStore file and
+publishes each as a flow. A stored value the app no longer accepts reads as the default or the
+nearest allowed value, and a damaged or unreadable file gives the defaults instead of an error.
+
+`MainActivity` reads the theme, the time format and whether the language question was answered
+before it draws anything, so no screen appears in the wrong theme first. The theme is applied in
+Compose and to the system bars; the time format reaches every screen as the `ClockFormatter` in
+`LocalClockFormatter`, which writes every clock time the app shows, independent of the phone's own
+format and the app language.
+
+The app language is the per-app language Android keeps itself, not a DataStore setting: from
+Android 13 on the system stores it and offers it in the app's system settings (the build generates
+the list of languages from the translated `values-*` folders), and on Android 12 AppCompat stores
+it and applies it to `MainActivity`, which is therefore an `AppCompatActivity`. The first start
+asks for it with the phone's language selected.
 
 ## Recording
 

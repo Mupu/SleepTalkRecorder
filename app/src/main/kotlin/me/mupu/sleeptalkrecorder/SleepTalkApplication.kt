@@ -5,6 +5,7 @@ import android.content.Context
 import me.mupu.sleeptalkrecorder.data.SleepDatabase
 import me.mupu.sleeptalkrecorder.data.SleepRepository
 import me.mupu.sleeptalkrecorder.recording.Recorder
+import me.mupu.sleeptalkrecorder.settings.SettingsStore
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +36,9 @@ class AppContainer(context: Context) {
         database = SleepDatabase.open(context),
         recordingsDirectory = File(context.noBackupFilesDir, "recordings"),
     )
+
+    /** The user's settings. */
+    val settings = SettingsStore.open(context)
 
     /** Starts and stops recordings and publishes their state. */
     val recorder = Recorder(context)

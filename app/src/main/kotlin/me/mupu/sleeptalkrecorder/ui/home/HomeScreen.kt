@@ -289,7 +289,6 @@ private fun LiveTag(text: String) {
 
 @Composable
 private fun LastSleepCard(sleep: SleepSummary, onClick: () -> Unit) {
-    val context = LocalContext.current
     val resources = LocalResources.current
     val zone = ZoneId.systemDefault()
     val date = SleepDate.of(sleep.startedAt, zone)
@@ -305,7 +304,7 @@ private fun LastSleepCard(sleep: SleepSummary, onClick: () -> Unit) {
             leadingContent = { SleepKindIcon(date.kind) },
             overlineContent = { Text(stringResource(R.string.last_sleep)) },
             headlineContent = { Text(sleepTitle(resources, date)) },
-            supportingContent = { Text(sleepSubtitle(context, sleep, zone)) },
+            supportingContent = { Text(sleepSubtitle(sleep, zone)) },
             trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
         )
     }

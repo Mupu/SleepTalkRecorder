@@ -76,6 +76,12 @@ android {
         }
     }
 
+    // Lists the translated languages for the system's per-app language setting (Android 13+);
+    // res/resources.properties names the language of the untranslated resources.
+    androidResources {
+        generateLocaleConfig = true
+    }
+
     buildFeatures {
         buildConfig = true
         compose = true
@@ -94,9 +100,11 @@ room {
 
 dependencies {
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.appcompat)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.media3.exoplayer)
