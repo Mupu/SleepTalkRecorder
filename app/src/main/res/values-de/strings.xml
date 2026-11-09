@@ -10,6 +10,8 @@
     <string name="duration_seconds">%1$d s</string>
     <string name="duration_minutes">%1$d min</string>
     <string name="duration_hours_minutes">%1$d h %2$02d min</string>
+    <string name="duration_seconds_decimal">%1$s s</string>
+    <string name="duration_minutes_seconds">%1$d min %2$02d s</string>
     <string name="time_range">%1$s–%2$s</string>
 
     <!-- Navigation -->
@@ -56,6 +58,22 @@
     <string name="speed_hint">Tempo (bis du diesen Schlaf verlässt)</string>
     <string name="sleep_no_audio">Dieser Schlaf enthält kein Audio, das sich abspielen lässt.</string>
     <string name="playback_failed">Ein Teil dieses Schlafs lässt sich nicht abspielen. Seine Dateien sind vielleicht beschädigt.</string>
+    <string name="zoom_in">Vergrößern</string>
+    <string name="zoom_out">Verkleinern</string>
+    <string name="zoom_fit">Ganzen Schlaf zeigen</string>
+    <string name="timeline_span">%1$s–%2$s · %3$s</string>
+    <string name="finding_events">Ereignisse werden gesucht…</string>
+    <string name="no_events">Keine Ereignisse in diesem Schlaf.</string>
+    <plurals name="event_count">
+        <item quantity="one">%d Ereignis</item>
+        <item quantity="other">%d Ereignisse</item>
+    </plurals>
+    <string name="events_total">%1$s · %2$s</string>
+    <string name="event_heading">%1$s · %2$s</string>
+    <string name="event_details">%1$s · Pos %2$s</string>
+    <string name="kind_event">Ereignis</string>
+    <string name="play_event">Dieses Ereignis abspielen</string>
+    <string name="pause_event">Dieses Ereignis anhalten</string>
 
     <!-- Settings -->
     <string name="settings_appearance">Darstellung</string>

@@ -28,6 +28,8 @@ data class PlaybackState(
     val speed: Float = 1f,
     /** Whether the last attempt to play failed, for example on a damaged file. */
     val failed: Boolean = false,
+    /** Where playback pauses on its own while a stretch is played with [SleepPlayer.playRange]. */
+    val until: Duration? = null,
 )
 
 /**
@@ -80,6 +82,18 @@ class SleepPlayer(context: Context) {
 
     /** Plays from the current position; at the end of the sleep, from its start. */
     fun play() {
+        mutableState.value = mutableState.value.copy(until = null)
+        start()
+    }
+
+    /** Plays the stretch from [from] until [until] and pauses there, as when an event is played on its own. */
+    fun playRange(from: Duration, until: Duration) {
+        seekTo(from)
+        mutableState.value = mutableState.value.copy(until = until)
+        start()
+    }
+
+    private fun start() {
         if (timeline?.pieces.isNullOrEmpty()) return
         if (player.playbackState == Player.STATE_ENDED) player.seekTo(0, 0)
         // A failed player stays idle until it is prepared again.
@@ -89,11 +103,13 @@ class SleepPlayer(context: Context) {
     }
 
     fun pause() {
+        mutableState.value = mutableState.value.copy(until = null)
         player.pause()
     }
 
-    /** Moves to [position] of the sleep, held within its start and end. */
+    /** Moves to [position] of the sleep, held within its start and end; a stretch being played ends there. */
     fun seekTo(position: Duration) {
+        mutableState.value = mutableState.value.copy(until = null)
         val timeline = timeline?.takeIf { it.pieces.isNotEmpty() } ?: return
         val location = timeline.locate(position)
         player.seekTo(location.piece, location.offset.toMillis())
@@ -112,11 +128,19 @@ class SleepPlayer(context: Context) {
     }
 
     private fun publish() {
+        val position = currentPosition()
+        val until = mutableState.value.until
+        if (until != null && position >= until) {
+            pause()
+            return
+        }
+        val playing = player.playWhenReady && player.playbackState != Player.STATE_ENDED &&
+            player.playbackState != Player.STATE_IDLE
         mutableState.value = mutableState.value.copy(
-            playing = player.playWhenReady && player.playbackState != Player.STATE_ENDED &&
-                player.playbackState != Player.STATE_IDLE,
-            position = currentPosition(),
+            playing = playing,
+            position = position,
             speed = player.playbackParameters.speed,
+            until = until?.takeIf { playing },
         )
     }
 
@@ -142,7 +166,10 @@ class SleepPlayer(context: Context) {
     }
 
     private companion object {
-        /** How often the position is published while playing; enough for a smooth clock. */
-        const val TICK_MILLIS = 100L
+        /**
+         * How often the position is published while playing; enough for a smooth clock, and a
+         * stretch played on its own ends at most this much late.
+         */
+        const val TICK_MILLIS = 50L
     }
 }

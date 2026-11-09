@@ -1,5 +1,6 @@
 package me.mupu.sleeptalkrecorder.recording
 
+import me.mupu.sleeptalkrecorder.detection.FeatureTrackFile
 import java.io.File
 import java.time.Duration
 import java.time.Instant
@@ -49,8 +50,20 @@ class RecordingSessionTest {
 
         val recording = store.recordings.single()
         assertEquals(40_000L, recording.finishedFrames)
-        assertEquals(listOf("0001.wav", "0002.wav", "0003.wav"), File(folder.root, "${recording.id}").list()!!.sorted())
+        assertEquals(listOf("0001.wav", "0002.wav", "0003.wav", "features.bin"), File(folder.root, "${recording.id}").list()!!.sorted())
         assertEquals(true, source.closed)
+    }
+
+    @Test
+    fun `the feature track holds one hop for every 320 samples recorded`() = runBlocking {
+        val source = FakeSource(buffers = 5, bufferFrames = 1_000)
+
+        val job = launch(Dispatchers.IO) { session(source).record {} }
+        source.allDelivered.await()
+        job.cancelAndJoin()
+
+        val track = FeatureTrackFile.read(File(folder.root, "${store.recordings.single().id}/features.bin"))!!
+        assertEquals(15, track.size)
     }
 
     @Test

@@ -14,6 +14,9 @@
     <string name="duration_seconds">%1$d s</string>
     <string name="duration_minutes">%1$d min</string>
     <string name="duration_hours_minutes">%1$d h %2$02d min</string>
+    <!-- %1$s is a number with one decimal, for example "0.4". -->
+    <string name="duration_seconds_decimal">%1$s s</string>
+    <string name="duration_minutes_seconds">%1$d min %2$02d s</string>
     <string name="time_range">%1$s–%2$s</string>
 
     <!-- Navigation -->
@@ -63,6 +66,26 @@
     <string name="speed_hint">Speed (until you leave this sleep)</string>
     <string name="sleep_no_audio">This sleep holds no audio that can be played.</string>
     <string name="playback_failed">Part of this sleep cannot be played. Its files may be damaged.</string>
+    <string name="zoom_in">Zoom in</string>
+    <string name="zoom_out">Zoom out</string>
+    <string name="zoom_fit">Show the whole sleep</string>
+    <!-- The stretch the timeline shows: "02:10–02:40 · 30 min". -->
+    <string name="timeline_span">%1$s–%2$s · %3$s</string>
+    <string name="finding_events">Finding events…</string>
+    <string name="no_events">No events in this sleep.</string>
+    <plurals name="event_count">
+        <item quantity="one">%d event</item>
+        <item quantity="other">%d events</item>
+    </plurals>
+    <!-- The count and total length of a sleep's events: "12 events · 3 min". -->
+    <string name="events_total">%1$s · %2$s</string>
+    <!-- An event in the list: its clock time and length, "03:14:07 · 1.2 s". -->
+    <string name="event_heading">%1$s · %2$s</string>
+    <!-- Its kind and its position in the sleep's audio: "Event · Pos 4:02:11". -->
+    <string name="event_details">%1$s · Pos %2$s</string>
+    <string name="kind_event">Event</string>
+    <string name="play_event">Play this event</string>
+    <string name="pause_event">Pause this event</string>
 
     <!-- Settings -->
     <string name="settings_appearance">Appearance</string>

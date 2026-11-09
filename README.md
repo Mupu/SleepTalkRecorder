@@ -13,8 +13,10 @@ Recordings never leave the phone: there is no account, no network access and no 
 One Android module in Kotlin and Jetpack Compose. A foreground service records the microphone into
 15-minute WAV files in the app's private storage; a Room database keeps each sleep and its
 recordings with the UTC instant of their first sample, and every position is derived from sample
-counts. [`ARCHITECTURE.md`](ARCHITECTURE.md) describes the packages, the recording and storage
-design and the time model. Planning, research and decisions live in the
+counts. While recording, a compact loudness feature track is written next to the audio; right
+after the stop the app finds the sleep's events on it against a rolling baseline and stores them,
+like every later result, as annotations with their origin. [`ARCHITECTURE.md`](ARCHITECTURE.md)
+describes the packages, the recording, storage and detection design and the time model. Planning, research and decisions live in the
 [GitHub issues](https://github.com/Mupu/SleepTalkRecorder/issues), starting with the
 wayfinder map.
 

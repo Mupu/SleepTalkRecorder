@@ -17,6 +17,9 @@ class SleepRetentionTest {
         startedAt = LocalDateTime.parse(start).atZone(berlin).toInstant(),
         endedAt = end?.let { LocalDateTime.parse(it).atZone(berlin).toInstant() },
         recordingCount = 1,
+        eventCount = 0,
+        eventMillis = 0,
+        eventsFound = end != null,
     )
 
     private fun expiredIds(keep: Duration, today: String, vararg sleeps: SleepSummary) =

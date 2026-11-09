@@ -1,5 +1,7 @@
 package me.mupu.sleeptalkrecorder.recording
 
+import me.mupu.sleeptalkrecorder.detection.FeatureTrackFile
+import me.mupu.sleeptalkrecorder.detection.FeatureTrackRecorder
 import me.mupu.sleeptalkrecorder.time.RecordingClock
 import java.io.File
 import java.io.IOException
@@ -36,7 +38,8 @@ enum class RecordingEnd {
 
 /**
  * Records one sleep from a [source] until the calling coroutine is cancelled. The audio goes into
- * chunk files under `recordingsDirectory/<recording id>/`; the [store] learns the new sleep, the
+ * chunk files under `recordingsDirectory/<recording id>/`, next to the recording's feature track
+ * ([FeatureTrackFile.FILE_NAME]), which is extracted from the same buffers; the [store] learns the new sleep, the
  * audio-clock anchor of the first sample and, at every flush, how many samples are safely
  * written, so a killed process loses at most the audio since the last flush.
  *
@@ -63,14 +66,16 @@ class RecordingSession(
 
         val provisionalStart = clocks.now()
         val ids = store.startSleep(provisionalStart, mic.sampleRate)
+        val directory = File(recordingsDirectory, ids.recordingId.toString())
         val writer = ChunkedWavWriter(
-            directory = File(recordingsDirectory, ids.recordingId.toString()),
+            directory = directory,
             sampleRate = mic.sampleRate,
             framesPerChunk = framesOf(chunkLength, mic.sampleRate),
         )
+        val features = FeatureTrackRecorder(File(directory, FeatureTrackFile.FILE_NAME))
 
         try {
-            loop(mic, ids, writer, provisionalStart, onProgress)
+            loop(mic, ids, writer, features, provisionalStart, onProgress)
         } finally {
             withContext(NonCancellable) {
                 val durableFrames = try {
@@ -78,6 +83,11 @@ class RecordingSession(
                     writer.frames
                 } catch (_: IOException) {
                     writer.flushedFrames
+                }
+                try {
+                    features.close()
+                } catch (_: IOException) {
+                    // The audio is what counts; a short track is rebuilt from it when events are found.
                 }
                 store.finish(ids.recordingId, durableFrames)
             }
@@ -88,6 +98,7 @@ class RecordingSession(
         mic: PcmSource,
         ids: NewRecording,
         writer: ChunkedWavWriter,
+        features: FeatureTrackRecorder,
         provisionalStart: Instant,
         onProgress: (RecordingProgress) -> Unit,
     ): RecordingEnd {
@@ -108,7 +119,10 @@ class RecordingSession(
 
             try {
                 writer.write(buffer, read)
+                features.push(buffer, read)
                 if (writer.frames >= nextFlushAt) {
+                    // The track first, so that it covers every sample the store counts as saved.
+                    features.flush()
                     writer.flush()
                     store.saveProgress(ids.recordingId, writer.frames)
                     nextFlushAt = writer.frames + flushEveryFrames

@@ -4,6 +4,7 @@ import android.content.res.Resources
 import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.time.SleepDate
 import me.mupu.sleeptalkrecorder.time.SleepKind
+import java.text.NumberFormat
 import java.time.Duration
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -39,6 +40,27 @@ fun sleepTitle(resources: Resources, date: SleepDate): String {
 fun groupDate(resources: Resources, date: LocalDate): String {
     val locale = resources.configuration.locales[0]
     return date.format(DateTimeFormatter.ofPattern(resources.getString(R.string.date_pattern_group), locale))
+}
+
+/**
+ * The length of an event, as precise as it matters: "0.4 s" (with the app language's decimal mark)
+ * below ten seconds, "12 s" below a minute, then "2 min 05 s", and from an hour on as
+ * [formatDuration].
+ */
+fun formatEventLength(resources: Resources, length: Duration): String {
+    val millis = length.toMillis().coerceAtLeast(0)
+    return when {
+        millis < 10_000 -> {
+            val number = NumberFormat.getNumberInstance(resources.configuration.locales[0]).apply {
+                minimumFractionDigits = 1
+                maximumFractionDigits = 1
+            }
+            resources.getString(R.string.duration_seconds_decimal, number.format(millis / 1_000.0))
+        }
+        millis < 60_000 -> resources.getString(R.string.duration_seconds, (millis / 1_000).toInt())
+        millis < 3_600_000 -> resources.getString(R.string.duration_minutes_seconds, (millis / 60_000).toInt(), (millis / 1_000 % 60).toInt())
+        else -> formatDuration(resources, length)
+    }
 }
 
 /** A length of time in hours and minutes: "7 h 31 min", "12 min", or "25 s" below a minute. */

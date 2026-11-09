@@ -2,18 +2,24 @@ package me.mupu.sleeptalkrecorder.ui.sleep
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.SleepRepository
 import me.mupu.sleeptalkrecorder.data.SleepSummary
+import me.mupu.sleeptalkrecorder.detection.EventDetector
 import me.mupu.sleeptalkrecorder.playback.SleepPlayer
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
+import me.mupu.sleeptalkrecorder.settings.Settings
+import me.mupu.sleeptalkrecorder.settings.SettingsStore
 import java.time.Duration
 import java.time.Instant
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** The player of the sleep screen, once the sleep's audio is known. */
 data class PlayerUiState(
@@ -35,36 +41,61 @@ data class PlayerUiState(
 data class SleepUiState(
     /** The sleep, or null while loading or once it is gone. */
     val sleep: SleepSummary? = null,
+    /** The sleep's audio; null while it is being read. */
+    val timeline: SleepTimeline? = null,
     /** Null while the sleep's audio is being read. */
     val player: PlayerUiState? = null,
+    /** The loudness the timeline draws; null while it is being read. */
+    val loudness: SleepLoudness? = null,
+    /** The events of the sleep; empty until they are found ([SleepSummary.eventsFound]). */
+    val events: List<SleepEvent> = emptyList(),
+    /** The event being played on its own, if any. */
+    val playingEventId: Long? = null,
 )
 
-/** State and actions of the sleep screen: the sleep and its full playback. */
+/** State and actions of the sleep screen: the sleep, its events, and their playback. */
 class SleepViewModel(
     sleepId: Long,
     repository: SleepRepository,
+    settings: SettingsStore,
     private val player: SleepPlayer,
 ) : ViewModel() {
 
     private val timeline = MutableStateFlow<SleepTimeline?>(null)
+    private val loudness = MutableStateFlow<SleepLoudness?>(null)
 
     /** Where the user is dragging the timeline to; null when not dragging. */
     private val scrubPosition = MutableStateFlow<Duration?>(null)
+
+    /** The event last played on its own; it is playing while the player plays a stretch. */
+    private val eventPlayed = MutableStateFlow<Long?>(null)
+
+    private val leadIn = settings.flow(Settings.leadIn).stateIn(viewModelScope, SharingStarted.Eagerly, Settings.leadIn.default)
+    private val tail = settings.flow(Settings.tail).stateIn(viewModelScope, SharingStarted.Eagerly, Settings.tail.default)
 
     init {
         viewModelScope.launch {
             val loaded = repository.timeline(sleepId)
             player.load(loaded)
             timeline.value = loaded
+
+            val track = repository.track(sleepId)
+            val detection = withContext(Dispatchers.Default) { EventDetector.detect(track.track) }
+            loudness.value = SleepLoudness(track, detection.level, detection.baseline)
         }
     }
 
+    private val sleepAndEvents = combine(repository.sleep(sleepId), repository.events(sleepId)) { sleep, events ->
+        sleep to if (sleep?.eventsFound == true) events else emptyList()
+    }
+
     val state: StateFlow<SleepUiState> = combine(
-        repository.sleep(sleepId),
-        timeline,
+        sleepAndEvents,
+        combine(timeline, loudness, ::Pair),
         player.state,
         scrubPosition,
-    ) { sleep, timeline, playback, scrub ->
+        eventPlayed,
+    ) { (sleep, events), (timeline, loudness), playback, scrub, played ->
         val player = timeline?.let {
             val position = scrub ?: playback.position
             PlayerUiState(
@@ -76,7 +107,14 @@ class SleepViewModel(
                 failed = playback.failed,
             )
         }
-        SleepUiState(sleep, player)
+        SleepUiState(
+            sleep = sleep,
+            timeline = timeline,
+            player = player,
+            loudness = loudness,
+            events = events,
+            playingEventId = played.takeIf { playback.playing && playback.until != null },
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SleepUiState())
 
     fun togglePlay() {
@@ -85,6 +123,11 @@ class SleepViewModel(
 
     fun pause() {
         player.pause()
+    }
+
+    /** Moves the playback to [position] straight away, as a tap on the timeline does. */
+    fun seekTo(position: Duration) {
+        player.seekTo(position)
     }
 
     /** Shows [position] while the timeline is dragged, without moving the playback yet. */
@@ -97,6 +140,21 @@ class SleepViewModel(
         val position = scrubPosition.value ?: return
         player.seekTo(position)
         scrubPosition.value = null
+    }
+
+    /** Moves the playback to just before [event], with the lead-in of the settings. */
+    fun seekToEvent(event: SleepEvent) {
+        player.seekTo((event.start - leadIn.value).coerceAtLeast(Duration.ZERO))
+    }
+
+    /** Plays [event] on its own with the settings' lead-in and tail, or pauses it while it plays. */
+    fun togglePlayEvent(event: SleepEvent) {
+        if (state.value.playingEventId == event.id) {
+            player.pause()
+            return
+        }
+        eventPlayed.value = event.id
+        player.playRange((event.start - leadIn.value).coerceAtLeast(Duration.ZERO), event.end + tail.value)
     }
 
     /** Switches to the next speed, after the fastest back to the slowest. */

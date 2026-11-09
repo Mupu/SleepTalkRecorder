@@ -14,6 +14,9 @@ data class ChunkFile(val file: File, val frames: Long)
 /** A recording as the timeline plays it: its clock and its chunk files in order, without holes. */
 data class TimelineRecording(val clock: RecordingClock, val chunks: List<ChunkFile>) {
 
+    /** The samples the recording plays. */
+    val frames: Long get() = chunks.sumOf { it.frames }
+
     companion object {
         /**
          * Reads the chunk files [ChunkedWavWriter] wrote into [directory] for a recording of
@@ -78,7 +81,13 @@ data class TimelineLocation(val piece: Int, val offset: Duration)
  * Every position maps to the instant its sample was recorded through the [RecordingClock] of the
  * recording that holds it, so clock times follow from sample counts and never drift across files.
  */
-class SleepTimeline(recordings: List<TimelineRecording>) {
+class SleepTimeline(
+    /** The recordings in playing order. */
+    val recordings: List<TimelineRecording>,
+) {
+
+    /** The position of the first sample of each of [recordings]. */
+    val recordingPositions: List<Duration>
 
     /** Every chunk file of the sleep in playing order; the player plays each as one item. */
     val pieces: List<File>
@@ -98,8 +107,10 @@ class SleepTimeline(recordings: List<TimelineRecording>) {
         val starts = ArrayList<Duration>()
         val recordingStarts = ArrayList<Duration>()
         val clocks = ArrayList<RecordingClock>()
+        val placed = ArrayList<Duration>()
         var recordingStart = Duration.ZERO
         for (recording in recordings) {
+            placed += recordingStart
             var firstFrame = 0L
             for (chunk in recording.chunks) {
                 pieces += chunk.file
@@ -114,6 +125,7 @@ class SleepTimeline(recordings: List<TimelineRecording>) {
         this.starts = starts
         this.recordingStarts = recordingStarts
         this.clocks = clocks
+        recordingPositions = placed
         duration = recordingStart
     }
 

@@ -11,7 +11,8 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 |---|---|---|
 | `time` | The time model: *night* and *nap* naming, the timeline of a *recording*, the latest stop time | none |
 | `recording` | The recording session, WAV chunk writer, microphone, foreground service and its notifications | only in `MicrophoneSource`, `Recorder`, `RecordingService`, `RecordingNotifications` |
-| `data` | Room database, entities and the `SleepRepository` | Room |
+| `detection` | The feature track (extraction and file format) and the `EventDetector` with its baseline | none |
+| `data` | Room database, entities, the `SleepRepository`, and loading feature tracks for a sleep | Room |
 | `playback` | The `SleepTimeline` of a sleep's chunk files and the `SleepPlayer` that plays it | only in `SleepPlayer` (Media3) |
 | `retention` | Automatic deletion: which sleeps are old enough (`SleepRetention`) and the WorkManager job that deletes them | only in `AutoDeletion` (WorkManager) |
 | `settings` | The user's settings and the `SettingsStore` that keeps them; the app language | DataStore; AppCompat only in `AppLanguages` |
@@ -20,10 +21,12 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 
 The root package holds `MainActivity`, the only activity, and `SleepTalkApplication` with the
 `AppContainer`, which wires the shared objects by hand: the database, the repository, the
-`SettingsStore` and the `Recorder`; it also keeps automatic deletion scheduled. Logic that can be
-tested without a device (`time`, the WAV writer, the recording session, level computation, the
-sleep timeline, the settings, which sleeps automatic deletion removes) is plain Kotlin
-behind small interfaces (`PcmSource`, `RecordingStore`, `Clocks`) and is unit-tested on the JVM.
+`SettingsStore` and the `Recorder`; it also keeps automatic deletion scheduled and starts the
+search for events of finished sleeps. Logic that can be tested without a device (`time`,
+`detection`, the WAV writer, the recording session, level computation, the sleep timeline, the
+timeline view of the sleep screen, the settings, which sleeps automatic deletion removes) is plain
+Kotlin behind small interfaces (`PcmSource`, `RecordingStore`, `Clocks`) and is unit-tested on the
+JVM.
 
 Screens follow unidirectional data flow: a `ViewModel` combines repository and recorder flows into
 one immutable UI state, and the screen sends user actions back as calls.
@@ -77,7 +80,8 @@ shows the *sleep*'s name, a chronometer and a Stop action. A partial wake lock c
 
 `RecordingSession` reads 100 ms buffers from `MicrophoneSource` (`AudioRecord`, source
 `VOICE_RECOGNITION`, so automatic gain control and noise reduction are off, 16 kHz mono 16-bit) and
-hands each buffer to `ChunkedWavWriter`. Stopping is coroutine cancellation; the session finishes
+hands each buffer to `ChunkedWavWriter` and to the recording's feature track (see
+[Finding events](#finding-events)). Stopping is coroutine cancellation; the session finishes
 its files and the database rows before the cancellation completes. A microphone that fails or a
 storage error ends the session with a reason the home screen shows, never with a crash.
 
@@ -97,14 +101,35 @@ syncs it, and the repository stores the sample count reached; a killed process t
 playable files that miss at most the last seconds. On the next process start, recordings still
 marked as recording are finished with that stored count.
 
-Room (`SleepDatabase`) holds two tables:
+Next to the chunk files lies `features.bin`, the recording's feature track (see
+[Finding events](#finding-events)). It is flushed before the WAV files at every flush, so it always
+covers the samples the database counts as saved.
+
+Room (`SleepDatabase`) holds four tables:
 
 - `sleep`: start and end instant; the end is null while the sleep is recorded.
 - `recording`: its sleep, the UTC instant of its first sample, the sample rate, the sample count
   and whether it is still recorded.
+- `event_kind`: the kinds of *event*, as data rather than a list in code: an id that annotations
+  refer to, the user's name (null for the kinds the app ships, which it names in the app
+  language), a colour (a theme colour role such as `primary`, so it follows light and dark mode,
+  or a fixed `#RRGGBB`), and whether the sleep screen offers a filter for the kind. The database
+  adds the app's kinds that are missing each time it opens, so a new app version can ship new
+  kinds; v1 ships only the plain event.
+- `annotation`: every result about a stretch of a sleep, with its origin. The stretch is given in
+  milliseconds of the sleep's audio (the playing axis, see [Time model](#time-model)), so it does
+  not depend on the detector's hop size. The `type` says what the annotation states (`EVENT` with
+  a kind, `SENSITIVITY` with the start threshold the detector chose, in `value`), and `origin`
+  (`DEVICE`, `SERVER` or `USER`), `producer` and `producer_version` say who stated it.
+
+Annotations are layers: an analysis that runs again replaces only its own annotations (same
+origin and producer) and leaves every other layer alone. Hiding an event, a sensitivity override
+for a stretch, a transcript or a user's correction is one more annotation type beside the
+detector's, and user annotations win over every analysis; none of them needs a new table.
 
 The schema is exported to `app/schemas/`. Data derived from a sleep or a recording goes into
-tables of its own that reference it by foreign key, so these two tables stay stable. Auto backup is off: recordings never leave the phone, and a restored database without its audio would
+tables of its own that reference it by foreign key, so the `sleep` and `recording` tables stay
+stable. Auto backup is off: recordings never leave the phone, and a restored database without its audio would
 list sleeps that cannot be played.
 
 ## Deletion
@@ -124,6 +149,51 @@ is named after, lies more than the chosen number of calendar days before today: 
 30 days is still there on the 30th day after its date and gone on the 31st, whatever time of day
 the work runs and across daylight saving changes.
 
+## Finding events
+
+Events are found from a compact *feature track*, never from the audio, so finding them again takes
+a fraction of a second even for a long night. `FeatureExtractor` turns the PCM of a recording into
+one 8-byte record per hop of 320 samples (20 ms): full-band RMS and peak level, the levels of the
+bands below 300 Hz, from 300 to 3400 Hz (the speech band) and above, spectral flatness of the
+speech band, zero crossings and voicing. Levels are dBFS in steps of 0.5 dB. `RecordingSession`
+extracts it live from the buffers it records, which costs little next to keeping the microphone
+open, and `FeatureTrackFile` stores it as an append-only file whose header names its format
+version. Only the speech band is used to find events yet; the other columns are there so later
+kinds of events can be told apart without reading the audio again.
+
+When a track is missing, of an older format version, or shorter than its audio, the repository
+extracts it again from the chunk files before using it. That takes seconds per hour of audio but
+happens only after a storage failure or a change of the format.
+
+`EventDetector` works on the tracks of a sleep's recordings back to back (`SleepTrack`, which maps
+each hop to its exact position in the sleep):
+
+1. The level is the speech band, averaged in power over 100 ms, so rumble and hiss barely move it.
+2. The *baseline* is the 20th percentile of the speech band over a minute centred on each moment,
+   kept in a sliding histogram of the 256 level codes. It stays below sounds that fill less than
+   most of that minute and follows a floor that changes (a fan switching on) within half a
+   minute. Digital silence is left out.
+3. The *sensitivity* is chosen per sleep: the start threshold above the baseline is the median of
+   the residual (level minus baseline) plus a multiple of the noise spread, the distance from the
+   residual's 16th percentile to its median, held between 5 and 25 dB. Events lie in the upper
+   tail and do not move it, so a noisy night gets a higher threshold than a quiet one.
+4. A hysteresis state machine starts an event after 60 ms above the start threshold and ends it
+   after 300 ms below a stop threshold 40 % lower. Events shorter than the minimum length are
+   dropped, and events less than 1.5 s apart are joined.
+
+Every knob is a named parameter of `DetectionParams`; one sensitivity setting from 0 to 1 sets the
+noise-spread multiple and the minimum length together.
+
+`SleepRepository.findEvents` stores the events and the chosen threshold as annotations of the
+producer `loudness`, whose version combines the detector's and the feature format's versions.
+`AppContainer` searches every finished sleep without annotations of the current version: after
+each recording ends and once at process start, which also covers a recording a killed process left
+behind and a detector that changed with an update.
+
+The sleep screen reads the same track to draw the timeline: the smoothed speech-band level, grey
+except where an event lies, with the baseline as a dashed line. `SleepLoudness` keeps maxima of
+16, 256 and 4 096 hops, so every column of the timeline reads only a few values at any zoom.
+
 ## Playback
 
 *Full playback* plays a sleep's audio as one continuous axis: its recordings back to back, each as
@@ -136,6 +206,8 @@ left out; a missing or damaged file ends its recording there.
 PCM format without encoder delay, so ExoPlayer moves from file to file on the same audio track,
 without a gap. Speed changes keep the pitch. The player belongs to the sleep screen's `ViewModel`
 and pauses when the screen is no longer visible, because there is no notification to control it.
+An event is played on its own as a stretch from the *lead-in* before it to the tail after it, both
+from the settings; the player pauses itself at the stretch's end.
 
 ## Time model
 

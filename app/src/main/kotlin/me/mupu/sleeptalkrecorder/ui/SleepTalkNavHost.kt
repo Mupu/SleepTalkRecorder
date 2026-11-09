@@ -78,7 +78,9 @@ fun SleepTalkNavHost(container: AppContainer) {
             val sleepId = entry.arguments?.getLong(Routes.SLEEP_ID) ?: return@composable
             val context = LocalContext.current.applicationContext
             SleepScreen(
-                viewModel = viewModel { SleepViewModel(sleepId, container.sleepRepository, SleepPlayer(context)) },
+                viewModel = viewModel {
+                    SleepViewModel(sleepId, container.sleepRepository, container.settings, SleepPlayer(context))
+                },
                 onBack = { navController.popBackStack() },
             )
         }

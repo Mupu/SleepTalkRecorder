@@ -1,0 +1,52 @@
+package me.mupu.sleeptalkrecorder.detection
+
+import me.mupu.sleeptalkrecorder.detection.FeatureTrack.Companion.HOP_MILLIS
+import java.time.Duration
+
+/**
+ * The feature tracks of a sleep's recordings back to back as one [track], with the position in the
+ * sleep's audio of each hop. A recording rarely ends on a whole hop, so the next recording's hops
+ * start up to 20 ms later than their index suggests; [positionOf] and [hopAt] account for that, and
+ * positions therefore stay exact over any number of recordings.
+ */
+class SleepTrack private constructor(
+    /** All hops of the sleep. */
+    val track: FeatureTrack,
+    private val firstHops: IntArray,
+    private val starts: List<Duration>,
+) {
+
+    /** The position in the sleep's audio where [hop] starts; [FeatureTrack.size] gives the end of the last hop. */
+    fun positionOf(hop: Int): Duration {
+        val recording = recordingOf(hop)
+        return starts[recording] + Duration.ofMillis((hop - firstHops[recording]) * HOP_MILLIS)
+    }
+
+    /** The hop that holds [position], held within the track. */
+    fun hopAt(position: Duration): Int {
+        if (track.size == 0) return 0
+        val recording = starts.indexOfLast { it <= position }.coerceAtLeast(0)
+        val first = firstHops[recording]
+        val until = if (recording < firstHops.lastIndex) firstHops[recording + 1] else track.size
+        val into = (position - starts[recording]).toMillis().coerceAtLeast(0) / HOP_MILLIS
+        // A position past a recording's last hop (or in a recording without hops) is its last hop.
+        return (first + into).toInt().coerceAtMost(until - 1).coerceIn(0, track.size - 1)
+    }
+
+    /** The recording that holds [hop]; on a boundary the later one, which starts with it. */
+    private fun recordingOf(hop: Int): Int = firstHops.indexOfLast { it <= hop }.coerceAtLeast(0)
+
+    companion object {
+        /** The sleep of [recordings]: each recording's track and the position of its first sample. */
+        fun of(recordings: List<Pair<FeatureTrack, Duration>>): SleepTrack {
+            val firstHops = IntArray(recordings.size)
+            var hops = 0
+            recordings.forEachIndexed { index, (track, _) ->
+                firstHops[index] = hops
+                hops += track.size
+            }
+            val starts = recordings.map { it.second }.ifEmpty { listOf(Duration.ZERO) }
+            return SleepTrack(FeatureTrack.concat(recordings.map { it.first }), firstHops.takeIf { it.isNotEmpty() } ?: IntArray(1), starts)
+        }
+    }
+}

@@ -2,11 +2,12 @@ package me.mupu.sleeptalkrecorder.data
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 
-/** Database access for sleeps and their recordings. */
+/** Database access for sleeps, their recordings and their annotations. */
 @Dao
 interface SleepDao {
 
@@ -57,24 +58,58 @@ interface SleepDao {
     @Query("DELETE FROM sleep WHERE id = :id")
     suspend fun deleteSleep(id: Long)
 
-    /** All sleeps, the most recently started first. */
-    @Query(
-        """
-        SELECT sleep.id, sleep.started_at, sleep.ended_at, COUNT(recording.id) AS recording_count
-        FROM sleep LEFT JOIN recording ON recording.sleep_id = sleep.id
-        GROUP BY sleep.id
-        ORDER BY sleep.started_at DESC
-        """,
-    )
-    fun sleeps(): Flow<List<SleepSummary>>
+    /** All sleeps, the most recently started first, with their events found by [producer] [version]. */
+    @Query("$SUMMARY ORDER BY sleep.started_at DESC")
+    fun sleeps(producer: String, version: String): Flow<List<SleepSummary>>
 
+    @Query("$SUMMARY WHERE sleep.id = :id")
+    fun sleep(id: Long, producer: String, version: String): Flow<SleepSummary?>
+
+    /** The ids of finished sleeps whose events [producer] [version] has not yet found. */
     @Query(
         """
-        SELECT sleep.id, sleep.started_at, sleep.ended_at, COUNT(recording.id) AS recording_count
-        FROM sleep LEFT JOIN recording ON recording.sleep_id = sleep.id
-        WHERE sleep.id = :id
-        GROUP BY sleep.id
+        SELECT id FROM sleep WHERE ended_at IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM annotation WHERE annotation.sleep_id = sleep.id AND type = 'SENSITIVITY'
+            AND producer = :producer AND producer_version = :version
+        )
         """,
     )
-    fun sleep(id: Long): Flow<SleepSummary?>
+    suspend fun sleepsWithoutEvents(producer: String, version: String): List<Long>
+
+    /** Adds the kinds that are not stored yet; kinds that exist keep the user's changes. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertKinds(kinds: List<EventKindEntity>)
+
+    @Insert
+    suspend fun insertAnnotations(annotations: List<AnnotationEntity>)
+
+    /** Removes what [producer] found in a sleep, before it stores its new results. */
+    @Query("DELETE FROM annotation WHERE sleep_id = :sleepId AND origin = :origin AND producer = :producer")
+    suspend fun deleteResults(sleepId: Long, origin: AnnotationOrigin, producer: String)
+
+    /** The events of a sleep in order, with their kinds. */
+    @Query(
+        """
+        SELECT annotation.id, start_ms, end_ms, kind_id, event_kind.name AS kind_name, event_kind.color AS kind_color
+        FROM annotation JOIN event_kind ON event_kind.id = annotation.kind_id
+        WHERE sleep_id = :sleepId AND type = 'EVENT'
+        ORDER BY start_ms, annotation.id
+        """,
+    )
+    fun events(sleepId: Long): Flow<List<SleepEvent>>
 }
+
+/**
+ * A sleep with its recordings and events. Only the events of a finished analysis count as found:
+ * the analysis writes its events and its sensitivity in one transaction.
+ */
+private const val SUMMARY = """
+    SELECT sleep.id, sleep.started_at, sleep.ended_at,
+        (SELECT COUNT(*) FROM recording WHERE recording.sleep_id = sleep.id) AS recording_count,
+        (SELECT COUNT(*) FROM annotation WHERE annotation.sleep_id = sleep.id AND type = 'EVENT') AS event_count,
+        (SELECT COALESCE(SUM(end_ms - start_ms), 0) FROM annotation
+            WHERE annotation.sleep_id = sleep.id AND type = 'EVENT') AS event_ms,
+        EXISTS (SELECT 1 FROM annotation WHERE annotation.sleep_id = sleep.id AND type = 'SENSITIVITY'
+            AND producer = :producer AND producer_version = :version) AS events_found
+    FROM sleep
+"""

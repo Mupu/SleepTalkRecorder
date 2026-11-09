@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import android.text.format.Formatter
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -36,6 +37,7 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -99,7 +101,12 @@ fun LibraryScreen(
                     ListItem(
                         leadingContent = { SleepKindIcon(date.kind) },
                         headlineContent = { Text(sleepTitle(resources, date)) },
-                        supportingContent = { Text(sleepSubtitle(sleep, zone)) },
+                        supportingContent = {
+                            Column {
+                                Text(sleepSubtitle(sleep, zone))
+                                EventsTag(sleep)
+                            }
+                        },
                         trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
                         modifier = Modifier.combinedClickable(
                             onClick = { onOpenSleep(sleep.id) },
@@ -201,6 +208,34 @@ private fun RunningSleepItem(running: RunningSleep, onClick: () -> Unit) {
             },
         )
     }
+}
+
+/** How many events a sleep has and how long they last together, or that they are being found. */
+@Composable
+private fun EventsTag(sleep: SleepSummary) {
+    val resources = LocalResources.current
+    val count = pluralStringResource(R.plurals.event_count, sleep.eventCount, sleep.eventCount)
+    val text = if (!sleep.eventsFound) {
+        stringResource(R.string.finding_events)
+    } else if (sleep.eventCount == 0) {
+        count
+    } else {
+        stringResource(
+            R.string.events_total,
+            count,
+            formatDuration(resources, Duration.ofMillis(sleep.eventMillis)),
+        )
+    }
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium.merge(TextStyle(fontFeatureSettings = "tnum")),
+        color = MaterialTheme.colorScheme.onPrimaryContainer,
+        modifier = Modifier
+            .padding(top = 4.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+    )
 }
 
 /** The round icon in front of a sleep: a moon for a night, a sun for a nap. */

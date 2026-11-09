@@ -155,6 +155,8 @@ class RecordingService : Service() {
     private fun finish(state: RecorderState) {
         session = null
         container.recorder.report(state)
+        // Events are found right after the stop, and after a recording that failed.
+        container.findMissingEvents()
         if (wakeLock.isHeld) wakeLock.release()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()

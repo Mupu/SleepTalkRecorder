@@ -1,51 +1,69 @@
 package me.mupu.sleeptalkrecorder.ui.sleep
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.mupu.sleeptalkrecorder.R
+import me.mupu.sleeptalkrecorder.data.EventKinds
+import me.mupu.sleeptalkrecorder.data.SleepEvent
+import me.mupu.sleeptalkrecorder.data.SleepSummary
+import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.time.SleepDate
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
+import me.mupu.sleeptalkrecorder.ui.format.formatEventLength
 import me.mupu.sleeptalkrecorder.ui.format.formatPosition
 import me.mupu.sleeptalkrecorder.ui.format.sleepTitle
 import me.mupu.sleeptalkrecorder.ui.library.sleepSubtitle
 import java.text.NumberFormat
-import java.time.Duration
 import java.time.ZoneId
 
-/** One sleep: its name and times, a timeline of the whole sleep and the player below it. */
+/**
+ * One sleep: its name and times, the zoomable loudness timeline with its overview, the player, and
+ * the list of its events, each of which plays on its own.
+ */
 @Composable
 fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -58,54 +76,77 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
     val sleep = state.sleep
     val title = sleep?.let { sleepTitle(resources, SleepDate.of(it.startedAt, zone)) }.orEmpty()
     Scaffold(topBar = { AppBar(title, navigationIcon = { BackIcon(onBack) }) }) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp)) {
+        Column(Modifier.fillMaxSize().padding(padding)) {
             if (sleep != null) {
                 Text(
-                    sleepSubtitle(sleep, zone),
+                    listOfNotNull(sleepSubtitle(sleep, zone), eventSummary(sleep)).joinToString(" · "),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 4.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
-            Spacer(Modifier.height(12.dp))
-            state.player?.let { player ->
-                Player(
-                    player = player,
-                    onTogglePlay = viewModel::togglePlay,
-                    onScrub = viewModel::scrub,
-                    onScrubFinished = viewModel::finishScrub,
-                    onNextSpeed = viewModel::nextSpeed,
+            Spacer(Modifier.height(8.dp))
+
+            val timeline = state.timeline
+            val player = state.player
+            if (timeline != null && player != null) {
+                var window by remember(timeline) { mutableStateOf(TimelineWindow.whole(timeline.duration)) }
+                Column(Modifier.padding(horizontal = 12.dp)) {
+                    LoudnessTimeline(
+                        timeline = timeline,
+                        loudness = state.loudness,
+                        events = state.events,
+                        position = player.position,
+                        window = window,
+                        onWindowChange = { window = it },
+                        onSeek = viewModel::seekTo,
+                        onScrub = viewModel::scrub,
+                        onScrubFinished = viewModel::finishScrub,
+                    )
+                    Player(player, onTogglePlay = viewModel::togglePlay, onNextSpeed = viewModel::nextSpeed)
+                }
+                HorizontalDivider()
+                EventList(
+                    sleep = sleep,
+                    events = state.events,
+                    timeline = timeline,
+                    playingEventId = state.playingEventId,
+                    onSelect = { event ->
+                        window = window.showing(event.start, event.end)
+                        viewModel.seekToEvent(event)
+                    },
+                    onTogglePlay = viewModel::togglePlayEvent,
                 )
             }
         }
     }
 }
 
+/** "12 events", that they are still being found, or null while the sleep is recorded. */
 @Composable
-private fun Player(
-    player: PlayerUiState,
-    onTogglePlay: () -> Unit,
-    onScrub: (Duration) -> Unit,
-    onScrubFinished: () -> Unit,
-    onNextSpeed: () -> Unit,
-) {
+private fun eventSummary(sleep: SleepSummary): String? = when {
+    sleep.isRunning -> null
+    !sleep.eventsFound -> stringResource(R.string.finding_events)
+    else -> pluralStringResource(R.plurals.event_count, sleep.eventCount, sleep.eventCount)
+}
+
+@Composable
+private fun Player(player: PlayerUiState, onTogglePlay: () -> Unit, onNextSpeed: () -> Unit) {
     val clock = LocalClockFormatter.current
     val zone = ZoneId.systemDefault()
     val numbers = TextStyle(fontFeatureSettings = "tnum")
 
-    Timeline(player, onScrub, onScrubFinished)
-
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 8.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
         FilledIconButton(
             onClick = onTogglePlay,
             enabled = player.hasAudio,
             shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.size(56.dp),
+            modifier = Modifier.size(52.dp),
         ) {
             Icon(
                 painterResource(if (player.playing) R.drawable.ic_pause else R.drawable.ic_play),
                 contentDescription = stringResource(if (player.playing) R.string.pause else R.string.play),
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier.size(30.dp),
             )
         }
         Spacer(Modifier.width(16.dp))
@@ -138,43 +179,91 @@ private fun Player(
     }
 }
 
-/** The whole sleep as a slider; dragging shows the target position and seeks when released. */
+/** The events of the sleep in order; a tap shows one on the timeline, its button plays it alone. */
 @Composable
-private fun Timeline(player: PlayerUiState, onScrub: (Duration) -> Unit, onScrubFinished: () -> Unit) {
-    val description = stringResource(R.string.timeline)
-    val seconds = player.duration.toMillis() / 1_000f
-
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-            Slider(
-                value = (player.position.toMillis() / 1_000f).coerceIn(0f, seconds),
-                onValueChange = { onScrub(Duration.ofMillis((it * 1_000).toLong())) },
-                onValueChangeFinished = onScrubFinished,
-                valueRange = 0f..seconds.coerceAtLeast(1f),
-                enabled = player.hasAudio,
-                modifier = Modifier.semantics { contentDescription = description },
-            )
-            if (player.hasAudio) {
-                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                    TimelineLabel(formatPosition(Duration.ZERO))
-                    TimelineLabel(formatPosition(player.duration))
-                }
+private fun EventList(
+    sleep: SleepSummary?,
+    events: List<SleepEvent>,
+    timeline: SleepTimeline,
+    playingEventId: Long?,
+    onSelect: (SleepEvent) -> Unit,
+    onTogglePlay: (SleepEvent) -> Unit,
+) {
+    LazyColumn(Modifier.fillMaxSize()) {
+        items(events, key = { it.id }) { event ->
+            EventRow(event, timeline, playing = event.id == playingEventId, onSelect = onSelect, onTogglePlay = onTogglePlay)
+        }
+        if (sleep != null && events.isEmpty()) {
+            item(key = "empty") {
+                Text(
+                    stringResource(if (sleep.eventsFound) R.string.no_events else R.string.finding_events),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun TimelineLabel(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelSmall.merge(TextStyle(fontFeatureSettings = "tnum")),
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+private fun EventRow(
+    event: SleepEvent,
+    timeline: SleepTimeline,
+    playing: Boolean,
+    onSelect: (SleepEvent) -> Unit,
+    onTogglePlay: (SleepEvent) -> Unit,
+) {
+    val clock = LocalClockFormatter.current
+    val resources = LocalResources.current
+    val colors = MaterialTheme.colorScheme
+    val numbers = TextStyle(fontFeatureSettings = "tnum")
+    val time = if (timeline.pieces.isEmpty()) "" else clock.format(timeline.instantAt(event.start), seconds = true)
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(64.dp)
+            .clickable { onSelect(event) }
+            .background(if (playing) colors.primary.copy(alpha = 0.1f) else colors.surface)
+            .padding(start = 16.dp, end = 4.dp),
+    ) {
+        Box(
+            Modifier
+                .padding(vertical = 10.dp)
+                .width(4.dp)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(2.dp))
+                .background(kindColor(event.kindColor, colors)),
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.event_heading, time, formatEventLength(resources, event.end - event.start)),
+                style = MaterialTheme.typography.titleSmall.merge(numbers),
+            )
+            Text(
+                stringResource(R.string.event_details, kindName(event), formatPosition(event.start)),
+                style = MaterialTheme.typography.bodySmall.merge(numbers),
+                color = colors.onSurfaceVariant,
+            )
+        }
+        IconButton(onClick = { onTogglePlay(event) }) {
+            Icon(
+                painterResource(if (playing) R.drawable.ic_pause else R.drawable.ic_play),
+                contentDescription = stringResource(if (playing) R.string.pause_event else R.string.play_event),
+            )
+        }
+    }
+}
+
+/** The name of an event's kind: the user's name, or the app's for the kinds it ships. */
+@Composable
+private fun kindName(event: SleepEvent): String = event.kindName ?: when (event.kindId) {
+    EventKinds.EVENT -> stringResource(R.string.kind_event)
+    else -> event.kindId
 }
 
 /** Shows the speed and switches to the next one on every tap. */

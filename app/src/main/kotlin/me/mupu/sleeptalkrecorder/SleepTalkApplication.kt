@@ -14,6 +14,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** The application; it owns the [AppContainer] that screens and the recording service share. */
 class SleepTalkApplication : Application() {
@@ -54,7 +56,22 @@ class AppContainer(context: Context) {
      */
     val interruptedRecordingsFinished: Job = scope.launch { sleepRepository.finishInterruptedRecordings() }
 
+    /** One search for events at a time, so a sleep is never searched twice at once. */
+    private val eventSearch = Mutex()
+
     init {
         scope.launch { AutoDeletion.followSettings(context, settings) }
+        findMissingEvents()
+    }
+
+    /**
+     * Finds the events of every finished sleep that has none yet, in the background: at process
+     * start (for recordings a killed process left behind) and after every recording ends.
+     */
+    fun findMissingEvents() {
+        scope.launch {
+            interruptedRecordingsFinished.join()
+            eventSearch.withLock { sleepRepository.findMissingEvents() }
+        }
     }
 }
