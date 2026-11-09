@@ -66,12 +66,6 @@ data class TimelineRecording(val clock: RecordingClock, val chunks: List<ChunkFi
     }
 }
 
-/**
- * Where a position of a sleep lies: [offset] into the chunk file with the index [piece] in
- * [SleepTimeline.pieces].
- */
-data class TimelineLocation(val piece: Int, val offset: Duration)
-
 /** The stretch of a sleep from [start] until [end] (exclusive), on whichever axis it is used. */
 data class Stretch(val start: Duration, val end: Duration)
 
@@ -97,18 +91,11 @@ class SleepTimeline(
     /** The position of the first sample of each of [recordings]. */
     val recordingPositions: List<Duration>
 
-    /** Every chunk file of the sleep in playing order; the player plays each as one item. */
+    /** Every chunk file of the sleep in playing order. */
     val pieces: List<File>
 
     /** How long the whole sleep plays. */
     val duration: Duration
-
-    /** The position of each piece's first sample. */
-    private val starts: List<Duration>
-
-    /** The position of the first sample of each piece's recording, and that recording's clock. */
-    private val recordingStarts: List<Duration>
-    private val clocks: List<RecordingClock>
 
     /** Where each of [recordings] starts on the clock axis. */
     private val clockStarts: List<Duration>
@@ -120,28 +107,13 @@ class SleepTimeline(
     val gaps: List<Stretch>
 
     init {
-        val pieces = ArrayList<File>()
-        val starts = ArrayList<Duration>()
-        val recordingStarts = ArrayList<Duration>()
-        val clocks = ArrayList<RecordingClock>()
         val placed = ArrayList<Duration>()
         var recordingStart = Duration.ZERO
         for (recording in recordings) {
             placed += recordingStart
-            var firstFrame = 0L
-            for (chunk in recording.chunks) {
-                pieces += chunk.file
-                starts += recordingStart + recording.clock.durationOf(firstFrame)
-                recordingStarts += recordingStart
-                clocks += recording.clock
-                firstFrame += chunk.frames
-            }
-            recordingStart += recording.clock.durationOf(firstFrame)
+            recordingStart += recording.clock.durationOf(recording.frames)
         }
-        this.pieces = pieces
-        this.starts = starts
-        this.recordingStarts = recordingStarts
-        this.clocks = clocks
+        pieces = recordings.flatMap { recording -> recording.chunks.map { it.file } }
         recordingPositions = placed
         duration = recordingStart
 
@@ -157,21 +129,6 @@ class SleepTimeline(
         this.clockStarts = clockStarts
         this.gaps = gaps
         clockDuration = clockEnd
-    }
-
-    /** The position [offset] into the piece with the index [piece]. */
-    fun positionOf(piece: Int, offset: Duration): Duration = starts[piece] + offset
-
-    /**
-     * The piece that plays [position], and how far into it. A position on the boundary of two
-     * pieces lies at the start of the later one; positions outside the sleep are held at its
-     * start and end.
-     */
-    fun locate(position: Duration): TimelineLocation {
-        require(pieces.isNotEmpty()) { "an empty timeline has no positions" }
-        val held = position.coerceIn(Duration.ZERO, duration)
-        val piece = starts.indexOfLast { it <= held }.coerceAtLeast(0)
-        return TimelineLocation(piece, held - starts[piece])
     }
 
     /** Where [position] lies on the clock axis. */
@@ -217,10 +174,14 @@ class SleepTimeline(
     /** The recording that holds [position]; on the boundary of two, the later one. */
     private fun recordingAt(position: Duration): Int = recordingPositions.indexOfLast { it <= position }.coerceAtLeast(0)
 
-    /** The instant the sample at [position] was recorded. */
+    /**
+     * The instant the sample at [position] was recorded; positions outside the sleep are held at
+     * its start and end.
+     */
     fun instantAt(position: Duration): Instant {
-        val piece = locate(position).piece
-        val intoRecording = position.coerceIn(Duration.ZERO, duration) - recordingStarts[piece]
-        return clocks[piece].startedAt + intoRecording
+        require(recordings.isNotEmpty()) { "an empty timeline has no instants" }
+        val held = position.coerceIn(Duration.ZERO, duration)
+        val recording = recordingAt(held)
+        return recordings[recording].clock.startedAt + (held - recordingPositions[recording])
     }
 }

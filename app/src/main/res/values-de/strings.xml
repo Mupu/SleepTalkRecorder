@@ -61,6 +61,10 @@
     <string name="zoom_in">Vergrößern</string>
     <string name="zoom_out">Verkleinern</string>
     <string name="zoom_fit">Ganzen Schlaf zeigen</string>
+    <string name="playback_full">Vollständig</string>
+    <string name="playback_cut">Nur Ereignisse</string>
+    <string name="cut_nothing_to_play">Keine Ereignisse zum Abspielen. Vollständig spielt den ganzen Schlaf.</string>
+    <string name="auto_zoom">Auto-Zoom: dem aktuellen Ereignis folgen</string>
     <string name="timeline_span">%1$s–%2$s · %3$s</string>
     <string name="finding_events">Ereignisse werden gesucht…</string>
     <string name="no_events">Keine Ereignisse in diesem Schlaf.</string>

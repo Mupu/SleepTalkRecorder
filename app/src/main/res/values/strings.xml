@@ -69,6 +69,10 @@
     <string name="zoom_in">Zoom in</string>
     <string name="zoom_out">Zoom out</string>
     <string name="zoom_fit">Show the whole sleep</string>
+    <string name="playback_full">Full</string>
+    <string name="playback_cut">Cut</string>
+    <string name="cut_nothing_to_play">No events to play. Full playback plays the whole sleep.</string>
+    <string name="auto_zoom">Auto zoom: follow the current event</string>
     <!-- The stretch the timeline shows: "02:10–02:40 · 30 min". -->
     <string name="timeline_span">%1$s–%2$s · %3$s</string>
     <string name="finding_events">Finding events…</string>

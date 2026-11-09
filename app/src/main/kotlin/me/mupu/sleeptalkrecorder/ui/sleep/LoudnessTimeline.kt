@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,7 +60,9 @@ import java.time.ZoneId
  * the sleep's audio, as the player plays it.
  *
  * Dragging the large timeline pans it, pinching zooms it, and a tap moves the playhead there.
- * Tapping or dragging the overview moves the window and the playhead along.
+ * Tapping or dragging the overview moves the window and the playhead along. Every such change of
+ * the window by hand is reported through [onWindowChange]; the auto zoom button shows [autoZoom]
+ * and switches it.
  */
 @Composable
 fun LoudnessTimeline(
@@ -70,6 +73,8 @@ fun LoudnessTimeline(
     position: Duration,
     window: TimelineWindow,
     onWindowChange: (TimelineWindow) -> Unit,
+    autoZoom: Boolean,
+    onAutoZoomChange: (Boolean) -> Unit,
     onSeek: (Duration) -> Unit,
     onScrub: (Duration) -> Unit,
     onScrubFinished: () -> Unit,
@@ -188,6 +193,9 @@ fun LoudnessTimeline(
             }
             IconButton(onClick = { onWindowChange(TimelineWindow.whole(window.total)) }) {
                 Icon(painterResource(R.drawable.ic_fit_screen), contentDescription = stringResource(R.string.zoom_fit))
+            }
+            FilledIconToggleButton(checked = autoZoom, onCheckedChange = onAutoZoomChange) {
+                Icon(painterResource(R.drawable.ic_center_focus_strong), contentDescription = stringResource(R.string.auto_zoom))
             }
             if (timeline.pieces.isNotEmpty()) {
                 Text(

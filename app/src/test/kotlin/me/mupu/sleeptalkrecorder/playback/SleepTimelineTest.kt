@@ -23,7 +23,6 @@ class SleepTimelineTest {
         val timeline = SleepTimeline(listOf(recording(clock, chunk, chunk, 16_000L * 42)))
 
         assertEquals(Duration.ofMinutes(30).plusSeconds(42), timeline.duration)
-        assertEquals(Duration.ofMinutes(15).plusMillis(3_250), timeline.positionOf(1, Duration.ofMillis(3_250)))
         assertEquals(Instant.parse("2026-11-08T23:11:10Z"), timeline.instantAt(Duration.ofMinutes(30).plusSeconds(10)))
     }
 
@@ -35,38 +34,26 @@ class SleepTimelineTest {
         val timeline = SleepTimeline(listOf(first, second))
 
         assertEquals(Duration.ofMinutes(15), timeline.duration)
-        assertEquals(Duration.ofMinutes(10), timeline.positionOf(1, Duration.ZERO))
         assertEquals(Instant.parse("2026-11-08T22:50:59Z"), timeline.instantAt(Duration.ofSeconds(9 * 60 + 59)))
         assertEquals(Instant.parse("2026-11-08T23:43:00Z"), timeline.instantAt(Duration.ofMinutes(12)))
-    }
-
-    @Test
-    fun `a position is located in the file that holds it`() {
-        val timeline = SleepTimeline(listOf(recording(clock, 16_000L * 60, 16_000L * 60)))
-
-        assertEquals(TimelineLocation(0, Duration.ofSeconds(59)), timeline.locate(Duration.ofSeconds(59)))
-        assertEquals(TimelineLocation(1, Duration.ZERO), timeline.locate(Duration.ofSeconds(60)))
-        assertEquals(TimelineLocation(1, Duration.ofSeconds(30)), timeline.locate(Duration.ofSeconds(90)))
     }
 
     @Test
     fun `positions outside the sleep are held at its start and end`() {
         val timeline = SleepTimeline(listOf(recording(clock, 16_000L * 60)))
 
-        assertEquals(TimelineLocation(0, Duration.ZERO), timeline.locate(Duration.ofSeconds(-5)))
-        assertEquals(TimelineLocation(0, Duration.ofSeconds(60)), timeline.locate(Duration.ofMinutes(5)))
+        assertEquals(evening, timeline.instantAt(Duration.ofSeconds(-5)))
         assertEquals(evening.plusSeconds(60), timeline.instantAt(Duration.ofMinutes(5)))
     }
 
     @Test
     fun `a clock time is exact to the sample at a sample rate without whole milliseconds`() {
-        // At 44.1 kHz a chunk of 1,000 samples lasts 22.6757... ms.
-        val clock = RecordingClock(evening, sampleRate = 44_100)
-        val timeline = SleepTimeline(listOf(recording(clock, 1_000, 1_000, 1_000)))
+        // At 44.1 kHz a recording of 1,000 samples lasts 22.6757... ms.
+        val first = RecordingClock(evening, sampleRate = 44_100)
+        val second = RecordingClock(evening.plusSeconds(60), sampleRate = 44_100)
+        val timeline = SleepTimeline(listOf(recording(first, 1_000), recording(second, 1_000)))
 
-        val start = timeline.positionOf(2, Duration.ZERO)
-        assertEquals(clock.durationOf(2_000), start)
-        assertEquals(clock.instantAt(2_000), timeline.instantAt(start))
+        assertEquals(second.instantAt(500), timeline.instantAt(first.durationOf(1_000) + second.durationOf(500)))
     }
 
     private fun minutes(minutes: Long) = Duration.ofMinutes(minutes)

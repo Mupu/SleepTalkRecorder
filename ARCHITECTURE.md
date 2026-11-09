@@ -13,7 +13,7 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 | `recording` | The recording session, WAV chunk writer, microphone, foreground service and its notifications | only in `MicrophoneSource`, `Recorder`, `RecordingService`, `RecordingNotifications` |
 | `detection` | The feature track (extraction and file format) and the `EventDetector` with its baseline | none |
 | `data` | Room database, entities, the `SleepRepository`, and loading feature tracks for a sleep | Room |
-| `playback` | The `SleepTimeline` of a sleep's chunk files and the `SleepPlayer` that plays it | only in `SleepPlayer` (Media3) |
+| `playback` | The `SleepTimeline` of a sleep's chunk files, the `SleepAudio` stream made of them, the `CutPlan` of cut playback and the `SleepPlayer` that plays it | only in `SleepPlayer` (Media3) |
 | `retention` | Automatic deletion: which sleeps are old enough (`SleepRetention`) and the WorkManager job that deletes them | only in `AutoDeletion` (WorkManager) |
 | `settings` | The user's settings and the `SettingsStore` that keeps them; the app language | DataStore; AppCompat only in `AppLanguages` |
 | `models` | The transcription models: the catalogue of downloadable models (`TranscriptionModel`), the `ModelInstaller` that downloads and checks their files, the `ModelLibrary` with their states and the active one, and the WorkManager job that downloads them | only in `ModelDownloadWorker` (WorkManager) |
@@ -25,9 +25,10 @@ The root package holds `MainActivity`, the only activity, and `SleepTalkApplicat
 `SettingsStore`, the `Recorder` and the `ModelLibrary`; it also keeps automatic deletion scheduled
 and starts the search for events of finished sleeps. Logic that can be tested without a device
 (`time`, `detection`, the WAV writer, the recording session, level computation, the sleep
-timeline, the timeline view of the sleep screen, the settings, which sleeps automatic deletion
-removes, the model downloads and states) is plain Kotlin behind small interfaces (`PcmSource`,
-`RecordingStore`, `Clocks`, `ByteSource`, `ModelDownloads`) and is unit-tested on the JVM.
+timeline and its audio stream, the cut plan, the timeline view of the sleep screen, the settings,
+which sleeps automatic deletion removes, the model downloads and states) is plain Kotlin behind
+small interfaces (`PcmSource`, `RecordingStore`, `Clocks`, `ByteSource`, `ModelDownloads`) and is
+unit-tested on the JVM.
 
 Screens follow unidirectional data flow: a `ViewModel` combines repository and recorder flows into
 one immutable UI state, and the screen sends user actions back as calls.
@@ -252,15 +253,36 @@ its chunk files in order. `SleepRepository.timeline` reads the files of every re
 database says the recording holds, so audio written after the last flush of a killed recording is
 left out; a missing or damaged file ends its recording there.
 
-`SleepPlayer` hands the files to a Media3 ExoPlayer as one playlist item each. All files share one
-PCM format without encoder delay, so ExoPlayer moves from file to file on the same audio track,
-without a gap. Speed changes keep the pitch. The player belongs to the sleep screen's `ViewModel`
-and pauses when the screen is no longer visible, because there is no notification to control it.
+`SleepPlayer` plays the timeline as one stream, `SleepAudio`: an RF64 header (WAV with 64-bit
+sizes, so a sleep of any length fits) followed by the samples of every chunk file the timeline
+plays, served to a Media3 ExoPlayer by a data source of its own. All recordings share the
+microphone's PCM format, so the stream is one audio track without gaps, and a position in it is
+the position in the sleep down to the sample. Speed changes keep the pitch. The player belongs to
+the sleep screen's `ViewModel` and pauses when the screen is no longer visible, because there is
+no notification to control it.
+
 An event is played on its own as a stretch from the *lead-in* before it to the tail after it, both
 from the settings; the player pauses itself at the stretch's end. Lead-in and tail stop at the
 start of a recording and at a stretch in which the microphone was unavailable
 (`SleepTimeline.uninterrupted`), so neither the audio before a gap nor the silence of a taken
 microphone is played around an event.
+
+*Cut playback*, the default, plays the events the list shows in this way, one after the other.
+`CutPlan` joins the stretches of events that overlap, so close events play without a jump, and
+keeps stretches apart that only touch where a recording starts. While playing, the player jumps
+from the end of a stretch to 200 ms before the next (ExoPlayer starts a seeked WAV stream at its
+next 100 ms block of samples) and stops after the last. The jumps are audible but never click:
+an audio processor in ExoPlayer's output path, `CutFader`, knows the stream position of every
+sample from the position ExoPlayer reports after each flush, fades each stretch in and out over
+15 ms and silences everything between stretches, so the fades sit at the stretch edges whenever
+the jump itself happens. It also fades in after every seek, in full playback too.
+
+The sleep screen highlights the event at the playhead in the list and scrolls it into view, also
+when the playhead lands there by a tap or a drag on the timeline; the event counts from the start
+of its lead-in to the end of its tail as cut playback plays them. Auto zoom, on when the screen
+opens, frames that event on the timeline with four times its length (30 s to 2 min) and keeps the
+playhead in view while playing; panning or zooming by hand, also with the overview, switches it
+off, its button on again.
 
 ## Time model
 

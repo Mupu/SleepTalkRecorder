@@ -6,6 +6,7 @@ import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.SleepRepository
 import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.detection.EventDetector
+import me.mupu.sleeptalkrecorder.playback.CutPlan
 import me.mupu.sleeptalkrecorder.playback.SleepPlayer
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
@@ -33,6 +34,10 @@ data class PlayerUiState(
     val playing: Boolean,
     val speed: Float,
     val failed: Boolean,
+    /** Whether only the listed events are played (cut playback) rather than the whole sleep. */
+    val cut: Boolean,
+    /** Whether cut playback is chosen but no event is listed, so it has nothing to play. */
+    val cutIsEmpty: Boolean,
 ) {
     /** Whether there is anything to play. */
     val hasAudio: Boolean get() = duration > Duration.ZERO
@@ -54,6 +59,8 @@ data class SleepUiState(
     val unavailable: List<Stretch> = emptyList(),
     /** The event being played on its own, if any. */
     val playingEventId: Long? = null,
+    /** The event at the playhead (see [currentEvent]), which the list highlights and auto zoom frames. */
+    val currentEvent: SleepEvent? = null,
 )
 
 /** State and actions of the sleep screen: the sleep, its events, and their playback. */
@@ -73,6 +80,9 @@ class SleepViewModel(
     /** The event last played on its own; it is playing while the player plays a stretch. */
     private val eventPlayed = MutableStateFlow<Long?>(null)
 
+    /** Whether cut playback is chosen; it is the default, because it is what the app is for. */
+    private val cut = MutableStateFlow(true)
+
     private val leadIn = settings.flow(Settings.leadIn).stateIn(viewModelScope, SharingStarted.Eagerly, Settings.leadIn.default)
     private val tail = settings.flow(Settings.tail).stateIn(viewModelScope, SharingStarted.Eagerly, Settings.tail.default)
     private val unavailable = repository.microphoneUnavailable(sleepId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -91,17 +101,40 @@ class SleepViewModel(
 
     private val sleepAndEvents = combine(repository.sleep(sleepId), repository.events(sleepId), unavailable) { sleep, events, unavailable ->
         Triple(sleep, if (sleep?.eventsFound == true) events else emptyList(), unavailable)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, Triple<SleepSummary?, List<SleepEvent>, List<Stretch>>(null, emptyList(), emptyList()))
+
+    /**
+     * The events the list shows, each with the settings' lead-in and tail as far as they reach
+     * without a gap or a taken microphone; equal lists are not published again, so the player
+     * only hears of real changes.
+     */
+    private val listed = combine(sleepAndEvents, timeline, leadIn, tail) { (_, events, unavailable), timeline, leadIn, tail ->
+        ListedEvents(
+            events,
+            events.map { event ->
+                if (timeline == null) Stretch(event.start, event.end) else eventWithLeadInAndTail(event, timeline, leadIn, tail, unavailable)
+            },
+        )
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, ListedEvents(emptyList(), emptyList()))
+
+    /** What cut playback plays; null while full playback is chosen or the audio is still being read. */
+    private val cutPlan = combine(listed, timeline, cut) { listed, timeline, cut ->
+        if (!cut || timeline == null) null else CutPlan.of(listed.played)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    init {
+        viewModelScope.launch { cutPlan.collect(player::setCutPlan) }
     }
 
     val state: StateFlow<SleepUiState> = combine(
         sleepAndEvents,
         combine(timeline, loudness, ::Pair),
-        player.state,
-        scrubPosition,
-        eventPlayed,
-    ) { (sleep, events, unavailable), (timeline, loudness), playback, scrub, played ->
+        combine(player.state, scrubPosition, ::Pair),
+        combine(eventPlayed, cut, cutPlan, ::Triple),
+        listed,
+    ) { (sleep, events, unavailable), (timeline, loudness), (playback, scrub), (played, cut, plan), listed ->
+        val position = scrub ?: playback.position
         val player = timeline?.let {
-            val position = scrub ?: playback.position
             PlayerUiState(
                 duration = it.duration,
                 position = position,
@@ -109,6 +142,8 @@ class SleepViewModel(
                 playing = playback.playing,
                 speed = playback.speed,
                 failed = playback.failed,
+                cut = cut,
+                cutIsEmpty = plan?.stretches?.isEmpty() == true,
             )
         }
         SleepUiState(
@@ -119,6 +154,7 @@ class SleepViewModel(
             events = events,
             unavailable = unavailable,
             playingEventId = played.takeIf { playback.playing && playback.until != null },
+            currentEvent = currentEvent(listed.events, listed.played, position),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SleepUiState())
 
@@ -147,6 +183,11 @@ class SleepViewModel(
         scrubPosition.value = null
     }
 
+    /** Plays only the listed events with lead-in and tail ([cut] true) or the whole sleep. */
+    fun setCut(cut: Boolean) {
+        this.cut.value = cut
+    }
+
     /** Moves the playback to just before [event], with the lead-in of the settings. */
     fun seekToEvent(event: SleepEvent) {
         player.seekTo(withLeadInAndTail(event).start)
@@ -163,13 +204,10 @@ class SleepViewModel(
         player.playRange(stretch.start, stretch.end)
     }
 
-    /**
-     * The stretch from the lead-in before [event] to the tail after it, which ends early at a gap
-     * or where the microphone was unavailable, so that neither is played around the event.
-     */
+    /** [eventWithLeadInAndTail] with this sleep's audio and the current settings. */
     private fun withLeadInAndTail(event: SleepEvent): Stretch {
-        val wanted = Stretch((event.start - leadIn.value).coerceAtLeast(Duration.ZERO), event.end + tail.value)
-        return timeline.value?.uninterrupted(wanted.start, wanted.end, Stretch(event.start, event.end), unavailable.value) ?: wanted
+        val timeline = timeline.value ?: return Stretch(event.start, event.end)
+        return eventWithLeadInAndTail(event, timeline, leadIn.value, tail.value, unavailable.value)
     }
 
     /** Switches to the next speed, after the fastest back to the slowest. */
@@ -187,3 +225,21 @@ class SleepViewModel(
         val SPEEDS = listOf(0.75f, 1f, 1.25f, 1.5f, 2f, 2.5f, 3f)
     }
 }
+
+/**
+ * The stretch from [leadIn] before [event] to [tail] after it, which ends early at a gap or where
+ * the microphone was [unavailable], so that neither is played around the event.
+ */
+private fun eventWithLeadInAndTail(
+    event: SleepEvent,
+    timeline: SleepTimeline,
+    leadIn: Duration,
+    tail: Duration,
+    unavailable: List<Stretch>,
+): Stretch {
+    val wanted = Stretch((event.start - leadIn).coerceAtLeast(Duration.ZERO), event.end + tail)
+    return timeline.uninterrupted(wanted.start, wanted.end, Stretch(event.start, event.end), unavailable)
+}
+
+/** The events the list shows, and the stretch around each that cut playback plays, in the same order. */
+private data class ListedEvents(val events: List<SleepEvent>, val played: List<Stretch>)

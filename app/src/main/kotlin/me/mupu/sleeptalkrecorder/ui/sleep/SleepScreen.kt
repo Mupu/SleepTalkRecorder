@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilledIconButton
@@ -23,8 +24,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,8 +67,11 @@ import java.text.NumberFormat
 import java.time.ZoneId
 
 /**
- * One sleep: its name and times, the zoomable loudness timeline with its overview, the player, and
- * the list of its events, each of which plays on its own.
+ * One sleep: its name and times, the zoomable loudness timeline with its overview, the player with
+ * full and cut playback, and the list of its events, each of which plays on its own.
+ *
+ * The list highlights the event at the playhead and scrolls to it. Auto zoom, on until the user
+ * pans or zooms the timeline by hand, frames that event and keeps the playhead in view.
  */
 @Composable
 fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
@@ -91,6 +100,17 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
             val player = state.player
             if (timeline != null && player != null) {
                 var window by remember(timeline) { mutableStateOf(TimelineWindow.whole(timeline.clockDuration)) }
+                var autoZoom by remember { mutableStateOf(true) }
+
+                val current = state.currentEvent
+                LaunchedEffect(autoZoom, current?.id) {
+                    if (autoZoom && current != null) window = window.framing(timeline.clockOf(current.start), timeline.clockOf(current.end))
+                }
+                if (autoZoom && player.playing) {
+                    val followed = window.following(timeline.clockOf(player.position))
+                    if (followed != window) SideEffect { window = followed }
+                }
+
                 Column(Modifier.padding(horizontal = 12.dp)) {
                     LoudnessTimeline(
                         timeline = timeline,
@@ -99,21 +119,32 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
                         unavailable = state.unavailable,
                         position = player.position,
                         window = window,
-                        onWindowChange = { window = it },
+                        onWindowChange = {
+                            window = it
+                            autoZoom = false
+                        },
+                        autoZoom = autoZoom,
+                        onAutoZoomChange = { autoZoom = it },
                         onSeek = viewModel::seekTo,
                         onScrub = viewModel::scrub,
                         onScrubFinished = viewModel::finishScrub,
                     )
-                    Player(player, onTogglePlay = viewModel::togglePlay, onNextSpeed = viewModel::nextSpeed)
+                    Player(
+                        player,
+                        onTogglePlay = viewModel::togglePlay,
+                        onNextSpeed = viewModel::nextSpeed,
+                        onCutChange = viewModel::setCut,
+                    )
                 }
                 HorizontalDivider()
                 EventList(
                     sleep = sleep,
                     events = state.events,
                     timeline = timeline,
+                    currentEventId = current?.id,
                     playingEventId = state.playingEventId,
                     onSelect = { event ->
-                        window = window.showing(timeline.clockOf(event.start), timeline.clockOf(event.end))
+                        if (!autoZoom) window = window.showing(timeline.clockOf(event.start), timeline.clockOf(event.end))
                         viewModel.seekToEvent(event)
                     },
                     onTogglePlay = viewModel::togglePlayEvent,
@@ -132,7 +163,7 @@ private fun eventSummary(sleep: SleepSummary): String? = when {
 }
 
 @Composable
-private fun Player(player: PlayerUiState, onTogglePlay: () -> Unit, onNextSpeed: () -> Unit) {
+private fun Player(player: PlayerUiState, onTogglePlay: () -> Unit, onNextSpeed: () -> Unit, onCutChange: (Boolean) -> Unit) {
     val clock = LocalClockFormatter.current
     val zone = ZoneId.systemDefault()
     val numbers = TextStyle(fontFeatureSettings = "tnum")
@@ -140,7 +171,7 @@ private fun Player(player: PlayerUiState, onTogglePlay: () -> Unit, onNextSpeed:
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
         FilledIconButton(
             onClick = onTogglePlay,
-            enabled = player.hasAudio,
+            enabled = player.hasAudio && !player.cutIsEmpty,
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.size(52.dp),
         ) {
@@ -162,12 +193,17 @@ private fun Player(player: PlayerUiState, onTogglePlay: () -> Unit, onNextSpeed:
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
+        PlaybackMode(cut = player.cut, enabled = player.hasAudio, onCutChange = onCutChange, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(8.dp))
         SpeedChip(player.speed, enabled = player.hasAudio, onClick = onNextSpeed)
     }
 
     val problem = when {
         !player.hasAudio -> R.string.sleep_no_audio
         player.failed -> R.string.playback_failed
+        player.cutIsEmpty -> R.string.cut_nothing_to_play
         else -> null
     }
     if (problem != null) {
@@ -180,19 +216,73 @@ private fun Player(player: PlayerUiState, onTogglePlay: () -> Unit, onNextSpeed:
     }
 }
 
-/** The events of the sleep in order; a tap shows one on the timeline, its button plays it alone. */
+/** Full or cut playback, as two connected buttons. */
+@Composable
+private fun PlaybackMode(cut: Boolean, enabled: Boolean, onCutChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    SingleChoiceSegmentedButtonRow(modifier) {
+        SegmentedButton(
+            selected = !cut,
+            onClick = { onCutChange(false) },
+            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+            enabled = enabled,
+        ) {
+            Text(stringResource(R.string.playback_full))
+        }
+        SegmentedButton(
+            selected = cut,
+            onClick = { onCutChange(true) },
+            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+            enabled = enabled,
+            icon = {
+                SegmentedButtonDefaults.Icon(active = cut) {
+                    Icon(painterResource(R.drawable.ic_content_cut), contentDescription = null, modifier = Modifier.size(18.dp))
+                }
+            },
+        ) {
+            Text(stringResource(R.string.playback_cut))
+        }
+    }
+}
+
+/**
+ * The events of the sleep in order; a tap shows one on the timeline, its button plays it alone.
+ * The event at the playhead is highlighted and scrolled into view.
+ */
 @Composable
 private fun EventList(
     sleep: SleepSummary?,
     events: List<SleepEvent>,
     timeline: SleepTimeline,
+    currentEventId: Long?,
     playingEventId: Long?,
     onSelect: (SleepEvent) -> Unit,
     onTogglePlay: (SleepEvent) -> Unit,
 ) {
-    LazyColumn(Modifier.fillMaxSize()) {
+    val listState = rememberLazyListState()
+    LaunchedEffect(currentEventId) {
+        val index = events.indexOfFirst { it.id == currentEventId }
+        if (index < 0) return@LaunchedEffect
+        val layout = listState.layoutInfo
+        val row = layout.visibleItemsInfo.firstOrNull { it.index == index }
+        val fullyVisible = row != null && row.offset >= layout.viewportStartOffset &&
+            row.offset + row.size <= layout.viewportEndOffset
+        if (!fullyVisible) {
+            // Centred in the list, so the events around it are seen too.
+            val rowSize = row?.size ?: layout.visibleItemsInfo.firstOrNull()?.size ?: 0
+            listState.animateScrollToItem(index, scrollOffset = -(layout.viewportSize.height - rowSize) / 2)
+        }
+    }
+
+    LazyColumn(Modifier.fillMaxSize(), state = listState) {
         items(events, key = { it.id }) { event ->
-            EventRow(event, timeline, playing = event.id == playingEventId, onSelect = onSelect, onTogglePlay = onTogglePlay)
+            EventRow(
+                event,
+                timeline,
+                current = event.id == currentEventId,
+                playing = event.id == playingEventId,
+                onSelect = onSelect,
+                onTogglePlay = onTogglePlay,
+            )
         }
         if (sleep != null && events.isEmpty()) {
             item(key = "empty") {
@@ -212,6 +302,7 @@ private fun EventList(
 private fun EventRow(
     event: SleepEvent,
     timeline: SleepTimeline,
+    current: Boolean,
     playing: Boolean,
     onSelect: (SleepEvent) -> Unit,
     onTogglePlay: (SleepEvent) -> Unit,
@@ -228,7 +319,7 @@ private fun EventRow(
             .fillMaxWidth()
             .height(64.dp)
             .clickable { onSelect(event) }
-            .background(if (playing) colors.primary.copy(alpha = 0.1f) else colors.surface)
+            .background(if (current || playing) colors.primary.copy(alpha = 0.1f) else colors.surface)
             .padding(start = 16.dp, end = 4.dp),
     ) {
         Box(

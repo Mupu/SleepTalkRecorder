@@ -35,6 +35,24 @@ data class TimelineWindow(val start: Duration, val end: Duration, val total: Dur
     fun showing(from: Duration, until: Duration): TimelineWindow =
         clamped((from - EVENT_MARGIN).toMillis(), (until - from + EVENT_MARGIN.multipliedBy(2)).toMillis())
 
+    /**
+     * The window auto zoom shows for an event from [from] to [until]: centred on it and
+     * [FRAMING_FACTOR] times as long, but no shorter than [FRAMING_MIN] and no longer than
+     * [FRAMING_MAX], so a short event keeps its surroundings and a long one its detail.
+     */
+    fun framing(from: Duration, until: Duration): TimelineWindow {
+        val span = (until - from).multipliedBy(FRAMING_FACTOR).coerceIn(FRAMING_MIN, FRAMING_MAX).toMillis()
+        val middle = (from.toMillis() + until.toMillis()) / 2
+        return clamped(middle - span / 2, span)
+    }
+
+    /**
+     * This window while the playhead is at [position]; once the playhead has left it, a window of
+     * the same span that shows it near its left edge, so it moves on with the playback.
+     */
+    fun following(position: Duration): TimelineWindow =
+        if (position in start..end) this else clamped(position.toMillis() - span.toMillis() / 10, span.toMillis())
+
     private fun clamped(startMillis: Long, spanMillis: Long): TimelineWindow {
         val totalMillis = total.toMillis()
         val span = spanMillis.coerceIn(minOf(MIN_SPAN.toMillis(), totalMillis), totalMillis)
@@ -48,6 +66,11 @@ data class TimelineWindow(val start: Duration, val end: Duration, val total: Dur
 
         /** How much the timeline shows before and after an event it is asked to show. */
         val EVENT_MARGIN: Duration = Duration.ofSeconds(30)
+
+        /** How many times an event's length auto zoom shows, within [FRAMING_MIN] and [FRAMING_MAX]. */
+        const val FRAMING_FACTOR = 4L
+        val FRAMING_MIN: Duration = Duration.ofSeconds(30)
+        val FRAMING_MAX: Duration = Duration.ofMinutes(2)
 
         /** The window that shows the whole sleep. */
         fun whole(total: Duration) = TimelineWindow(Duration.ZERO, total, total)

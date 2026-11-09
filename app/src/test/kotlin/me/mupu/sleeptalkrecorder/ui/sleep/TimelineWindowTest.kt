@@ -45,4 +45,22 @@ class TimelineWindowTest {
         assertEquals(minutes(15), window.positionAt(0.5))
         assertEquals(0.25, window.shareOf(Duration.ofSeconds(750)), 1e-9)
     }
+
+    @Test
+    fun `auto zoom frames an event with four times its length, from 30 seconds to 2 minutes`() {
+        val whole = TimelineWindow.whole(hour)
+        val framed = whole.framing(Duration.ofSeconds(1_780), Duration.ofSeconds(1_790))
+
+        assertEquals(TimelineWindow(Duration.ofSeconds(1_765), Duration.ofSeconds(1_805), hour), framed)
+        assertEquals(Duration.ofSeconds(30), whole.framing(minutes(30), minutes(30).plusSeconds(1)).span)
+        assertEquals(minutes(2), whole.framing(minutes(30), minutes(31)).span)
+    }
+
+    @Test
+    fun `a playhead that leaves the window takes the window along`() {
+        val window = TimelineWindow(minutes(10), minutes(20), hour)
+
+        assertEquals(window, window.following(minutes(15)))
+        assertEquals(TimelineWindow(minutes(20), minutes(30), hour), window.following(minutes(21)))
+    }
 }
