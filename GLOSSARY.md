@@ -33,11 +33,11 @@ An event the user marked as not interesting; it stays in the sleep but is skippe
 _Avoid_: Deleted event, false positive
 
 **Speech event**:
-An event in which a later check heard likely speech; the mark is a guess layered on top of the event and never hides or removes it.
+An event in which a later check heard likely speech; the mark is a guess layered on top of the event and never hides or removes it. The user can turn a speech event back into a plain event.
 _Avoid_: Voice line, confirmed speech
 
 **Transcript**:
-Machine-written text of what was said in a speech event; may be incomplete or wrong.
+Text of what was said in a speech event, written by a transcription model and correctable by the user; may be incomplete or wrong.
 _Avoid_: Subtitle, caption
 
 **Baseline**:
