@@ -47,6 +47,16 @@ interface SleepDao {
     @Query("UPDATE sleep SET ended_at = :endedAt WHERE id = :id")
     suspend fun setSleepEnd(id: Long, endedAt: Instant)
 
+    @Query("SELECT * FROM sleep WHERE id = :id")
+    suspend fun findSleep(id: Long): SleepEntity?
+
+    /**
+     * Deletes a sleep row. Every table that holds data of a sleep or of one of its recordings
+     * references it with `ON DELETE CASCADE`, so their rows go with it.
+     */
+    @Query("DELETE FROM sleep WHERE id = :id")
+    suspend fun deleteSleep(id: Long)
+
     /** All sleeps, the most recently started first. */
     @Query(
         """

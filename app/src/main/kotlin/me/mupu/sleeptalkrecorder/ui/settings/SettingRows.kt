@@ -4,20 +4,25 @@ import android.app.TimePickerDialog
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -33,6 +38,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
@@ -122,6 +129,30 @@ internal fun DurationSetting(
 }
 
 /**
+ * An on/off setting with its switch at the end of the row. The whole row switches, so it is one
+ * target that screen readers announce as a switch. [content] is shown below the row, for example
+ * the value the setting works with while it is on.
+ */
+@Composable
+internal fun SwitchSetting(
+    @DrawableRes icon: Int,
+    label: String,
+    hint: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    content: @Composable () -> Unit = {},
+) {
+    Column {
+        Box(Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)) {
+            SettingLabel(icon, label, hint) {
+                Switch(checked = checked, onCheckedChange = null)
+            }
+        }
+        content()
+    }
+}
+
+/**
  * A clock time that can be switched off: a switch at the end of the row and, while it is on, a
  * button below the label that opens Android's time picker in the user's time format.
  */
@@ -137,13 +168,7 @@ internal fun SwitchableTimeSetting(
 ) {
     var picking by rememberSaveable { mutableStateOf(false) }
 
-    Column {
-        // The whole row switches, so it is one target that screen readers announce as a switch.
-        Box(Modifier.toggleable(value = enabled, role = Role.Switch, onValueChange = onEnabledChange)) {
-            SettingLabel(icon, label, hint) {
-                Switch(checked = enabled, onCheckedChange = null)
-            }
-        }
+    SwitchSetting(icon, label, hint, checked = enabled, onCheckedChange = onEnabledChange) {
         if (enabled) {
             OutlinedButton(onClick = { picking = true }, modifier = ControlPadding) {
                 Text(LocalClockFormatter.current.format(time))
@@ -193,6 +218,77 @@ private fun TimePicker(time: LocalTime, onPicked: (LocalTime) -> Unit, onClose: 
             dialog.dismiss()
         }
     }
+}
+
+/**
+ * A number of whole days within [range], shown as a button with [valueLabel] that opens a dialog
+ * to type it. The value is stored only when the dialog is confirmed, never while typing, so a
+ * half-typed number never takes effect.
+ */
+@Composable
+internal fun DaysField(
+    value: Duration,
+    range: ClosedRange<Duration>,
+    valueLabel: String,
+    dialogTitle: String,
+    onChange: (Duration) -> Unit,
+) {
+    var editing by rememberSaveable { mutableStateOf(false) }
+
+    OutlinedButton(onClick = { editing = true }, modifier = ControlPadding) {
+        Text(valueLabel)
+    }
+    if (editing) {
+        DaysDialog(
+            initial = value,
+            range = range,
+            title = dialogTitle,
+            onConfirm = {
+                editing = false
+                onChange(it)
+            },
+            onDismiss = { editing = false },
+        )
+    }
+}
+
+@Composable
+private fun DaysDialog(
+    initial: Duration,
+    range: ClosedRange<Duration>,
+    title: String,
+    onConfirm: (Duration) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val fewest = range.start.toDays()
+    val most = range.endInclusive.toDays()
+    var text by rememberSaveable { mutableStateOf(initial.toDays().toString()) }
+    val days = text.toLongOrNull()?.takeIf { it in fewest..most }
+    val confirm = { days?.let { onConfirm(Duration.ofDays(it)) } }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            OutlinedTextField(
+                value = text,
+                // Digits only; the number keyboard also offers signs and separators.
+                onValueChange = { text = it.filter(Char::isDigit).take(most.toString().length) },
+                singleLine = true,
+                isError = days == null,
+                suffix = { Text(stringResource(R.string.settings_auto_delete_days_unit)) },
+                supportingText = { Text(stringResource(R.string.settings_auto_delete_days_range, fewest, most)) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { confirm() }),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { confirm() }, enabled = days != null) { Text(stringResource(R.string.ok)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
+    )
 }
 
 @Composable

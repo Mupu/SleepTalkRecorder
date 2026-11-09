@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -73,6 +74,26 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 onEnabledChange = { viewModel.set(Settings.stopAtEnabled, it) },
                 onTimeChange = { viewModel.set(Settings.stopAt, it) },
             )
+            SwitchSetting(
+                icon = R.drawable.ic_auto_delete,
+                label = stringResource(R.string.settings_auto_delete),
+                hint = stringResource(
+                    if (settings.autoDelete) R.string.settings_auto_delete_on else R.string.settings_auto_delete_off,
+                ),
+                checked = settings.autoDelete,
+                onCheckedChange = { viewModel.set(Settings.autoDelete, it) },
+            ) {
+                if (settings.autoDelete) {
+                    val days = settings.autoDeleteAfter.toDays().toInt()
+                    DaysField(
+                        value = settings.autoDeleteAfter,
+                        range = Settings.autoDeleteAfter.range,
+                        valueLabel = pluralStringResource(R.plurals.settings_auto_delete_after_days, days, days),
+                        dialogTitle = stringResource(R.string.settings_auto_delete_dialog_title),
+                        onChange = { viewModel.set(Settings.autoDeleteAfter, it) },
+                    )
+                }
+            }
 
             SettingsSection(stringResource(R.string.settings_playback))
             DurationSetting(

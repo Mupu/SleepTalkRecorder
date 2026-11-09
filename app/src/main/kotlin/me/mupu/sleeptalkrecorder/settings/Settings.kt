@@ -32,6 +32,16 @@ object Settings {
 
     /** The clock time at which a recording stops at the latest while [stopAtEnabled] is on. */
     val stopAt = timeOfDaySetting("stop_at_minute", LocalTime.NOON)
+
+    /** Whether sleeps older than [autoDeleteAfter] are deleted on their own. */
+    val autoDelete = booleanSetting("auto_delete", false)
+
+    /** How long sleeps are kept when [autoDelete] is on; whole days, kept while it is off. */
+    val autoDeleteAfter = durationSetting(
+        "auto_delete_after_ms",
+        Duration.ofDays(30),
+        Duration.ofDays(1)..Duration.ofDays(365),
+    )
 }
 
 /** The app's appearance. */

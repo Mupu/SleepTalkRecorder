@@ -17,6 +17,8 @@
     <string name="settings">Einstellungen</string>
     <string name="back">Zurück</string>
     <string name="next">Weiter</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Abbrechen</string>
 
     <!-- Home -->
     <string name="ready">Bereit für die Nacht</string>
@@ -39,6 +41,11 @@
         <item quantity="other">%d Aufnahmen</item>
     </plurals>
     <string name="library_empty">Noch keine Schlafzeiten. Starte vor dem Schlafen eine Aufnahme auf dem Startbildschirm.</string>
+    <string name="library_long_press_hint">Lange auf einen Schlaf drücken, um ihn zu löschen</string>
+    <string name="delete_sleep_title">Schlaf löschen?</string>
+    <string name="delete_sleep_text">„%1$s“ wird mit allen Aufnahmen gelöscht. Das gibt %2$s frei und kann nicht rückgängig gemacht werden.</string>
+    <string name="delete">Löschen</string>
+    <string name="delete_sleep_failed">Der Schlaf konnte nicht vollständig gelöscht werden. Versuche es noch einmal.</string>
 
     <!-- Sleep screen -->
     <string name="play">Abspielen</string>
@@ -68,6 +75,16 @@
     <string name="settings_recording">Aufnahme</string>
     <string name="settings_stop_at">Spätestens stoppen um</string>
     <string name="settings_stop_at_hint">Eine Benachrichtigung sagt dir, wenn deshalb gestoppt wurde.</string>
+    <string name="settings_auto_delete">Schlafzeiten automatisch löschen</string>
+    <string name="settings_auto_delete_off">Aus</string>
+    <string name="settings_auto_delete_on">Schlafzeiten werden gelöscht nach</string>
+    <string name="settings_auto_delete_dialog_title">Schlafzeiten löschen nach</string>
+    <string name="settings_auto_delete_days_unit">Tagen</string>
+    <string name="settings_auto_delete_days_range">Erlaubt: %1$d bis %2$d</string>
+    <plurals name="settings_auto_delete_after_days">
+        <item quantity="one">%d Tag</item>
+        <item quantity="other">%d Tagen</item>
+    </plurals>
     <string name="seconds_decimal">%1$.1f s</string>
 
     <!-- First start -->

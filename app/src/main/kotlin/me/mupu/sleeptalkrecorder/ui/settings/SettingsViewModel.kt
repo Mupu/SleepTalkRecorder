@@ -25,6 +25,8 @@ data class SettingsUiState(
     val tail: Duration,
     val stopAtEnabled: Boolean,
     val stopAt: LocalTime,
+    val autoDelete: Boolean,
+    val autoDeleteAfter: Duration,
 )
 
 /** State and actions of the settings screen. */
@@ -34,11 +36,12 @@ class SettingsViewModel(private val store: SettingsStore) : ViewModel() {
     val state: StateFlow<SettingsUiState?> = combine(
         store.flow(Settings.theme),
         store.flow(Settings.timeFormat),
-        store.flow(Settings.leadIn),
-        store.flow(Settings.tail),
+        // combine() takes at most five typed flows, so settings shown together come in pairs.
+        combine(store.flow(Settings.leadIn), store.flow(Settings.tail), ::Pair),
         combine(store.flow(Settings.stopAtEnabled), store.flow(Settings.stopAt), ::Pair),
-    ) { theme, timeFormat, leadIn, tail, (stopAtEnabled, stopAt) ->
-        SettingsUiState(theme, timeFormat, leadIn, tail, stopAtEnabled, stopAt)
+        combine(store.flow(Settings.autoDelete), store.flow(Settings.autoDeleteAfter), ::Pair),
+    ) { theme, timeFormat, (leadIn, tail), (stopAtEnabled, stopAt), (autoDelete, autoDeleteAfter) ->
+        SettingsUiState(theme, timeFormat, leadIn, tail, stopAtEnabled, stopAt, autoDelete, autoDeleteAfter)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Stores [value] for [setting]; the state follows once it is written. */

@@ -5,6 +5,7 @@ import android.content.Context
 import me.mupu.sleeptalkrecorder.data.SleepDatabase
 import me.mupu.sleeptalkrecorder.data.SleepRepository
 import me.mupu.sleeptalkrecorder.recording.Recorder
+import me.mupu.sleeptalkrecorder.retention.AutoDeletion
 import me.mupu.sleeptalkrecorder.settings.SettingsStore
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -48,4 +49,8 @@ class AppContainer(context: Context) {
      * can never finish the recording that just started.
      */
     val interruptedRecordingsFinished: Job = scope.launch { sleepRepository.finishInterruptedRecordings() }
+
+    init {
+        scope.launch { AutoDeletion.followSettings(context, settings) }
+    }
 }

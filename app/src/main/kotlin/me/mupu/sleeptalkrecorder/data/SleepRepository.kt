@@ -9,6 +9,7 @@ import me.mupu.sleeptalkrecorder.time.RecordingClock
 import java.io.File
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 
@@ -18,6 +19,10 @@ import kotlinx.coroutines.withContext
  * The audio of recording `n` is in [recordingsDirectory]`/n/` as chunk WAV files; the database
  * holds the timeline (start instant, sample rate, sample count) that maps positions in those files
  * to clock times.
+ *
+ * A sleep owns its rows and its recordings' directories, and [deleteSleep] is the one place that
+ * removes them: files a recording owns belong in its directory, and tables with data of a sleep or
+ * a recording reference it with `ON DELETE CASCADE`.
  */
 class SleepRepository(
     private val database: SleepDatabase,
@@ -45,11 +50,41 @@ class SleepRepository(
                     TimelineRecording.read(
                         clock = RecordingClock(recording.startedAt, recording.sampleRate),
                         frames = recording.frames,
-                        directory = File(recordingsDirectory, recording.id.toString()),
+                        directory = directoryOf(recording.id),
                     )
                 },
             )
         }
+    }
+
+    /** The bytes a sleep's files take up on the device. */
+    suspend fun sizeOf(sleepId: Long): Long {
+        val recordings = dao.recordingsOf(sleepId)
+        return withContext(Dispatchers.IO) {
+            recordings.sumOf { recording ->
+                directoryOf(recording.id).walkBottomUp().filter { it.isFile }.sumOf { it.length() }
+            }
+        }
+    }
+
+    /**
+     * Deletes a finished sleep with everything it owns: the files of its recordings first, then its
+     * rows, so a deletion cut short by a killed process or a file that cannot be removed never
+     * leaves files that no row points to; the sleep stays listed and can be deleted again.
+     *
+     * Returns whether the sleep is gone. A sleep that is still recorded is not deleted.
+     */
+    suspend fun deleteSleep(sleepId: Long): Boolean = withContext(NonCancellable) {
+        val sleep = dao.findSleep(sleepId) ?: return@withContext true
+        if (sleep.endedAt == null) return@withContext false
+
+        val directories = dao.recordingsOf(sleepId).map { directoryOf(it.id) }
+        val filesGone = withContext(Dispatchers.IO) {
+            // Every directory is tried, even after one failed.
+            directories.map { it.deleteRecursively() }.all { it }
+        }
+        if (filesGone) dao.deleteSleep(sleepId)
+        filesGone
     }
 
     override suspend fun startSleep(startedAt: Instant, sampleRate: Int): NewRecording =
@@ -98,4 +133,6 @@ class SleepRepository(
             finish(recording.id, recording.frames)
         }
     }
+
+    private fun directoryOf(recordingId: Long) = File(recordingsDirectory, recordingId.toString())
 }

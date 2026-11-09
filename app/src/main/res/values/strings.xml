@@ -21,6 +21,8 @@
     <string name="settings">Settings</string>
     <string name="back">Back</string>
     <string name="next">Next</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
 
     <!-- Home -->
     <string name="ready">Ready for the night</string>
@@ -43,6 +45,12 @@
         <item quantity="other">%d recordings</item>
     </plurals>
     <string name="library_empty">No sleeps yet. Start a recording on the home screen before you go to sleep.</string>
+    <string name="library_long_press_hint">Long-press a sleep to delete it</string>
+    <string name="delete_sleep_title">Delete sleep?</string>
+    <!-- %1$s is the sleep's name, %2$s the size of its files, for example "352 MB". -->
+    <string name="delete_sleep_text">“%1$s” is deleted with all its recordings. This frees %2$s and cannot be undone.</string>
+    <string name="delete">Delete</string>
+    <string name="delete_sleep_failed">The sleep could not be deleted completely. Try again.</string>
 
     <!-- Sleep screen -->
     <string name="play">Play</string>
@@ -74,6 +82,18 @@
     <string name="settings_recording">Recording</string>
     <string name="settings_stop_at">Stop at the latest at</string>
     <string name="settings_stop_at_hint">A notification tells you when this stopped a recording.</string>
+    <string name="settings_auto_delete">Delete sleeps automatically</string>
+    <string name="settings_auto_delete_off">Off</string>
+    <string name="settings_auto_delete_on">Sleeps are deleted after</string>
+    <string name="settings_auto_delete_dialog_title">Delete sleeps after</string>
+    <string name="settings_auto_delete_days_unit">days</string>
+    <!-- %1$d and %2$d are the fewest and most days allowed. -->
+    <string name="settings_auto_delete_days_range">Allowed: %1$d to %2$d</string>
+    <!-- Follows settings_auto_delete_on: "Sleeps are deleted after 30 days". -->
+    <plurals name="settings_auto_delete_after_days">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
     <!-- A length in seconds with one decimal: "1.5 s". -->
     <string name="seconds_decimal">%1$.1f s</string>
 

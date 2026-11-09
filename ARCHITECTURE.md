@@ -13,13 +13,15 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 | `recording` | The recording session, WAV chunk writer, microphone, foreground service and its notifications | only in `MicrophoneSource`, `Recorder`, `RecordingService`, `RecordingNotifications` |
 | `data` | Room database, entities and the `SleepRepository` | Room |
 | `playback` | The `SleepTimeline` of a sleep's chunk files and the `SleepPlayer` that plays it | only in `SleepPlayer` (Media3) |
+| `retention` | Automatic deletion: which sleeps are old enough (`SleepRetention`) and the WorkManager job that deletes them | only in `AutoDeletion` (WorkManager) |
 | `settings` | The user's settings and the `SettingsStore` that keeps them; the app language | DataStore; AppCompat only in `AppLanguages` |
 | `ui` | Navigation, one sub-package per screen (`home`, `library`, `sleep`, `settings`, `setup`), shared `components`, `format` and `theme` | Compose |
 
 The root package holds `MainActivity`, the only activity, and `SleepTalkApplication` with the
 `AppContainer`, which wires the shared objects by hand: the database, the repository, the
-`SettingsStore` and the `Recorder`. Logic that can be tested without a device (`time`, the WAV
-writer, the recording session, level computation, the sleep timeline, the settings) is plain Kotlin
+`SettingsStore` and the `Recorder`; it also keeps automatic deletion scheduled. Logic that can be
+tested without a device (`time`, the WAV writer, the recording session, level computation, the
+sleep timeline, the settings, which sleeps automatic deletion removes) is plain Kotlin
 behind small interfaces (`PcmSource`, `RecordingStore`, `Clocks`) and is unit-tested on the JVM.
 
 Screens follow unidirectional data flow: a `ViewModel` combines repository and recorder flows into
@@ -84,6 +86,23 @@ Room (`SleepDatabase`) holds two tables:
 The schema is exported to `app/schemas/`. Data derived from a sleep or a recording goes into
 tables of its own that reference it by foreign key, so these two tables stay stable. Auto backup is off: recordings never leave the phone, and a restored database without its audio would
 list sleeps that cannot be played.
+
+## Deletion
+
+`SleepRepository.deleteSleep` is the only way a sleep is removed, by hand or automatically, and it
+removes everything the sleep owns: first the directory of each of its recordings, then its row.
+The rows of other tables go with it through `ON DELETE CASCADE`. So every table holding data of a
+sleep or a recording references it that way, and every file of a recording lives in the
+recording's directory; then deletion needs no change when data is added. The files go first so
+that an interrupted deletion never leaves files without a row: the sleep stays listed and can be
+deleted again. A sleep that is still recorded is never deleted.
+
+In the library a long press on a finished sleep asks for confirmation and names the size of its
+files. With "delete sleeps automatically" on, WorkManager runs `AutoDeleteWorker` once a day, and
+once more whenever the setting or its days change. It deletes every sleep whose date, the day it
+is named after, lies more than the chosen number of calendar days before today: a sleep kept for
+30 days is still there on the 30th day after its date and gone on the 31st, whatever time of day
+the work runs and across daylight saving changes.
 
 ## Playback
 

@@ -1,7 +1,8 @@
 package me.mupu.sleeptalkrecorder.ui.library
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import android.text.format.Formatter
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,19 +12,26 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -45,7 +53,10 @@ import me.mupu.sleeptalkrecorder.ui.format.sleepTitle
 import java.time.Duration
 import java.time.ZoneId
 
-/** Every sleep, grouped by the day it is named after; the running sleep on top. */
+/**
+ * Every sleep, grouped by the day it is named after; the running sleep on top. A long press on a
+ * finished sleep deletes it after a confirmation.
+ */
 @Composable
 fun LibraryScreen(
     viewModel: LibraryViewModel,
@@ -57,7 +68,19 @@ fun LibraryScreen(
     val resources = LocalResources.current
     val zone = ZoneId.systemDefault()
 
-    Scaffold(topBar = { AppBar(stringResource(R.string.library), navigationIcon = { BackIcon(onBack) }) }) { padding ->
+    val snackbarHostState = remember { SnackbarHostState() }
+    val deletionFailedMessage = stringResource(R.string.delete_sleep_failed)
+    LaunchedEffect(state.deletionFailed) {
+        if (state.deletionFailed) {
+            snackbarHostState.showSnackbar(deletionFailedMessage)
+            viewModel.deletionFailureShown()
+        }
+    }
+
+    Scaffold(
+        topBar = { AppBar(stringResource(R.string.library), navigationIcon = { BackIcon(onBack) }) },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+    ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {
             state.running?.let { running ->
                 item(key = "running") { RunningSleepItem(running, onClick = onOpenRunning) }
@@ -78,7 +101,21 @@ fun LibraryScreen(
                         headlineContent = { Text(sleepTitle(resources, date)) },
                         supportingContent = { Text(sleepSubtitle(sleep, zone)) },
                         trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
-                        modifier = Modifier.clickable { onOpenSleep(sleep.id) },
+                        modifier = Modifier.combinedClickable(
+                            onClick = { onOpenSleep(sleep.id) },
+                            onLongClick = { viewModel.askToDelete(sleep) },
+                        ),
+                    )
+                }
+            }
+            if (state.groups.isNotEmpty()) {
+                item(key = "hint") {
+                    Text(
+                        stringResource(R.string.library_long_press_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
                     )
                 }
             }
@@ -95,6 +132,33 @@ fun LibraryScreen(
             }
         }
     }
+
+    state.deletion?.let { request ->
+        DeleteSleepDialog(request, onConfirm = viewModel::confirmDeletion, onDismiss = viewModel::cancelDeletion)
+    }
+}
+
+/** Asks whether to delete a sleep, naming it and the space its files take up. */
+@Composable
+private fun DeleteSleepDialog(request: DeletionRequest, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val resources = LocalResources.current
+    val name = sleepTitle(resources, SleepDate.of(request.sleep.startedAt, ZoneId.systemDefault()))
+    val size = Formatter.formatShortFileSize(LocalContext.current, request.bytes)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(painterResource(R.drawable.ic_delete), contentDescription = null) },
+        title = { Text(stringResource(R.string.delete_sleep_title)) },
+        text = { Text(stringResource(R.string.delete_sleep_text, name, size)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
+    )
 }
 
 @Composable
