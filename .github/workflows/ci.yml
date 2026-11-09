@@ -40,8 +40,10 @@ jobs:
       - name: Full check
         run: ./gradlew check assembleDebug
 
+      # Only main releases; a manual run on another branch checks without tagging anything.
       - name: Find the version to release
         id: release
+        if: github.ref == 'refs/heads/main'
         run: |
           tag=$(python3 tools/check_release.py --tag)
           if [ -z "$tag" ]; then echo "No new version to release."; fi
