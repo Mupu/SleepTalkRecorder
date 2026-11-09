@@ -27,7 +27,7 @@ The root package holds `MainActivity`, the only activity, and `SleepTalkApplicat
 automatic deletion scheduled, starts the search for events of finished sleeps and schedules their
 speech recognition. Logic that can be tested without a device
 (`time`, `detection`, the WAV writer, the recording session, level computation, the sleep
-timeline and its audio stream, the cut plan, the timeline view of the sleep screen, the
+timeline and its audio stream, the cut plan, the timeline view and the event filter of the sleep screen, the
 sensitivity sheet's re-scan, the settings,
 which sleeps automatic deletion removes, the model downloads and states, the transcript filter and
 the speech recognition run) is plain Kotlin behind small interfaces (`PcmSource`,
@@ -145,7 +145,7 @@ Room (`SleepDatabase`) holds four tables:
   a kind, `SENSITIVITY` with a start threshold in `value`: the one the detector chose for the
   sleep, or one the user set for the stretch,
   `MICROPHONE_UNAVAILABLE` from the recorder, `TRANSCRIPT` with the kind speech recognition gives
-  an event and its words in `text`), and `origin` (`DEVICE`, `SERVER` or `USER`),
+  an event and its words in `text`, `HIDDEN` from the user over an event they hid), and `origin` (`DEVICE`, `SERVER` or `USER`),
   `producer` and `producer_version` say who stated it. Gaps between recordings take no time on
   this axis and need no annotation: they follow from the recordings' start instants and lengths.
 
@@ -153,6 +153,12 @@ Annotations are layers: an analysis that runs again replaces only its own annota
 origin and producer) and leaves every other layer alone. Hiding an event, a sensitivity override
 for a stretch, a transcript or a user's correction is one more annotation type beside the
 detector's, and user annotations win over every analysis; none of them needs a new table.
+
+An event is hidden while a `HIDDEN` mark overlaps it, rather than only one over the same stretch
+as transcripts are matched: a search with other settings or a changed detector finds the event
+again with slightly different bounds, and the mark still keeps to it. A mark whose event is no
+longer found hides nothing until the event is found again. Hidden events stay in the sleep and
+in its speech recognition, but are left out of the counts the library and the sleep screen show.
 
 The schema is exported to `app/schemas/`. Data derived from a sleep or a recording goes into
 tables of its own that reference it by foreign key, so the `sleep` and `recording` tables stay
@@ -223,7 +229,7 @@ each recording ends and once at process start, which also covers a recording a k
 behind and a detector that changed with an update.
 
 The sleep screen reads the same track to draw the timeline: the smoothed speech-band level, grey
-except where an event lies, with the baseline as a dashed line. The timeline runs on the clock axis
+except where an event lies that is not hidden, with the baseline as a dashed line. The timeline runs on the clock axis
 (see [Time model](#time-model)), so gaps between recordings take their real width; they and the
 stretches in which the microphone was unavailable are hatched. `SleepLoudness` keeps maxima of
 16, 256 and 4 096 hops, so every column of the timeline reads only a few values at any zoom.
@@ -338,9 +344,11 @@ start of a recording and at a stretch in which the microphone was unavailable
 (`SleepTimeline.uninterrupted`), so neither the audio before a gap nor the silence of a taken
 microphone is played around an event.
 
-*Cut playback*, the default, plays the events the list shows in this way, one after the other;
-with the "Speech only" filter (one per event kind that has a filter) the list, and so cut
-playback, holds only speech events.
+*Cut playback*, the default, plays the events the list shows in this way, one after the other.
+The list's filter chips exclude each other: "All" lists every event that is not hidden, "Speech
+only" (one chip per event kind that has a filter) those of the kind that are not hidden, and
+"Hidden" only the hidden events, so they can be gone through by ear and unhidden. Hiding is
+undone from a snackbar.
 `CutPlan` joins the stretches of events that overlap, so close events play without a jump, and
 keeps stretches apart that only touch where a recording starts. While playing, the player jumps
 from the end of a stretch to 200 ms before the next (ExoPlayer starts a seeked WAV stream at its

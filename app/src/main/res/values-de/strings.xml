@@ -80,6 +80,13 @@
     <string name="filter_all">Alle</string>
     <string name="filter_kind_only">Nur %1$s</string>
     <string name="no_events_filter">Keine Ereignisse für diesen Filter.</string>
+    <string name="filter_hidden">Ausgeblendete</string>
+    <string name="no_hidden_events">Keine ausgeblendeten Ereignisse.</string>
+    <string name="hidden_tag">ausgeblendet</string>
+    <string name="hide_event">Ausblenden</string>
+    <string name="unhide_event">Einblenden</string>
+    <string name="event_hidden">Ereignis ausgeblendet</string>
+    <string name="undo">Rückgängig</string>
     <string name="transcript">Transkript</string>
     <string name="transcript_automatic">automatisch erkannt, kann falsch sein · %1$s</string>
     <string name="transcript_quoted">„%1$s“</string>

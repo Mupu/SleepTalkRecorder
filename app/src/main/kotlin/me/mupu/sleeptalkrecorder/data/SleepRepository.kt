@@ -211,6 +211,30 @@ class SleepRepository(
         }
     }
 
+    /**
+     * Hides [event] with a mark of the user over its stretch, or, with [hidden] false, shows it
+     * again by removing every mark that overlaps it. Marks are the user's, so neither a new search
+     * for events nor speech recognition removes them.
+     */
+    suspend fun setHidden(sleepId: Long, event: SleepEvent, hidden: Boolean) {
+        database.withTransaction {
+            dao.deleteHidden(sleepId, event.startMillis, event.endMillis)
+            if (hidden) {
+                dao.insertAnnotations(
+                    listOf(
+                        AnnotationEntity(
+                            sleepId = sleepId,
+                            type = AnnotationType.HIDDEN,
+                            startMillis = event.startMillis,
+                            endMillis = event.endMillis,
+                            origin = AnnotationOrigin.USER,
+                        ),
+                    ),
+                )
+            }
+        }
+    }
+
     override suspend fun sleepsToTranscribe(): List<Long> = dao.sleepsToTranscribe(DETECTOR, DETECTOR_VERSION)
 
     override suspend fun eventsOf(sleepId: Long, onlyPending: Boolean): List<Stretch> =

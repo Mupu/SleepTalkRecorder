@@ -131,30 +131,35 @@ private val WaitReason.text: Int
         WaitReason.BATTERY -> R.string.transcription_waits_battery
     }
 
-/** "All 12" and one "Speech only 3" chip per kind with a filter; null [selected] shows all. */
+/**
+ * The exclusive filter chips with the number of events each lists: "All 12", one "Speech only 3"
+ * per kind with a filter, and "Hidden 2". Tapping the selected kind or "Hidden" again shows all.
+ */
 @Composable
 internal fun EventFilterChips(
     kinds: List<EventKindEntity>,
     events: List<SleepEvent>,
-    selected: String?,
-    onSelect: (String?) -> Unit,
+    selected: EventFilter,
+    onSelect: (EventFilter) -> Unit,
 ) {
+    @Composable
+    fun Chip(filter: EventFilter, label: String) {
+        FilterChip(
+            selected = selected == filter,
+            onClick = { onSelect(if (selected == filter) EventFilter.All else filter) },
+            label = { Text("$label  ${events.count(filter::shows)}") },
+        )
+    }
+
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
     ) {
-        FilterChip(
-            selected = selected == null,
-            onClick = { onSelect(null) },
-            label = { Text("${stringResource(R.string.filter_all)}  ${events.size}") },
-        )
+        Chip(EventFilter.All, stringResource(R.string.filter_all))
         for (kind in kinds) {
-            FilterChip(
-                selected = selected == kind.id,
-                onClick = { onSelect(if (selected == kind.id) null else kind.id) },
-                label = { Text("${stringResource(R.string.filter_kind_only, kindName(kind.id, kind.name))}  ${events.count { it.kindId == kind.id }}") },
-            )
+            Chip(EventFilter.Kind(kind.id), stringResource(R.string.filter_kind_only, kindName(kind.id, kind.name)))
         }
+        Chip(EventFilter.Hidden, stringResource(R.string.filter_hidden))
     }
 }
 

@@ -123,13 +123,14 @@ interface SleepDao {
     /**
      * The events of a sleep in order, each with the kind and transcript of its winning transcript
      * annotation: the one over the same stretch from the user, else from a server, else from the
-     * phone, the latest first; without one, the detector's kind.
+     * phone, the latest first; without one, the detector's kind. An event is hidden while one of
+     * the user's hidden marks overlaps it.
      */
     @Query(
         """
         SELECT event.id, event.start_ms, event.end_ms, kind.id AS kind_id, kind.name AS kind_name,
             kind.color AS kind_color, transcript.text AS transcript, transcript.origin AS transcript_origin,
-            transcript.producer AS transcript_producer
+            transcript.producer AS transcript_producer, $IS_HIDDEN AS hidden
         FROM annotation AS event
         LEFT JOIN annotation AS transcript ON transcript.id = (
             SELECT id FROM annotation WHERE sleep_id = event.sleep_id AND type = 'TRANSCRIPT'
@@ -143,6 +144,10 @@ interface SleepDao {
         """,
     )
     fun events(sleepId: Long): Flow<List<SleepEvent>>
+
+    /** Removes the hidden marks that overlap a stretch, which shows the events in it again. */
+    @Query("DELETE FROM annotation WHERE sleep_id = :sleepId AND type = 'HIDDEN' AND start_ms < :endMillis AND end_ms > :startMillis")
+    suspend fun deleteHidden(sleepId: Long, startMillis: Long, endMillis: Long)
 
     /** The kinds the sleep screen offers a filter for. */
     @Query("SELECT * FROM event_kind WHERE has_filter ORDER BY id")
@@ -216,6 +221,15 @@ private const val HAS_DEVICE_TRANSCRIPT = """
         AND transcript.start_ms = event.start_ms AND transcript.end_ms = event.end_ms)
 """
 
+/**
+ * Whether the event `event` is hidden: a hidden mark overlaps it. Overlap rather than the same
+ * stretch, so the mark keeps to its event when a later search finds it with other bounds.
+ */
+private const val IS_HIDDEN = """
+    EXISTS (SELECT 1 FROM annotation AS mark WHERE mark.sleep_id = event.sleep_id AND mark.type = 'HIDDEN'
+        AND mark.start_ms < event.end_ms AND mark.end_ms > event.start_ms)
+"""
+
 /** The stretch of an event in milliseconds of the sleep's audio. */
 data class EventStretch(
     @ColumnInfo(name = "start_ms") val startMillis: Long,
@@ -223,15 +237,16 @@ data class EventStretch(
 )
 
 /**
- * A sleep with its recordings and events. Only the events of a finished analysis count as found:
- * the analysis writes its events and its sensitivity in one transaction.
+ * A sleep with its recordings and the events that are not hidden. Only the events of a finished
+ * analysis count as found: the analysis writes its events and its sensitivity in one transaction.
  */
 private const val SUMMARY = """
     SELECT sleep.id, sleep.started_at, sleep.ended_at,
         (SELECT COUNT(*) FROM recording WHERE recording.sleep_id = sleep.id) AS recording_count,
-        (SELECT COUNT(*) FROM annotation WHERE annotation.sleep_id = sleep.id AND type = 'EVENT') AS event_count,
-        (SELECT COALESCE(SUM(end_ms - start_ms), 0) FROM annotation
-            WHERE annotation.sleep_id = sleep.id AND type = 'EVENT') AS event_ms,
+        (SELECT COUNT(*) FROM annotation AS event WHERE event.sleep_id = sleep.id AND event.type = 'EVENT'
+            AND NOT $IS_HIDDEN) AS event_count,
+        (SELECT COALESCE(SUM(event.end_ms - event.start_ms), 0) FROM annotation AS event
+            WHERE event.sleep_id = sleep.id AND event.type = 'EVENT' AND NOT $IS_HIDDEN) AS event_ms,
         EXISTS (SELECT 1 FROM annotation WHERE annotation.sleep_id = sleep.id AND type = 'SENSITIVITY'
             AND producer = :producer AND producer_version = :version) AS events_found
     FROM sleep

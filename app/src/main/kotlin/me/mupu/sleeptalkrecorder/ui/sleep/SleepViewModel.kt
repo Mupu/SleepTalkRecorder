@@ -65,11 +65,13 @@ data class SleepUiState(
     val player: PlayerUiState? = null,
     /** The loudness the timeline draws; null while it is being read. */
     val loudness: SleepLoudness? = null,
-    /** The events of the sleep; empty until they are found ([SleepSummary.eventsFound]). */
+    /** The events of the sleep, hidden ones too; empty until they are found ([SleepSummary.eventsFound]). */
     val events: List<SleepEvent> = emptyList(),
-    /** The kind the list is filtered to, such as speech; null for all events. */
-    val filter: String? = null,
-    /** The events the list shows and cut playback plays: those of the [filter]'s kind, or all. */
+    /** The events the timeline colours: those that are not hidden. */
+    val timelineEvents: List<SleepEvent> = emptyList(),
+    /** Which events the list shows. */
+    val filter: EventFilter = EventFilter.All,
+    /** The events the list shows and cut playback plays: those the [filter] shows. */
     val listedEvents: List<SleepEvent> = emptyList(),
     /** The stretches of the sleep's audio in which the microphone was unavailable. */
     val unavailable: List<Stretch> = emptyList(),
@@ -121,8 +123,8 @@ class SleepViewModel(
     /** The sleep's feature track and its curves, which the sensitivity sheet re-scans; null while being read. */
     private val analysis = MutableStateFlow<Pair<SleepTrack, Detection>?>(null)
 
-    /** The kind the list is filtered to; null for all events. */
-    private val filter = MutableStateFlow<String?>(null)
+    /** Which events the list shows and cut playback plays. */
+    private val filter = MutableStateFlow<EventFilter>(EventFilter.All)
 
     /** Where the user is dragging the timeline to; null when not dragging. */
     private val scrubPosition = MutableStateFlow<Duration?>(null)
@@ -160,7 +162,7 @@ class SleepViewModel(
      * only hears of real changes.
      */
     private val listed = combine(sleepAndEvents, timeline, leadIn, tail, filter) { (_, all, unavailable), timeline, leadIn, tail, filter ->
-        val events = if (filter == null) all else all.filter { it.kindId == filter }
+        val events = all.filter(filter::shows)
         ListedEvents(
             filter,
             events,
@@ -168,7 +170,7 @@ class SleepViewModel(
                 if (timeline == null) Stretch(event.start, event.end) else eventWithLeadInAndTail(event, timeline, leadIn, tail, unavailable)
             },
         )
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, ListedEvents(null, emptyList(), emptyList()))
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, ListedEvents(EventFilter.All, emptyList(), emptyList()))
 
     /** What cut playback plays; null while full playback is chosen or the audio is still being read. */
     private val cutPlan = combine(listed, timeline, cut) { listed, timeline, cut ->
@@ -216,6 +218,7 @@ class SleepViewModel(
             player = player,
             loudness = loudness,
             events = events,
+            timelineEvents = events.filterNot { it.hidden },
             filter = listed.filter,
             listedEvents = listed.events,
             unavailable = unavailable,
@@ -257,6 +260,11 @@ class SleepViewModel(
             )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    private val hiddenChannel = Channel<SleepEvent>(Channel.BUFFERED)
+
+    /** Each event the user hid, once it is stored, so the hiding can be undone. */
+    val eventHidden: Flow<SleepEvent> = hiddenChannel.receiveAsFlow()
 
     private val applied = Channel<SensitivityApplied>(Channel.BUFFERED)
 
@@ -315,9 +323,20 @@ class SleepViewModel(
         return eventWithLeadInAndTail(event, timeline, leadIn.value, tail.value, unavailable.value)
     }
 
-    /** Lists and plays only the events of the kind [kindId], or all of them for null. */
-    fun setFilter(kindId: String?) {
-        filter.value = kindId
+    /** Lists, and so plays, the events [filter] shows. */
+    fun setFilter(filter: EventFilter) {
+        this.filter.value = filter
+    }
+
+    /**
+     * Hides [event] ([hidden] true) or shows it again. It stays hidden after a restart and when
+     * its events are found again; each event hidden is reported once through [eventHidden].
+     */
+    fun setHidden(event: SleepEvent, hidden: Boolean) {
+        viewModelScope.launch {
+            repository.setHidden(sleepId, event, hidden)
+            if (hidden) hiddenChannel.send(event)
+        }
     }
 
     /** Recognises speech in every event of the sleep again, now, whatever the settings say. */
@@ -429,4 +448,4 @@ private fun eventWithLeadInAndTail(
 }
 
 /** The events the list shows, and the stretch around each that cut playback plays, in the same order. */
-private data class ListedEvents(val filter: String?, val events: List<SleepEvent>, val played: List<Stretch>)
+private data class ListedEvents(val filter: EventFilter, val events: List<SleepEvent>, val played: List<Stretch>)

@@ -94,6 +94,14 @@ enum class AnnotationType {
      * of the user wins over those of analyses.
      */
     TRANSCRIPT,
+
+    /**
+     * The user hid the events over the stretch: they stay in the sleep but are left out of the
+     * list and of cut playback unless hidden events are shown, and drawn grey like silence. Any
+     * event that overlaps the stretch counts as hidden, so the mark keeps to its event when a
+     * later search finds it with slightly different bounds.
+     */
+    HIDDEN,
 }
 
 /** Where an annotation comes from. */
@@ -111,8 +119,9 @@ enum class AnnotationOrigin {
 /**
  * One result about a stretch of a sleep, with its origin. Everything found in or said about a
  * sleep is an annotation: the events the detector found and the sensitivity it chose, the
- * transcripts of speech recognition, and later hidden events and the user's corrections. Each layer is added beside the others,
- * so an analysis that runs again replaces only its own annotations and never the user's.
+ * transcripts of speech recognition, the events the user hid, and later the user's corrections.
+ * Each layer is added beside the others, so an analysis that runs again replaces only its own
+ * annotations and never the user's.
  *
  * The stretch is given as positions in the sleep's audio (the axis the player plays, on which the
  * gaps between recordings take no time), so it does not depend on the detector's hop size.
@@ -168,9 +177,9 @@ data class SleepSummary(
     @ColumnInfo(name = "started_at") val startedAt: Instant,
     @ColumnInfo(name = "ended_at") val endedAt: Instant?,
     @ColumnInfo(name = "recording_count") val recordingCount: Int,
-    /** How many events were found in it. */
+    /** How many events were found in it, without those the user hid. */
     @ColumnInfo(name = "event_count") val eventCount: Int,
-    /** How long its events last together, in milliseconds. */
+    /** How long those events last together, in milliseconds. */
     @ColumnInfo(name = "event_ms") val eventMillis: Long,
     /** Whether its events have been found, which happens right after the stop. */
     @ColumnInfo(name = "events_found") val eventsFound: Boolean,
@@ -197,6 +206,8 @@ data class SleepEvent(
     @ColumnInfo(name = "transcript_origin") val transcriptOrigin: AnnotationOrigin? = null,
     /** The model that wrote it, such as `parakeet-ultra`; null for the user. */
     @ColumnInfo(name = "transcript_producer") val transcriptProducer: String? = null,
+    /** Whether the user hid the event: a [AnnotationType.HIDDEN] annotation overlaps its stretch. */
+    val hidden: Boolean = false,
 ) {
     /** Whether this is a speech event: one with words, or a murmur without them. */
     val isSpeech: Boolean get() = kindId == EventKinds.SPEECH

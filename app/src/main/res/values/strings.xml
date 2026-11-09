@@ -93,6 +93,15 @@
     <!-- The filter chip of an event kind: "Speech only". -->
     <string name="filter_kind_only">%1$s only</string>
     <string name="no_events_filter">No events for this filter.</string>
+    <!-- The filter chip that lists only the hidden events. -->
+    <string name="filter_hidden">Hidden</string>
+    <string name="no_hidden_events">No hidden events.</string>
+    <!-- The tag of a hidden event in the list. -->
+    <string name="hidden_tag">hidden</string>
+    <string name="hide_event">Hide</string>
+    <string name="unhide_event">Unhide</string>
+    <string name="event_hidden">Event hidden</string>
+    <string name="undo">Undo</string>
     <string name="transcript">Transcript</string>
     <!-- Below a transcript; %1$s is the model's name. -->
     <string name="transcript_automatic">automatic, may be wrong · %1$s</string>

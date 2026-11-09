@@ -33,7 +33,9 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
@@ -80,7 +83,8 @@ import java.time.ZoneId
  * pans or zooms the timeline by hand, frames that event and keeps the playhead in view.
  *
  * The sensitivity of the sleep is set from the app bar's menu, that around an event from the
- * event's menu, in [SensitivitySheet].
+ * event's menu, in [SensitivitySheet]. The event's menu also hides it, which a snackbar undoes, or
+ * unhides it; the timeline draws hidden events grey like silence.
  */
 @Composable
 fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
@@ -95,6 +99,16 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
     // Playback has no notification or lock-screen controls, so it stops with the screen.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.pause() }
 
+    LaunchedEffect(viewModel) {
+        viewModel.eventHidden.collect { event ->
+            val result = snackbars.showSnackbar(
+                resources.getString(R.string.event_hidden),
+                actionLabel = resources.getString(R.string.undo),
+                duration = SnackbarDuration.Long,
+            )
+            if (result == SnackbarResult.ActionPerformed) viewModel.setHidden(event, hidden = false)
+        }
+    }
     LaunchedEffect(viewModel) {
         viewModel.sensitivityApplied.collect { applied ->
             val message = if (applied.wholeSleep) R.plurals.sensitivity_applied_sleep else R.plurals.sensitivity_applied_event
@@ -158,7 +172,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
                     LoudnessTimeline(
                         timeline = timeline,
                         loudness = state.loudness,
-                        events = state.events,
+                        events = state.timelineEvents,
                         unavailable = state.unavailable,
                         position = player.position,
                         window = window,
@@ -180,13 +194,13 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
                     )
                 }
                 HorizontalDivider()
-                if (state.events.isNotEmpty() && filterKinds.isNotEmpty()) {
+                if (state.events.isNotEmpty()) {
                     EventFilterChips(filterKinds, state.events, state.filter, onSelect = viewModel::setFilter)
                 }
                 EventList(
                     sleep = sleep,
                     events = state.listedEvents,
-                    filtered = state.filter != null,
+                    filter = state.filter,
                     timeline = timeline,
                     currentEventId = current?.id,
                     playingEventId = state.playingEventId,
@@ -195,6 +209,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
                         viewModel.seekToEvent(event)
                     },
                     onTogglePlay = viewModel::togglePlayEvent,
+                    onHide = viewModel::setHidden,
                     onSensitivity = if (state.sensitivityAvailable) viewModel::openSensitivity else null,
                 )
 
@@ -334,20 +349,21 @@ private fun PlaybackMode(cut: Boolean, enabled: Boolean, onCutChange: (Boolean) 
 }
 
 /**
- * The events of the sleep in order; a tap shows one on the timeline, its button plays it alone,
- * and its menu opens the sensitivity around it while [onSensitivity] is given.
- * The event at the playhead is highlighted and scrolled into view.
+ * The events the [filter] shows, in order; a tap shows one on the timeline, its button plays it
+ * alone, and its menu hides or unhides it and opens the sensitivity around it while
+ * [onSensitivity] is given. The event at the playhead is highlighted and scrolled into view.
  */
 @Composable
 private fun EventList(
     sleep: SleepSummary?,
     events: List<SleepEvent>,
-    filtered: Boolean,
+    filter: EventFilter,
     timeline: SleepTimeline,
     currentEventId: Long?,
     playingEventId: Long?,
     onSelect: (SleepEvent) -> Unit,
     onTogglePlay: (SleepEvent) -> Unit,
+    onHide: (SleepEvent, Boolean) -> Unit,
     onSensitivity: ((SleepEvent) -> Unit)?,
 ) {
     val listState = rememberLazyListState()
@@ -377,6 +393,7 @@ private fun EventList(
                 onToggleTranscript = { expanded = if (event.id in expanded) expanded - event.id else expanded + event.id },
                 onSelect = onSelect,
                 onTogglePlay = onTogglePlay,
+                onHide = onHide,
                 onSensitivity = onSensitivity,
             )
         }
@@ -384,7 +401,8 @@ private fun EventList(
             item(key = "empty") {
                 val empty = when {
                     !sleep.eventsFound -> R.string.finding_events
-                    filtered -> R.string.no_events_filter
+                    filter == EventFilter.Hidden -> R.string.no_hidden_events
+                    filter != EventFilter.All -> R.string.no_events_filter
                     else -> R.string.no_events
                 }
                 Text(
@@ -409,6 +427,7 @@ private fun EventRow(
     onToggleTranscript: () -> Unit,
     onSelect: (SleepEvent) -> Unit,
     onTogglePlay: (SleepEvent) -> Unit,
+    onHide: (SleepEvent, Boolean) -> Unit,
     onSensitivity: ((SleepEvent) -> Unit)?,
 ) {
     val clock = LocalClockFormatter.current
@@ -427,20 +446,24 @@ private fun EventRow(
             .background(if (current || playing) colors.primary.copy(alpha = 0.1f) else colors.surface)
             .padding(start = 16.dp, end = 4.dp),
     ) {
+        // A hidden event is dimmed, with the grey of silence on the timeline as its colour.
         Box(
             Modifier
                 .padding(vertical = 10.dp)
                 .width(4.dp)
                 .fillMaxHeight()
                 .clip(RoundedCornerShape(2.dp))
-                .background(kindColor(event.kindColor, colors)),
+                .background(if (event.hidden) colors.outlineVariant else kindColor(event.kindColor, colors)),
         )
         Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-            Text(
-                stringResource(R.string.event_heading, time, formatEventLength(resources, event.end - event.start)),
-                style = MaterialTheme.typography.titleSmall.merge(numbers),
-            )
+        Column(Modifier.weight(1f).padding(vertical = 8.dp).alpha(if (event.hidden) 0.6f else 1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.event_heading, time, formatEventLength(resources, event.end - event.start)),
+                    style = MaterialTheme.typography.titleSmall.merge(numbers),
+                )
+                if (event.hidden) HiddenTag()
+            }
             Text(
                 stringResource(R.string.event_details, kindName(event.kindId, event.kindName), formatPosition(event.start)),
                 style = MaterialTheme.typography.bodySmall.merge(numbers),
@@ -454,10 +477,32 @@ private fun EventRow(
                 contentDescription = stringResource(if (playing) R.string.pause_event else R.string.play_event),
             )
         }
-        if (onSensitivity != null) {
-            MoreMenu(listOf(MenuEntry(stringResource(R.string.sensitivity_here), R.drawable.ic_tune) { onSensitivity(event) }))
-        }
+        MoreMenu(
+            listOfNotNull(
+                if (event.hidden) {
+                    MenuEntry(stringResource(R.string.unhide_event), R.drawable.ic_visibility) { onHide(event, false) }
+                } else {
+                    MenuEntry(stringResource(R.string.hide_event), R.drawable.ic_visibility_off) { onHide(event, true) }
+                },
+                onSensitivity?.let { MenuEntry(stringResource(R.string.sensitivity_here), R.drawable.ic_tune) { it(event) } },
+            ),
+        )
     }
+}
+
+/** The small "hidden" tag after a hidden event's time. */
+@Composable
+private fun HiddenTag() {
+    Text(
+        stringResource(R.string.hidden_tag),
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .padding(start = 8.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .padding(horizontal = 6.dp, vertical = 1.dp),
+    )
 }
 
 /** Shows the speed and switches to the next one on every tap. */
