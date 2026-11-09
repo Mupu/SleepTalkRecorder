@@ -51,6 +51,13 @@ val releaseSigningValues: Map<String, String?> = mapOf(
 }
 val missingReleaseSigningValues = releaseSigningValues.filterValues { it == null }.keys
 
+// Where the app looks for updates: a GitHub-style "latest release" endpoint (README.md, "Testing
+// the updater"). Release builds check the repository's releases. Debug builds are an app of their
+// own that no release APK can update, so they check only the source the Gradle property
+// updateSource names, such as a local stand-in, and do not update themselves without it.
+val releaseUpdateSource = "https://api.github.com/repos/Mupu/SleepTalkRecorder/releases/latest"
+val debugUpdateSource: String = providers.gradleProperty("updateSource").orNull.orEmpty()
+
 /**
  * Downloads [url] once into [target] and fails the build unless the file has the SHA-256 [sha256].
  * A file already there with the right checksum is kept, so only the first build downloads.
@@ -197,6 +204,7 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.findByName("release")
+            buildConfigField("String", "UPDATE_SOURCE", "\"$releaseUpdateSource\"")
             ndk { abiFilters += "arm64-v8a" }
             // R8 shrinks and optimises the code and drops unused resources, which starts the app
             // faster; proguard-rules.pro keeps what is reached only from native code.
@@ -208,6 +216,7 @@ android {
         // src/debug/res), so they install beside the release app and never touch its sleeps.
         debug {
             applicationIdSuffix = ".debug"
+            buildConfigField("String", "UPDATE_SOURCE", "\"$debugUpdateSource\"")
             ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         }
     }

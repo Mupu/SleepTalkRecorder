@@ -21,19 +21,22 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 | `notifications` | The ids of all notifications and the progress notification that model downloads and speech recognition share | Android notifications, WorkManager's `ForegroundInfo` |
 | `readiness` | Whether the phone lets a whole night be recorded: the `Requirement`s it misses, the `VendorStep`s of its maker, and the `SystemPage`s that fix them | only in `PhoneReadiness` |
 | `whatsnew` | The changelogs bundled into the app: their `Changelog` parser, the `BundledChangelogs` of each app language and `WhatsNew`, which decides whether an update brought news the user has not seen | only in `BundledChangelogs.fromAssets` (assets) |
+| `update` | The app's updates from its releases: which release is an update (`Release`), when one is downloaded and installed (`UpdatePolicy`), and the `Updater` that checks, downloads, verifies and installs it | only in `AndroidUpdates` (HTTP, package manager, `PackageInstaller`) |
 | `ui` | Navigation, one sub-package per screen (`home`, `library`, `sleep`, `stats`, `settings`, `setup`, `whatsnew`), shared `components`, `format` and `theme` | Compose |
 
 The root package holds `MainActivity`, the only activity, and `SleepTalkApplication` with the
 `AppContainer`, which wires the shared objects by hand: the database with the repository and stores, the
 `SettingsStore`, the `Recorder`, the `ModelLibrary` and the speech recognition; it also keeps
-automatic deletion scheduled, starts the search for events of finished sleeps and schedules their
-speech recognition. Logic that can be tested without a device
+automatic deletion scheduled, starts the search for events of finished sleeps, schedules their
+speech recognition and owns the `Updater`. Logic that can be tested without a device
 (`time`, `detection`, the WAV writer, the recording session, level computation, the sleep
 timeline and its audio stream, the cut plan, the timeline view and the event filter of the sleep screen, the
 sensitivity sheet's re-scan, the numbers of the stats screen, the settings,
 which sleeps automatic deletion removes, the model downloads and states, the transcript filter,
-the speech recognition run, which transcript each event shows, and reading the changelogs) is plain Kotlin behind small interfaces (`PcmSource`,
-`RecordingStore`, `Clocks`, `ByteSource`, `ModelDownloads`, `TranscriptStore`, `Transcriber`) and
+the speech recognition run, which transcript each event shows, reading the changelogs, and finding,
+verifying and timing an update) is plain Kotlin behind small interfaces (`PcmSource`,
+`RecordingStore`, `Clocks`, `ByteSource`, `ModelDownloads`, `TranscriptStore`, `Transcriber`,
+`ReleaseSource`, `ApkInspector`, `PackageInstall`) and
 is unit-tested on the JVM.
 
 Screens follow unidirectional data flow: a `ViewModel` combines repository and recorder flows into
@@ -57,10 +60,11 @@ The *sleep windows* are set on a bar of their own over the 24 hours of a day, dr
 hours and cannot pass each other; tapping a thumb or its time opens the same time picker. Both
 times are stored as one setting, so they are never half changed.
 
-The first-start setup is a sequence of `SetupStep`s (the language, the permissions page, then the
-speech recognition model), each
-finished once with a setting of its own; `MainActivity` shows the first unfinished step instead of
-the app, so a setup left halfway continues where it stopped.
+The first-start setup is a sequence of `SetupStep`s (the language, the permissions page, "Install
+unknown apps" for updates, then the speech recognition model), each finished once with a setting
+of its own; `MainActivity` shows the first unfinished step instead of the app, so a setup left
+halfway continues where it stopped. A build that does not update itself leaves out the updates
+step.
 
 The app language is the per-app language Android keeps itself, not a DataStore setting: from
 Android 13 on the system stores it and offers it in the app's system settings (the build generates
@@ -83,6 +87,34 @@ is higher, a pop-up over the open screen shows the releases since, once: any way
 counts as seen, and one of its buttons opens the list of all releases, which the settings open too.
 A fresh install has nothing to announce and only stores its version; a downgrade stores the lower
 one, so the next update shows everything after it.
+
+## Updates
+
+The app updates itself from the releases of its GitHub repository, without a store or a server of
+its own. Each release carries the APK signed in CI and its `sha256sum` line as assets. Each start
+of the app (not a recreation of its screen) and "Check now" in the settings ask GitHub's API for
+the latest release, which is never a draft or a pre-release; it is an update when its tag names a
+higher version than the installed one and it carries both files. The source is a build setting:
+release builds ask GitHub, debug builds, an app of their own that no release APK could update,
+ask only a test source given at build time and otherwise do not update themselves
+([README](README.md#testing-the-updater)).
+
+The `Updater` downloads the APK into the cache on its own only on an unmetered network; on mobile
+data home offers the download with its size. A download continues where it stopped, and the file
+gets its final name only once its SHA-256 matches the published checksum and the package manager
+reads it as this app, with a higher version code, signed with exactly the installed app's
+certificates; anything else is deleted and shown as refused. A verified file is offered again on
+every later start, before and whatever the check finds, until it is installed.
+
+Installing kills all of the app's processes, so it never happens during a recording (`UpdatePolicy`),
+and home shows nothing about updates while one runs. Home's Update button installs at once
+otherwise; on its own the app installs only when it has been
+off the screen for ten seconds and nothing records, plays or recognises speech. The install is a
+`PackageInstaller` session that asks for no user action: with "Install unknown apps" granted (a
+setup step), `UPDATE_PACKAGES_WITHOUT_USER_ACTION` declared and the app updating itself, Android
+installs without a dialog as long as the APK's target API level is recent enough for the phone.
+When Android still asks, the system's confirmation is shown for a tap in the app; from the
+background it cannot be shown, so the session is given up and the update waits for a tap.
 
 ## Readiness
 

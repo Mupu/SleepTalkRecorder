@@ -286,7 +286,7 @@
     <string name="transcription_mode_manual_hint">Only when you start it from the menu of a sleep.</string>
     <string name="transcription_mode_off">Off</string>
     <string name="transcription_mode_off_hint">Speech recognition does not run. Texts recognised before are kept.</string>
-    <string name="settings_models_hint">This version of the app processes everything on the phone, speech recognition too. It uses the internet only to download models.</string>
+    <string name="settings_models_hint">This version of the app processes everything on the phone, speech recognition too. It uses the internet only to download models and its own updates.</string>
     <string name="settings_transcript_language">Transcript language</string>
     <string name="settings_transcript_language_hint">Your language. English is always recognised as well.</string>
     <string name="transcript_language_app">Same as the app</string>
@@ -390,4 +390,35 @@
     <string name="settings_updates">Updates</string>
     <!-- %1$s is the installed version, "0.2.0". -->
     <string name="settings_whats_new_hint">What changed in each update. You have version %1$s.</string>
+
+    <!-- Updates. %1$s is a version such as "0.2.0"; a size is for example "48 MB". -->
+    <string name="settings_check_updates">Check for updates automatically</string>
+    <string name="settings_check_updates_hint">On every start of the app. New versions download on Wi-Fi on their own.</string>
+    <string name="settings_check_now">Check now</string>
+    <string name="update_status_off">This build does not update itself.</string>
+    <string name="update_status_unchecked">Not checked yet</string>
+    <string name="update_status_checking">Checking…</string>
+    <string name="update_status_up_to_date">Up to date</string>
+    <string name="update_status_check_failed">Could not check. Check the connection and try again.</string>
+    <string name="update_status_available">Version %1$s is available</string>
+    <string name="update_status_downloading">Downloading version %1$s</string>
+    <string name="update_status_ready">Version %1$s is ready to install</string>
+    <string name="update_status_installing">Installing version %1$s…</string>
+    <string name="update_status_failed">The update to version %1$s failed</string>
+    <!-- %1$s is the size of the download. -->
+    <string name="update_download">Download (%1$s)</string>
+    <string name="update_download_metered">On mobile data the app downloads only when you tap.</string>
+    <string name="update_install">Update</string>
+    <string name="update_ready_hint">The app closes to update. Otherwise it updates by itself once it is in the background and nothing records or plays.</string>
+    <string name="update_failed_damaged">The download was damaged and was thrown away. Try again.</string>
+    <string name="update_failed_signer">This update is not signed like the installed app, so it is not installed.</string>
+    <string name="update_failed_not_update">The downloaded file is not an update of this app.</string>
+    <string name="update_failed_install">Android could not install the update.</string>
+
+    <!-- First start: updates. %1$s is the app's name. -->
+    <string name="setup_updates_title">Stay up to date</string>
+    <string name="setup_updates_text">The app updates itself from its releases on GitHub. It checks on every start and downloads new versions on Wi-Fi.</string>
+    <string name="setup_updates_install">Install unknown apps</string>
+    <string name="setup_updates_install_why">Allow it for %1$s, and updates install without asking each time. Without it, Android asks before every update.</string>
+    <string name="setup_updates_never_recording">An update never installs during a recording.</string>
 </resources>

@@ -22,4 +22,5 @@ Die erste Beta: Die App nimmt deine Nächte auf und lässt dich nur das hören, 
 - Eine Aufnahme, die ein Absturz oder ein leerer Akku abgebrochen hat, wird repariert und bleibt erhalten; Lücken und Abschnitte, in denen eine andere App das Mikrofon hatte, werden markiert.
 - Wähle das Design, die Sprache (Deutsch oder Englisch), das Uhrzeitformat sowie Vorlauf und Nachlauf der Ereignisse.
 - Nach einem Update zeigt die App einmal, was neu ist; die Einstellungen listen unter „Neuigkeiten“ jedes Update auf.
-- Alles bleibt auf dem Handy: Es gibt kein Konto, und das Internet wird nur zum Herunterladen der Spracherkennungsmodelle genutzt.
+- Die App hält sich selbst über ihre Releases auf GitHub aktuell: Sie sucht bei jedem Start nach einer neuen Version, lädt sie im WLAN herunter (über mobile Daten nach einem Tippen) und installiert sie, wenn du auf „Aktualisieren“ tippst, oder von selbst, sobald sie im Hintergrund ist und nichts aufnimmt oder abspielt. Ein Update unterbricht nie eine Aufnahme und wird nur installiert, wenn es wie die installierte App signiert ist.
+- Alles bleibt auf dem Handy: Es gibt kein Konto, und das Internet wird nur zum Herunterladen der Spracherkennungsmodelle und der Updates der App genutzt.

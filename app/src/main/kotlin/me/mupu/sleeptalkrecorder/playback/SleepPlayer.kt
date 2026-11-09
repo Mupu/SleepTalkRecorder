@@ -66,7 +66,11 @@ data class PlaybackState(
  * The player lives on the main thread; call [release] when it is no longer needed.
  */
 @OptIn(UnstableApi::class)
-class SleepPlayer(context: Context) {
+class SleepPlayer(
+    context: Context,
+    /** Told whether audio plays, whenever that changes; the updater waits while it does. */
+    private val onPlayingChange: (Boolean) -> Unit = {},
+) {
 
     private val fader = CutFader()
 
@@ -96,6 +100,7 @@ class SleepPlayer(context: Context) {
                 override fun onEvents(player: Player, events: Player.Events) {
                     publish()
                     if (player.isPlaying) startTicker() else stopTicker()
+                    if (events.contains(Player.EVENT_IS_PLAYING_CHANGED)) onPlayingChange(player.isPlaying)
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
@@ -205,6 +210,7 @@ class SleepPlayer(context: Context) {
     fun release() {
         scope.cancel()
         player.release()
+        onPlayingChange(false)
     }
 
     private fun publish() {

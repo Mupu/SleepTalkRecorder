@@ -108,6 +108,10 @@ fun HomeScreen(
             if (state.missing.isNotEmpty()) {
                 ReadinessBanner(state.missing, onFix = onFixReadiness)
             }
+            // Nothing about updates distracts while a sleep is recorded; an update never installs then.
+            if (state.recorder !is RecorderState.Recording && state.recorder != RecorderState.Starting) {
+                UpdateCard(state.update, onDownload = viewModel::downloadUpdate, onInstall = viewModel::installUpdate)
+            }
             RecorderPanel(
                 state = state,
                 onRecord = onRecord,

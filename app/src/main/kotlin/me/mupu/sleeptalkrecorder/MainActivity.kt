@@ -26,7 +26,10 @@ import me.mupu.sleeptalkrecorder.ui.setup.ModelSetupViewModel
 import me.mupu.sleeptalkrecorder.ui.setup.PermissionsPlace
 import me.mupu.sleeptalkrecorder.ui.setup.PermissionsScreen
 import me.mupu.sleeptalkrecorder.ui.setup.PermissionsViewModel
+import me.mupu.sleeptalkrecorder.ui.setup.LocalSetupSteps
 import me.mupu.sleeptalkrecorder.ui.setup.SetupStep
+import me.mupu.sleeptalkrecorder.ui.setup.UpdatesSetupScreen
+import me.mupu.sleeptalkrecorder.ui.setup.UpdatesSetupViewModel
 import me.mupu.sleeptalkrecorder.ui.theme.SleepTalkRecorderTheme
 import me.mupu.sleeptalkrecorder.ui.theme.isDark
 import kotlinx.coroutines.flow.combine
@@ -41,8 +44,10 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         val container = (application as SleepTalkApplication).container
+        // Without a saved state the app was opened anew; with one it was only recreated, as on a rotation.
+        container.appStarted(openedAnew = savedInstanceState == null)
         setContent {
-            val settings by remember { appSettings(container.settings) }.collectAsStateWithLifecycle(null)
+            val settings by remember { appSettings(container.settings, container.setupSteps) }.collectAsStateWithLifecycle(null)
             // Until the settings are read, which takes a few milliseconds, the window stays empty
             // instead of showing the wrong theme or screen first.
             val current = settings ?: return@setContent
@@ -58,7 +63,7 @@ class MainActivity : AppCompatActivity() {
 
             val clock = remember(current.timeFormat) { ClockFormatter(current.timeFormat) }
             SleepTalkRecorderTheme(darkTheme) {
-                CompositionLocalProvider(LocalClockFormatter provides clock) {
+                CompositionLocalProvider(LocalClockFormatter provides clock, LocalSetupSteps provides container.setupSteps) {
                     when (current.setupStep) {
                         null -> SleepTalkNavHost(container)
                         SetupStep.LANGUAGE ->
@@ -72,12 +77,24 @@ class MainActivity : AppCompatActivity() {
                                 onDone = permissions::finishSetupStep,
                             )
                         }
-                        SetupStep.MODEL ->
-                            ModelSetupScreen(viewModel { ModelSetupViewModel(container.settings, container.modelLibrary) })
+                        SetupStep.UPDATES -> UpdatesSetupScreen(viewModel { UpdatesSetupViewModel(container.settings) })
+                        SetupStep.MODEL -> ModelSetupScreen(
+                            viewModel { ModelSetupViewModel(container.settings, container.modelLibrary, container.setupSteps) },
+                        )
                     }
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        (application as SleepTalkApplication).container.visibilityChanged(true)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        (application as SleepTalkApplication).container.visibilityChanged(false)
     }
 
     override fun onResume() {
@@ -89,10 +106,10 @@ class MainActivity : AppCompatActivity() {
 
     private class AppSettings(val theme: ThemeMode, val timeFormat: TimeFormat, val setupStep: SetupStep?)
 
-    private fun appSettings(store: SettingsStore) = combine(
+    private fun appSettings(store: SettingsStore, steps: List<SetupStep>) = combine(
         store.flow(Settings.theme),
         store.flow(Settings.timeFormat),
-        SetupStep.current(store),
+        SetupStep.current(store, steps),
         ::AppSettings,
     )
 

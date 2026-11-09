@@ -11,6 +11,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  * The pages of the first-start setup, in the order they are shown. Each remembers in its
  * [finished] setting that the user went past it, so a setup left halfway continues where it
  * stopped. A new page is one more constant here and one more screen in `MainActivity`.
+ *
+ * A build may leave steps out (debug builds without an update source skip [UPDATES]); [current]
+ * and [back] take the steps it shows.
  */
 enum class SetupStep(private val finished: Setting<Boolean>) {
     /** Which language the app speaks. */
@@ -19,6 +22,9 @@ enum class SetupStep(private val finished: Setting<Boolean>) {
     /** Microphone, notifications, battery optimisation and the vendor's own app killers. */
     PERMISSIONS(Settings.permissionsReviewed),
 
+    /** "Install unknown apps", which lets the app install its updates without asking each time. */
+    UPDATES(Settings.updatesReviewed),
+
     /** The speech recognition model, downloaded in the background or left for later. */
     MODEL(Settings.modelOffered),
     ;
@@ -26,17 +32,17 @@ enum class SetupStep(private val finished: Setting<Boolean>) {
     /** Marks this step as done, which shows the next one. */
     suspend fun finish(store: SettingsStore) = store.set(finished, true)
 
-    /** Opens the step before this one again; the first step has none. */
-    suspend fun back(store: SettingsStore) {
-        val previous = entries.getOrNull(ordinal - 1) ?: return
+    /** Opens the step before this one of [steps] again; the first step has none. */
+    suspend fun back(store: SettingsStore, steps: List<SetupStep> = entries) {
+        val previous = steps.getOrNull(steps.indexOf(this) - 1) ?: return
         store.set(previous.finished, false)
     }
 
     companion object {
-        /** The step the setup is at, or null once every step is finished. */
-        fun current(store: SettingsStore): Flow<SetupStep?> =
-            combine(entries.map { step -> store.flow(step.finished) }) { finished ->
-                entries.firstOrNull { !finished[it.ordinal] }
+        /** The step of [steps] the setup is at, or null once every one is finished. */
+        fun current(store: SettingsStore, steps: List<SetupStep> = entries): Flow<SetupStep?> =
+            combine(steps.map { step -> store.flow(step.finished) }) { finished ->
+                steps.filterIndexed { index, _ -> !finished[index] }.firstOrNull()
             }.distinctUntilChanged()
     }
 }

@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenWhatsNew: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val updates by viewModel.updates.collectAsStateWithLifecycle()
     val language = AppLanguages.shown(LocalConfiguration.current)
     val snackbars = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -178,6 +179,13 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenWhats
             }
 
             SettingsSection(stringResource(R.string.settings_updates))
+            updates?.let { current ->
+                UpdateSettings(
+                    state = current,
+                    onCheckAutomaticallyChange = { viewModel.set(Settings.checkForUpdates, it) },
+                    onCheckNow = viewModel::checkForUpdates,
+                )
+            }
             LinkSetting(
                 icon = R.drawable.ic_new_releases,
                 label = stringResource(R.string.whats_new),

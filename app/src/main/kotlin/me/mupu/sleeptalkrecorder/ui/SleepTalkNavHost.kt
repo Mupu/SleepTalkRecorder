@@ -65,7 +65,7 @@ fun SleepTalkNavHost(container: AppContainer) {
     NavHost(navController = navController, startDestination = Routes.HOME) {
         composable(Routes.HOME) {
             HomeScreen(
-                viewModel = viewModel { HomeViewModel(container.recorder, container.sleepRepository, container.readiness) },
+                viewModel = viewModel { HomeViewModel(container.recorder, container.sleepRepository, container.readiness, container.updater) },
                 onOpenLibrary = { navController.navigate(Routes.LIBRARY) },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                 onOpenSleep = { navController.navigate(Routes.sleep(it)) },
@@ -91,7 +91,7 @@ fun SleepTalkNavHost(container: AppContainer) {
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(
-                viewModel = viewModel { SettingsViewModel(container.settings, container.modelLibrary) },
+                viewModel = viewModel { SettingsViewModel(container.settings, container.modelLibrary, container.updater) },
                 onBack = { navController.popBackStack() },
                 onOpenWhatsNew = { navController.navigate(Routes.WHATS_NEW) },
             )
@@ -107,7 +107,7 @@ fun SleepTalkNavHost(container: AppContainer) {
             val context = LocalContext.current.applicationContext
             SleepScreen(
                 viewModel = viewModel {
-                    SleepViewModel(sleepId, container.sleepRepository, container.settings, SleepPlayer(context), container.transcriptions)
+                    SleepViewModel(sleepId, container.sleepRepository, container.settings, SleepPlayer(context, container::playbackChanged), container.transcriptions)
                 },
                 onBack = { navController.popBackStack() },
                 onOpenStats = { navController.navigate(Routes.stats(sleepId)) },

@@ -15,6 +15,8 @@ import me.mupu.sleeptalkrecorder.settings.TimeFormat
 import me.mupu.sleeptalkrecorder.settings.TranscriptLanguage
 import me.mupu.sleeptalkrecorder.settings.TranscriptionMode
 import me.mupu.sleeptalkrecorder.time.SleepWindows
+import me.mupu.sleeptalkrecorder.update.UpdateState
+import me.mupu.sleeptalkrecorder.update.Updater
 import java.time.Duration
 import java.time.LocalTime
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,8 +48,23 @@ data class SettingsUiState(
     val needsLanguage: Boolean get() = models.any { it.active && it.model.needsLanguage }
 }
 
+/** The updates section of the settings screen. */
+data class UpdatesUiState(
+    val checkAutomatically: Boolean,
+    val update: UpdateState,
+) {
+    /** Whether "Check now" can start a check: not while one runs, downloads or installs. */
+    val canCheck: Boolean
+        get() = update != UpdateState.Off && update != UpdateState.Checking &&
+            update !is UpdateState.Downloading && update !is UpdateState.Installing
+}
+
 /** State and actions of the settings screen. */
-class SettingsViewModel(private val store: SettingsStore, private val models: ModelLibrary) : ViewModel() {
+class SettingsViewModel(
+    private val store: SettingsStore,
+    private val models: ModelLibrary,
+    private val updater: Updater,
+) : ViewModel() {
 
     private val deleting = MutableStateFlow<TranscriptionModel?>(null)
 
@@ -65,6 +82,13 @@ class SettingsViewModel(private val store: SettingsStore, private val models: Mo
             speech.models, speech.language, speech.mode, speech.deleting,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** The updates section; null until the setting is read. */
+    val updates: StateFlow<UpdatesUiState?> = combine(store.flow(Settings.checkForUpdates), updater.state, ::UpdatesUiState)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Looks for an update now. */
+    fun checkForUpdates() = updater.check()
 
     /** The speech recognition settings, combined into one value like the pairs above. */
     private data class Speech(

@@ -249,7 +249,7 @@
     <string name="transcription_mode_manual_hint">Nur wenn du sie im Menü eines Schlafs startest.</string>
     <string name="transcription_mode_off">Aus</string>
     <string name="transcription_mode_off_hint">Die Spracherkennung läuft nicht. Bereits erkannte Texte bleiben erhalten.</string>
-    <string name="settings_models_hint">Diese Version der App verarbeitet alles auf dem Telefon, auch die Spracherkennung. Das Internet nutzt sie nur, um Modelle zu laden.</string>
+    <string name="settings_models_hint">Diese Version der App verarbeitet alles auf dem Telefon, auch die Spracherkennung. Das Internet nutzt sie nur, um Modelle und ihre eigenen Updates zu laden.</string>
     <string name="settings_transcript_language">Sprache des Transkripts</string>
     <string name="settings_transcript_language_hint">Deine Sprache. Englisch wird immer mit erkannt.</string>
     <string name="transcript_language_app">Wie die App</string>
@@ -344,4 +344,34 @@
     <string name="whats_new_empty">Es sind keine Updates aufgeführt.</string>
     <string name="settings_updates">Updates</string>
     <string name="settings_whats_new_hint">Was sich mit jedem Update geändert hat. Du hast Version %1$s.</string>
+
+    <!-- Updates -->
+    <string name="settings_check_updates">Automatisch nach Updates suchen</string>
+    <string name="settings_check_updates_hint">Bei jedem Start der App. Neue Versionen laden im WLAN von selbst.</string>
+    <string name="settings_check_now">Jetzt suchen</string>
+    <string name="update_status_off">Dieser Build aktualisiert sich nicht selbst.</string>
+    <string name="update_status_unchecked">Noch nicht gesucht</string>
+    <string name="update_status_checking">Suche…</string>
+    <string name="update_status_up_to_date">Aktuell</string>
+    <string name="update_status_check_failed">Die Suche ist fehlgeschlagen. Prüfe die Verbindung und versuche es erneut.</string>
+    <string name="update_status_available">Version %1$s ist verfügbar</string>
+    <string name="update_status_downloading">Version %1$s wird geladen</string>
+    <string name="update_status_ready">Version %1$s ist bereit zur Installation</string>
+    <string name="update_status_installing">Version %1$s wird installiert…</string>
+    <string name="update_status_failed">Das Update auf Version %1$s ist fehlgeschlagen</string>
+    <string name="update_download">Laden (%1$s)</string>
+    <string name="update_download_metered">Über mobile Daten lädt die App nur, wenn du tippst.</string>
+    <string name="update_install">Aktualisieren</string>
+    <string name="update_ready_hint">Die App schließt sich zum Aktualisieren. Sonst aktualisiert sie sich von selbst, sobald sie im Hintergrund ist und nichts aufnimmt oder abspielt.</string>
+    <string name="update_failed_damaged">Der Download war beschädigt und wurde verworfen. Versuche es erneut.</string>
+    <string name="update_failed_signer">Dieses Update ist nicht wie die installierte App signiert und wird deshalb nicht installiert.</string>
+    <string name="update_failed_not_update">Die geladene Datei ist kein Update dieser App.</string>
+    <string name="update_failed_install">Android konnte das Update nicht installieren.</string>
+
+    <!-- First start: updates -->
+    <string name="setup_updates_title">Auf dem neuesten Stand bleiben</string>
+    <string name="setup_updates_text">Die App aktualisiert sich selbst aus ihren Releases auf GitHub. Sie sucht bei jedem Start und lädt neue Versionen im WLAN.</string>
+    <string name="setup_updates_install">Unbekannte Apps installieren</string>
+    <string name="setup_updates_install_why">Erlaube es für %1$s, dann installieren sich Updates, ohne jedes Mal zu fragen. Ohne fragt Android vor jedem Update.</string>
+    <string name="setup_updates_never_recording">Ein Update wird nie während einer Aufnahme installiert.</string>
 </resources>

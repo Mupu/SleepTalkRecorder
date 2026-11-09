@@ -42,7 +42,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** State and actions of the setup page that offers the default speech recognition model. */
-class ModelSetupViewModel(private val store: SettingsStore, private val models: ModelLibrary) : ViewModel() {
+class ModelSetupViewModel(
+    private val store: SettingsStore,
+    private val models: ModelLibrary,
+    /** The steps of this build's setup, which decide the step before this one. */
+    private val steps: List<SetupStep>,
+) : ViewModel() {
 
     /** The default model's state; null until it is read. */
     val state: StateFlow<ModelState?> = models.models
@@ -56,7 +61,7 @@ class ModelSetupViewModel(private val store: SettingsStore, private val models: 
     }
 
     fun backSetupStep() {
-        viewModelScope.launch { SetupStep.MODEL.back(store) }
+        viewModelScope.launch { SetupStep.MODEL.back(store, steps) }
     }
 }
 

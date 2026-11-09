@@ -22,4 +22,5 @@ The first beta: the app records your nights and lets you hear only what was said
 - A recording cut off by a crash or an empty battery is repaired and kept; gaps and stretches in which another app had the microphone are marked.
 - Choose the theme, the language (English or German), the time format and the lead-in and tail of the events.
 - After an update the app shows once what is new; the settings list every update under "What's new".
-- Everything stays on the phone: there is no account, and the internet is only used to download the speech recognition models.
+- The app keeps itself up to date from its releases on GitHub: it looks for a new version on every start, downloads it on Wi-Fi (on mobile data after a tap) and installs it when you tap Update, or by itself once it is in the background and nothing records or plays. An update never interrupts a recording, and it is installed only when it is signed like the installed app.
+- Everything stays on the phone: there is no account, and the internet is only used to download the speech recognition models and the app's updates.

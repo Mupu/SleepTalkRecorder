@@ -28,12 +28,26 @@ import me.mupu.sleeptalkrecorder.transcription.batteryState
 import me.mupu.sleeptalkrecorder.whatsnew.BundledChangelogs
 import me.mupu.sleeptalkrecorder.whatsnew.Version
 import me.mupu.sleeptalkrecorder.whatsnew.WhatsNew
+import me.mupu.sleeptalkrecorder.recording.RecorderState
+import me.mupu.sleeptalkrecorder.ui.setup.SetupStep
+import me.mupu.sleeptalkrecorder.update.AppActivity
+import me.mupu.sleeptalkrecorder.update.GitHubReleases
+import me.mupu.sleeptalkrecorder.update.PackageApks
+import me.mupu.sleeptalkrecorder.update.SessionInstaller
+import me.mupu.sleeptalkrecorder.update.Updater
+import me.mupu.sleeptalkrecorder.update.isMetered
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
@@ -106,6 +120,72 @@ class AppContainer(context: Context) {
 
     /** Whether the phone's permissions and battery settings let a whole night be recorded. */
     val readiness = PhoneReadiness(context)
+
+    private val visible = MutableStateFlow(false)
+
+    /** Whether the app is on the screen; `MainActivity` reports it. */
+    val appVisible: StateFlow<Boolean> = visible.asStateFlow()
+
+    private val playing = MutableStateFlow(false)
+
+    /** Tells whether a sleep's audio plays; the player of the sleep screen reports it. */
+    fun playbackChanged(isPlaying: Boolean) {
+        playing.value = isPlaying
+    }
+
+    /** Tells whether the app is on the screen. */
+    fun visibilityChanged(isVisible: Boolean) {
+        visible.value = isVisible
+    }
+
+    private val activity: StateFlow<AppActivity> = combine(
+        recorder.state,
+        playing,
+        transcriptionRunner.progress,
+        visible,
+    ) { recording, isPlaying, transcription, isVisible ->
+        AppActivity(
+            recording = recording is RecorderState.Recording || recording == RecorderState.Starting,
+            playing = isPlaying,
+            transcribing = transcription != null,
+            visible = isVisible,
+        )
+    }.stateIn(scope, SharingStarted.Eagerly, AppActivity(recording = false, playing = false, transcribing = false, visible = false))
+
+    /** Keeps the app up to date from its releases; off in builds without an update source. */
+    val updater: Updater = Updater(
+        installedVersion = installedVersion,
+        source = BuildConfig.UPDATE_SOURCE.takeIf { it.isNotEmpty() }
+            ?.let { GitHubReleases(it, "SleepTalkRecorder/${BuildConfig.VERSION_NAME}") },
+        files = HttpByteSource,
+        // Downloads go to the cache, which the system may clear; then the next start downloads again.
+        directory = File(context.cacheDir, "updates"),
+        apks = PackageApks(appContext),
+        installer = SessionInstaller(appContext) { updater.installFinished(it) },
+        metered = { isMetered(appContext) },
+        activity = activity,
+        scope = scope,
+    )
+
+    /** The pages of the first-start setup in this build: the one about updates only where the app updates itself. */
+    val setupSteps: List<SetupStep> =
+        SetupStep.entries.filter { it != SetupStep.UPDATES || BuildConfig.UPDATE_SOURCE.isNotEmpty() }
+
+    private var startedBefore = false
+
+    /**
+     * The app's screen was created: opened anew, or recreated (on a rotation, or after Android
+     * ended the process in the background). Each start of the app looks for an update, unless the
+     * user switched that off; a recreation within the same process is no start.
+     */
+    fun appStarted(openedAnew: Boolean) {
+        val start = openedAnew || !startedBefore
+        startedBefore = true
+        if (!start) return
+        scope.launch {
+            if (settings.flow(Settings.checkForUpdates).first()) updater.check()
+        }
+    }
 
     /**
      * Finishes recordings a previous process left running. A new recording waits for it, so it

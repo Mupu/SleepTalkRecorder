@@ -7,7 +7,8 @@ the whole night or a cut version that skips the silence. Every position is shown
 into the recording (6:10:00) and as the real time it happened (07:38).
 
 This version processes everything on the phone: there is no account, and speech is recognised on
-the phone itself; the app uses the internet only to download its speech recognition models.
+the phone itself; the app uses the internet only to download its speech recognition models and
+its own updates from the GitHub releases.
 
 ## Architecture
 
@@ -103,12 +104,32 @@ nothing, lists the words found on non-speech and on speech, and writes every res
 `.local/test-output/transcription/transcription-evaluation.csv`. It reuses the feature tracks the
 detector evaluation keeps in `.local/test-output/detector/tracks/` and extracts missing ones.
 
+### Testing the updater
+
+Debug builds are an app of their own that no release APK can update, so they never look at the
+GitHub releases. The Gradle property `updateSource` points a debug build at another "latest
+release" endpoint instead: a small HTTP server on the PC that answers like GitHub's
+`GET /repos/{owner}/{repo}/releases/latest` (`tag_name`, and `assets` with `name`, `size` and
+`browser_download_url`) and serves `SleepTalkRecorder.apk` with its `SleepTalkRecorder.apk.sha256`.
+The emulator reaches the PC as `10.0.2.2`, to which debug builds may use plain HTTP:
+
+```sh
+./gradlew assembleDebug -PupdateSource=http://10.0.2.2:8739/repos/Mupu/SleepTalkRecorder/releases/latest
+```
+
+Build the newer APK the same way after raising the version in `CHANGELOG.md` for the build only,
+and install the older one with `adb install`. The newer APK re-signed with another key
+(`apksigner sign`) shows the refusal of another certificate, and a checksum file with another hash
+the refusal of a damaged download.
+
 ## Installing on a phone
 
 The app is not on Google Play. Every GitHub release carries the signed `SleepTalkRecorder.apk`
 and its checksum `SleepTalkRecorder.apk.sha256`; the newest one is always at
 <https://github.com/Mupu/SleepTalkRecorder/releases/latest/download/SleepTalkRecorder.apk>.
-Opened on the phone, Android asks once to allow "Install unknown apps" for the browser.
+Opened on the phone, Android asks once to allow "Install unknown apps" for the browser. From
+then on the app updates itself from these releases; the first-start setup asks to allow "Install
+unknown apps" for the app too, so that updates install without a dialog.
 
 An update keeps the recordings only when it is signed with the same key as the installed app.
 Android refuses an update signed with another key, and the only way past that is to uninstall,
@@ -122,6 +143,8 @@ Debug builds are an app of their own, `me.mupu.sleeptalkrecorder.debug`, named "
 with an amber icon. It installs beside the release app and keeps its own sleeps, settings and
 models, so testing never touches the real recordings. Each PC signs debug builds with its own
 generated debug key; a debug build from another PC installs only after uninstalling the old one.
+Debug builds do not update themselves, unless they are built for
+[testing the updater](#testing-the-updater).
 
 ### Set up release signing (once)
 

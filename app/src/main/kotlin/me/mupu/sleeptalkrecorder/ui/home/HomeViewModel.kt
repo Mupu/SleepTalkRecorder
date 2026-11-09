@@ -8,6 +8,8 @@ import me.mupu.sleeptalkrecorder.readiness.PhoneReadiness
 import me.mupu.sleeptalkrecorder.readiness.Requirement
 import me.mupu.sleeptalkrecorder.recording.Recorder
 import me.mupu.sleeptalkrecorder.recording.RecorderState
+import me.mupu.sleeptalkrecorder.update.UpdateState
+import me.mupu.sleeptalkrecorder.update.Updater
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -24,6 +26,8 @@ data class HomeUiState(
     val lastSleep: SleepSummary? = null,
     /** What the phone does not allow yet that a whole night needs; home warns while it is not empty. */
     val missing: Set<Requirement> = emptySet(),
+    /** Where the update stands; home shows an update once one is found. */
+    val update: UpdateState = UpdateState.Off,
 )
 
 /** State and actions of the home screen. */
@@ -31,6 +35,7 @@ class HomeViewModel(
     private val recorder: Recorder,
     repository: SleepRepository,
     readiness: PhoneReadiness,
+    private val updater: Updater,
 ) : ViewModel() {
 
     private val levels = recorder.state.runningFold(emptyList<Double>()) { history, state ->
@@ -40,16 +45,20 @@ class HomeViewModel(
 
     private val lastSleep = repository.sleeps().map { sleeps -> sleeps.firstOrNull { !it.isRunning } }
 
-    val state: StateFlow<HomeUiState> = combine(recorder.state, levels, lastSleep, readiness.missing, ::HomeUiState)
+    val state: StateFlow<HomeUiState> = combine(recorder.state, levels, lastSleep, readiness.missing, updater.state, ::HomeUiState)
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5_000),
-            HomeUiState(recorder.state.value, missing = readiness.missing.value),
+            HomeUiState(recorder.state.value, missing = readiness.missing.value, update = updater.state.value),
         )
 
     fun startRecording() = recorder.start()
 
     fun stopRecording() = recorder.stop()
+
+    fun downloadUpdate() = updater.download()
+
+    fun installUpdate() = updater.install()
 
     companion object {
         /** How many buffers the level meter shows. */

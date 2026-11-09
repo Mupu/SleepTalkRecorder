@@ -59,6 +59,9 @@ sealed interface SystemPage {
         val BATTERY_EXEMPTION =
             Action("android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS", AppReference.PACKAGE_URI)
 
+        /** Whether this app may install apps ("Install unknown apps"), which its updates need. */
+        val UNKNOWN_APP_SOURCES = Action("android.settings.MANAGE_UNKNOWN_APP_SOURCES", AppReference.PACKAGE_URI)
+
         /** The list of all apps and whether battery optimisation applies to them. */
         val BATTERY_EXEMPTION_LIST = Action("android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS")
     }

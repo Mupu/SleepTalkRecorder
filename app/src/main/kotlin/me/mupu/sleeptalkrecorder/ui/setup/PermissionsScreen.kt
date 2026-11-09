@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -217,11 +218,15 @@ fun PermissionsScreen(
     }
 }
 
-/** Where [step] stands in the setup: "2 / 2". */
+/** The steps the setup of this build shows, which [StepLabel] counts; `MainActivity` provides them. */
+val LocalSetupSteps = staticCompositionLocalOf<List<SetupStep>> { SetupStep.entries }
+
+/** Where [step] stands in the setup: "2 / 4". */
 @Composable
 internal fun StepLabel(step: SetupStep) {
+    val steps = LocalSetupSteps.current
     Text(
-        stringResource(R.string.setup_step, step.ordinal + 1, SetupStep.entries.size),
+        stringResource(R.string.setup_step, steps.indexOf(step) + 1, steps.size),
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -285,9 +290,9 @@ private fun VendorStepRow(step: VendorStep, opened: Boolean, fellBack: Boolean, 
     }
 }
 
-/** One card of the page: an icon, a title, why it matters, and what to do below. */
+/** One card of a setup page: an icon, a title, why it matters, and what to do below. */
 @Composable
-private fun SetupRow(
+internal fun SetupRow(
     @DrawableRes icon: Int,
     done: Boolean,
     title: String,

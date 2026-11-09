@@ -35,6 +35,12 @@ object Settings {
     /** Whether the app asked for the notification permission before, like [microphoneAsked]. */
     val notificationsAsked = booleanSetting("notifications_asked", false)
 
+    /** Whether the first-start page about installing updates ("Install unknown apps") was finished. */
+    val updatesReviewed = booleanSetting("updates_reviewed", false)
+
+    /** Whether the app looks for a newer release each time it starts. */
+    val checkForUpdates = booleanSetting("check_for_updates", true)
+
     /** Whether the first-start page offering the speech recognition model was finished. */
     val modelOffered = booleanSetting("model_offered", false)
 

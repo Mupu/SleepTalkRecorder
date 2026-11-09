@@ -30,6 +30,9 @@ class SetupStepTest {
         assertEquals(SetupStep.PERMISSIONS, SetupStep.current(store).first())
 
         SetupStep.PERMISSIONS.finish(store)
+        assertEquals(SetupStep.UPDATES, SetupStep.current(store).first())
+
+        SetupStep.UPDATES.finish(store)
         assertEquals(SetupStep.MODEL, SetupStep.current(store).first())
 
         SetupStep.MODEL.finish(store)
@@ -43,5 +46,17 @@ class SetupStepTest {
         SetupStep.PERMISSIONS.back(store)
 
         assertEquals(SetupStep.LANGUAGE, SetupStep.current(store).first())
+    }
+
+    @Test
+    fun `a step the build leaves out is skipped both ways`() = runTest {
+        val steps = SetupStep.entries - SetupStep.UPDATES
+        SetupStep.LANGUAGE.finish(store)
+        SetupStep.PERMISSIONS.finish(store)
+        assertEquals(SetupStep.MODEL, SetupStep.current(store, steps).first())
+
+        SetupStep.MODEL.back(store, steps)
+
+        assertEquals(SetupStep.PERMISSIONS, SetupStep.current(store, steps).first())
     }
 }

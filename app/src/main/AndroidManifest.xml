@@ -11,9 +11,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <!-- For downloading transcription models. -->
+    <!-- For downloading transcription models and updates. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- The app updates itself from its releases: the user allows "Install unknown apps" once,
+         and with the second permission Android installs its updates without asking each time. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <!-- Lets the setup ask for the battery optimisation exemption in one system dialog. Google
          Play allows this only for a few kinds of apps; this app is installed directly. -->
     <uses-permission
@@ -52,6 +56,11 @@
             android:name=".recording.RecordingService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <!-- Receives the system installer's answer to an update. -->
+        <receiver
+            android:name=".update.InstallStatusReceiver"
+            android:exported="false" />
 
         <!-- WorkManager's foreground service, which runs model downloads with a progress notification. -->
         <service
