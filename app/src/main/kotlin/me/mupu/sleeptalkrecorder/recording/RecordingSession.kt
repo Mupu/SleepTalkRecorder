@@ -39,9 +39,10 @@ enum class RecordingEnd {
 /**
  * Records one sleep from a [source] until the calling coroutine is cancelled. The audio goes into
  * chunk files under `recordingsDirectory/<recording id>/`, next to the recording's feature track
- * ([FeatureTrackFile.FILE_NAME]), which is extracted from the same buffers; the [store] learns the new sleep, the
- * audio-clock anchor of the first sample and, at every flush, how many samples are safely
- * written, so a killed process loses at most the audio since the last flush.
+ * ([FeatureTrackFile.FILE_NAME]), which is extracted from the same buffers; the [store] learns the new recording, the
+ * audio-clock anchor of the first sample, the stretches in which the system silenced the
+ * microphone and, at every flush, how many samples are safely written, so a killed process loses
+ * at most the audio since the last flush.
  *
  * Cancellation is the normal way to stop. The files and the store are finished before the
  * cancellation completes. The recording also stops on its own once the wall clock reaches
@@ -65,7 +66,7 @@ class RecordingSession(
         if (!mic.start()) return RecordingEnd.MICROPHONE_UNAVAILABLE
 
         val provisionalStart = clocks.now()
-        val ids = store.startSleep(provisionalStart, mic.sampleRate)
+        val ids = store.startRecording(provisionalStart, mic.sampleRate)
         val directory = File(recordingsDirectory, ids.recordingId.toString())
         val writer = ChunkedWavWriter(
             directory = directory,
@@ -74,8 +75,9 @@ class RecordingSession(
         )
         val features = FeatureTrackRecorder(File(directory, FeatureTrackFile.FILE_NAME))
 
+        val silence = SilenceTracker(store, ids.recordingId)
         try {
-            loop(mic, ids, writer, features, provisionalStart, onProgress)
+            loop(mic, ids, writer, features, silence, provisionalStart, onProgress)
         } finally {
             withContext(NonCancellable) {
                 val durableFrames = try {
@@ -89,6 +91,7 @@ class RecordingSession(
                 } catch (_: IOException) {
                     // The audio is what counts; a short track is rebuilt from it when events are found.
                 }
+                silence.save(durableFrames)
                 store.finish(ids.recordingId, durableFrames)
             }
         }
@@ -99,6 +102,7 @@ class RecordingSession(
         ids: NewRecording,
         writer: ChunkedWavWriter,
         features: FeatureTrackRecorder,
+        silence: SilenceTracker,
         provisionalStart: Instant,
         onProgress: (RecordingProgress) -> Unit,
     ): RecordingEnd {
@@ -117,14 +121,17 @@ class RecordingSession(
             if (read < 0) return RecordingEnd.MICROPHONE_UNAVAILABLE
             if (read == 0) continue
 
+            val bufferStart = writer.frames
             try {
                 writer.write(buffer, read)
                 features.push(buffer, read)
+                silence.update(mic.isSilenced(), bufferStart)
                 if (writer.frames >= nextFlushAt) {
                     // The track first, so that it covers every sample the store counts as saved.
                     features.flush()
                     writer.flush()
                     store.saveProgress(ids.recordingId, writer.frames)
+                    silence.save(writer.frames)
                     nextFlushAt = writer.frames + flushEveryFrames
                 }
             } catch (_: IOException) {
@@ -156,6 +163,33 @@ class RecordingSession(
                     levelDbfs = AudioLevel.rmsDbfs(buffer, read),
                 ),
             )
+        }
+    }
+
+    /**
+     * Follows whether the system silences the microphone and marks each silenced stretch in the
+     * store. The state is asked after every buffer and counts from that buffer's first sample: the
+     * system reports it with a delay of about a buffer, as the buffer itself reaches the app.
+     */
+    private class SilenceTracker(private val store: RecordingStore, private val recordingId: Long) {
+
+        /** The first sample of the stretch being silenced, or null while the microphone is heard. */
+        private var since: Long? = null
+
+        suspend fun update(silenced: Boolean, frame: Long) {
+            val from = since
+            when {
+                silenced && from == null -> since = frame
+                !silenced && from != null -> {
+                    store.markMicrophoneUnavailable(recordingId, from, frame)
+                    since = null
+                }
+            }
+        }
+
+        /** Saves the open stretch up to [frame], so that a killed process keeps it. */
+        suspend fun save(frame: Long) {
+            since?.takeIf { it < frame }?.let { store.markMicrophoneUnavailable(recordingId, it, frame) }
         }
     }
 

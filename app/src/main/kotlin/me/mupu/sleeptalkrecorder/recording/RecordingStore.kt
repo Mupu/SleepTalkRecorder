@@ -6,10 +6,10 @@ import java.time.Instant
 interface RecordingStore {
 
     /**
-     * Starts a new sleep with its first recording, which starts at [startedAt] until [anchor]
-     * corrects it.
+     * Starts a recording at [startedAt] (until [anchor] corrects it): the next recording of the
+     * last sleep when it was started in the same sleep window, otherwise the first of a new sleep.
      */
-    suspend fun startSleep(startedAt: Instant, sampleRate: Int): NewRecording
+    suspend fun startRecording(startedAt: Instant, sampleRate: Int): NewRecording
 
     /** Sets the instant of the recording's first sample, as the audio clock reports it. */
     suspend fun anchor(recordingId: Long, startedAt: Instant)
@@ -19,7 +19,14 @@ interface RecordingStore {
 
     /** Ends the recording with [frames] samples, and its sleep with it. */
     suspend fun finish(recordingId: Long, frames: Long)
+
+    /**
+     * Records that the microphone gave the recording silence from sample [fromFrame] until
+     * [untilFrame] (exclusive). A later call with the same [fromFrame] extends that stretch, so an
+     * open stretch can be saved at every flush.
+     */
+    suspend fun markMicrophoneUnavailable(recordingId: Long, fromFrame: Long, untilFrame: Long)
 }
 
-/** The ids of a sleep started with [RecordingStore.startSleep] and of its recording. */
+/** The ids of a recording started with [RecordingStore.startRecording] and of its sleep. */
 data class NewRecording(val sleepId: Long, val recordingId: Long)

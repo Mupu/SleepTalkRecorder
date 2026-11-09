@@ -22,6 +22,12 @@ interface PcmSource : Closeable {
 
     /** When a captured sample was recorded on the elapsed-since-boot clock, once the source knows. */
     fun timestamp(): AudioTimestampSample?
+
+    /**
+     * Whether the system currently gives this source silence instead of audio, because a call or
+     * another app holds the microphone or the user switched it off.
+     */
+    fun isSilenced(): Boolean
 }
 
 /** Sample [framePosition] of a capture was recorded at [nanoTime] on the elapsed-since-boot clock. */

@@ -80,6 +80,12 @@ enum class AnnotationType {
 
     /** The start threshold above the baseline, in dB ([AnnotationEntity.value]), used in the stretch. */
     SENSITIVITY,
+
+    /**
+     * The microphone was unavailable: a call, another app or the privacy toggle held it, and the
+     * stretch holds the silence Android delivered instead of the room.
+     */
+    MICROPHONE_UNAVAILABLE,
 }
 
 /** Where an annotation comes from. */

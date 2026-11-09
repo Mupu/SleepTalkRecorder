@@ -7,15 +7,22 @@ import me.mupu.sleeptalkrecorder.detection.EventDetector
 import me.mupu.sleeptalkrecorder.detection.FeatureTrackFile
 import me.mupu.sleeptalkrecorder.detection.SleepTrack
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
+import me.mupu.sleeptalkrecorder.playback.Stretch
 import me.mupu.sleeptalkrecorder.playback.TimelineRecording
+import me.mupu.sleeptalkrecorder.recording.ChunkedWavWriter
 import me.mupu.sleeptalkrecorder.recording.NewRecording
 import me.mupu.sleeptalkrecorder.recording.RecordingStore
 import me.mupu.sleeptalkrecorder.time.RecordingClock
+import me.mupu.sleeptalkrecorder.time.SleepDate
 import java.io.File
+import java.io.IOException
+import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -54,6 +61,12 @@ class SleepRepository(
      */
     fun events(sleepId: Long): Flow<List<SleepEvent>> = dao.events(sleepId)
 
+    /** The stretches of a sleep's audio in which the microphone was unavailable, in order. */
+    fun microphoneUnavailable(sleepId: Long): Flow<List<Stretch>> =
+        dao.annotations(sleepId, AnnotationType.MICROPHONE_UNAVAILABLE).map { stretches ->
+            stretches.map { Stretch(Duration.ofMillis(it.startMillis), Duration.ofMillis(it.endMillis)) }
+        }
+
     /**
      * The audio of a sleep as it is stored now: its recordings in order, each with the chunk files
      * that hold its saved samples. Empty if the sleep has no playable audio.
@@ -80,10 +93,12 @@ class SleepRepository(
 
     /**
      * Finds the events of a sleep and stores them, with the sensitivity chosen for it, in place of
-     * what the detector found before. Annotations of other origins, such as the user's, stay.
+     * what the detector found before. Annotations of other origins, such as the user's, stay. Only
+     * a finished sleep is searched.
      */
     suspend fun findEvents(sleepId: Long) {
         val started = System.nanoTime()
+        val end = dao.findSleep(sleepId)?.endedAt ?: return
         val track = track(sleepId)
         val loaded = System.nanoTime()
         val detection = withContext(Dispatchers.Default) { EventDetector.detect(track.track) }
@@ -95,10 +110,15 @@ class SleepRepository(
         val sensitivity = result(sleepId, AnnotationType.SENSITIVITY, 0, millis(track.track.size))
             .copy(value = detection.thresholdDb.toDouble())
 
-        database.withTransaction {
+        val stored = database.withTransaction {
+            // A new recording that continued the sleep meanwhile made these events incomplete;
+            // they are found again once it ends.
+            if (dao.findSleep(sleepId)?.endedAt != end) return@withTransaction false
             dao.deleteResults(sleepId, AnnotationOrigin.DEVICE, DETECTOR)
             dao.insertAnnotations(events + sensitivity)
+            true
         }
+        if (!stored) return
         Log.i(
             TAG,
             "Sleep $sleepId: ${events.size} events in ${track.track.size} hops; reading the track took " +
@@ -173,9 +193,21 @@ class SleepRepository(
         filesGone
     }
 
-    override suspend fun startSleep(startedAt: Instant, sampleRate: Int): NewRecording =
+    override suspend fun startRecording(startedAt: Instant, sampleRate: Int): NewRecording =
         database.withTransaction {
-            val sleepId = dao.insertSleep(SleepEntity(startedAt = startedAt, endedAt = null))
+            val last = dao.latestSleep()
+            val lastEnd = last?.endedAt
+            val sleepId = if (last != null && lastEnd != null &&
+                SleepDate.continues(last.startedAt, lastEnd, startedAt, ZoneId.systemDefault())
+            ) {
+                // The events are found again over the longer audio once this recording ends; the
+                // positions of everything else stay, because the new audio follows the old.
+                dao.reopenSleep(last.id)
+                dao.deleteResults(last.id, AnnotationOrigin.DEVICE, DETECTOR)
+                last.id
+            } else {
+                dao.insertSleep(SleepEntity(startedAt = startedAt, endedAt = null))
+            }
             val recordingId = dao.insertRecording(
                 RecordingEntity(
                     sleepId = sleepId,
@@ -209,14 +241,50 @@ class SleepRepository(
         }
     }
 
+    override suspend fun markMicrophoneUnavailable(recordingId: Long, fromFrame: Long, untilFrame: Long) {
+        database.withTransaction {
+            val recording = dao.recording(recordingId) ?: return@withTransaction
+            val clock = RecordingClock(recording.startedAt, recording.sampleRate)
+            // Where the recording starts in the sleep's audio: after every recording before it.
+            val recordingStart = dao.recordingsOf(recording.sleepId)
+                .takeWhile { it.id != recordingId }
+                .fold(Duration.ZERO) { start, earlier ->
+                    start + RecordingClock(earlier.startedAt, earlier.sampleRate).durationOf(earlier.frames)
+                }
+            val startMillis = (recordingStart + clock.durationOf(fromFrame)).toMillis()
+
+            dao.deleteResultAt(recording.sleepId, AnnotationType.MICROPHONE_UNAVAILABLE, startMillis, AnnotationOrigin.DEVICE, RECORDER)
+            dao.insertAnnotations(
+                listOf(
+                    AnnotationEntity(
+                        sleepId = recording.sleepId,
+                        type = AnnotationType.MICROPHONE_UNAVAILABLE,
+                        startMillis = startMillis,
+                        endMillis = (recordingStart + clock.durationOf(untilFrame)).toMillis(),
+                        origin = AnnotationOrigin.DEVICE,
+                        producer = RECORDER,
+                    ),
+                ),
+            )
+        }
+    }
+
     /**
-     * Finishes recordings left unfinished by a process that ended without stopping them, with the
-     * samples their last flush saved, so that no sleep stays "running" without a recorder. Call it
-     * once at process start, before a new recording can begin.
+     * Repairs and finishes the recordings a process left unfinished because it was killed, crashed
+     * or lost its power, so that no sleep stays "running" without a recorder. Their chunk files get
+     * headers that declare all the audio they hold, which keeps the seconds after the last flush
+     * that reached the storage; if the files cannot be repaired, the samples of the last flush
+     * count. Call it once at process start, before a new recording can begin.
      */
     suspend fun finishInterruptedRecordings() {
         for (recording in dao.unfinishedRecordings()) {
-            finish(recording.id, recording.frames)
+            val frames = try {
+                withContext(Dispatchers.IO) { ChunkedWavWriter.repair(directoryOf(recording.id), recording.sampleRate) }
+            } catch (error: IOException) {
+                Log.w(TAG, "Could not repair recording ${recording.id}", error)
+                recording.frames
+            }
+            finish(recording.id, frames)
         }
     }
 
@@ -224,6 +292,9 @@ class SleepRepository(
 
     private companion object {
         const val TAG = "SleepRepository"
+
+        /** The producer of the annotations the recording itself makes. */
+        const val RECORDER = "recorder"
 
         /** The producer of the detector's annotations. */
         const val DETECTOR = "loudness"

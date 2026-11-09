@@ -33,5 +33,15 @@ data class SleepDate(val kind: SleepKind, val date: LocalDate) {
                 else -> SleepDate(SleepKind.NIGHT, local.toLocalDate())
             }
         }
+
+        /**
+         * Whether a recording started at [start] continues the finished sleep from [sleepStart] to
+         * [sleepEnd] rather than starting a new one: it lies in the same window of the clock, the
+         * night from 18:00 to 11:59 or the nap from 12:00 to 17:59 that names the sleep, and after
+         * the sleep's end. A start before the end can only follow a clock that was set back, and
+         * would put the new recording's audio before the old one's on the clock.
+         */
+        fun continues(sleepStart: Instant, sleepEnd: Instant, start: Instant, zone: ZoneId): Boolean =
+            !start.isBefore(sleepEnd) && of(sleepStart, zone) == of(start, zone)
     }
 }

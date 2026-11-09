@@ -90,12 +90,13 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
             val timeline = state.timeline
             val player = state.player
             if (timeline != null && player != null) {
-                var window by remember(timeline) { mutableStateOf(TimelineWindow.whole(timeline.duration)) }
+                var window by remember(timeline) { mutableStateOf(TimelineWindow.whole(timeline.clockDuration)) }
                 Column(Modifier.padding(horizontal = 12.dp)) {
                     LoudnessTimeline(
                         timeline = timeline,
                         loudness = state.loudness,
                         events = state.events,
+                        unavailable = state.unavailable,
                         position = player.position,
                         window = window,
                         onWindowChange = { window = it },
@@ -112,7 +113,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
                     timeline = timeline,
                     playingEventId = state.playingEventId,
                     onSelect = { event ->
-                        window = window.showing(event.start, event.end)
+                        window = window.showing(timeline.clockOf(event.start), timeline.clockOf(event.end))
                         viewModel.seekToEvent(event)
                     },
                     onTogglePlay = viewModel::togglePlayEvent,

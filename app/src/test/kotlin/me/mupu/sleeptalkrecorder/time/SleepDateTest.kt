@@ -44,4 +44,29 @@ class SleepDateTest {
         assertEquals(SleepDate(SleepKind.NAP, LocalDate.of(2026, 11, 9)), SleepDate.of(instant, berlin))
         assertEquals(SleepDate(SleepKind.NIGHT, LocalDate.of(2026, 11, 9)), SleepDate.of(instant, ZoneId.of("Asia/Tokyo")))
     }
+
+    private fun instant(localDateTime: String) = LocalDateTime.parse(localDateTime).atZone(berlin).toInstant()
+
+    private fun continues(start: String, end: String, next: String) =
+        SleepDate.continues(sleepStart = instant(start), sleepEnd = instant(end), start = instant(next), zone = berlin)
+
+    @Test
+    fun `a recording started in the window of the last sleep continues it`() {
+        assertEquals(true, continues("2026-11-08T23:10", "2026-11-09T03:12", "2026-11-09T03:20"))
+        assertEquals(true, continues("2026-11-08T23:10", "2026-11-09T07:00", "2026-11-09T11:30"))
+        assertEquals(true, continues("2026-11-09T13:00", "2026-11-09T13:40", "2026-11-09T17:30"))
+    }
+
+    @Test
+    fun `a recording started in another window starts a new sleep`() {
+        // The nap window begins at noon; the night window at six in the evening.
+        assertEquals(false, continues("2026-11-08T23:10", "2026-11-09T07:00", "2026-11-09T12:05"))
+        assertEquals(false, continues("2026-11-09T13:00", "2026-11-09T13:40", "2026-11-09T18:10"))
+        assertEquals(false, continues("2026-11-08T23:10", "2026-11-09T07:00", "2026-11-09T23:00"))
+    }
+
+    @Test
+    fun `a recording that starts before the last sleep ended, after the clock was set back, starts a new sleep`() {
+        assertEquals(false, continues("2026-11-08T23:10", "2026-11-09T03:12", "2026-11-09T02:30"))
+    }
 }

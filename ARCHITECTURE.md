@@ -85,6 +85,18 @@ hands each buffer to `ChunkedWavWriter` and to the recording's feature track (se
 its files and the database rows before the cancellation completes. A microphone that fails or a
 storage error ends the session with a reason the home screen shows, never with a crash.
 
+A call, another app or the microphone privacy toggle can take the microphone away during the
+night. Android then keeps the recording running but delivers silence and says so through the
+recording callback (`AudioRecordingConfiguration.isClientSilenced`), which `MicrophoneSource`
+registers before it starts. The session asks after every buffer and stores each silenced stretch
+as a `MICROPHONE_UNAVAILABLE` annotation, saved again at every flush while it lasts, so a killed
+process keeps it.
+
+A new recording continues the last sleep when it starts in the same sleep window, the stretch of
+the clock that names the sleep (a night from 18:00 to 11:59, a nap from 12:00 to 17:59), and after
+that sleep's end; otherwise it starts a new sleep. A continued sleep is running again, and its
+events are found anew once the recording ends.
+
 Unless the user switched it off, a recording also stops on its own at the latest stop time of the
 settings: the first moment after the start at which the device's clock shows that time, or after
 the moment the setting was changed during the recording. The session compares the wall clock with
@@ -99,7 +111,10 @@ Audio of recording `n` is stored in `noBackupFilesDir/recordings/n/` as `0001.wa
 4 GiB WAV limit. Every 10 seconds the writer patches the size fields of the open file's header and
 syncs it, and the repository stores the sample count reached; a killed process therefore leaves
 playable files that miss at most the last seconds. On the next process start, recordings still
-marked as recording are finished with that stored count.
+marked as recording, cut off by a crash, a kill or a dead battery, are repaired: each chunk file's
+header is rewritten to declare every whole sample the file holds (which keeps audio written after
+the last flush), a file too short for a header is removed, and the recording is finished with the
+samples of its files. Only if the files cannot be repaired does the stored count stand.
 
 Next to the chunk files lies `features.bin`, the recording's feature track (see
 [Finding events](#finding-events)). It is flushed before the WAV files at every flush, so it always
@@ -119,8 +134,10 @@ Room (`SleepDatabase`) holds four tables:
 - `annotation`: every result about a stretch of a sleep, with its origin. The stretch is given in
   milliseconds of the sleep's audio (the playing axis, see [Time model](#time-model)), so it does
   not depend on the detector's hop size. The `type` says what the annotation states (`EVENT` with
-  a kind, `SENSITIVITY` with the start threshold the detector chose, in `value`), and `origin`
-  (`DEVICE`, `SERVER` or `USER`), `producer` and `producer_version` say who stated it.
+  a kind, `SENSITIVITY` with the start threshold the detector chose, in `value`,
+  `MICROPHONE_UNAVAILABLE` from the recorder), and `origin` (`DEVICE`, `SERVER` or `USER`),
+  `producer` and `producer_version` say who stated it. Gaps between recordings take no time on
+  this axis and need no annotation: they follow from the recordings' start instants and lengths.
 
 Annotations are layers: an analysis that runs again replaces only its own annotations (same
 origin and producer) and leaves every other layer alone. Hiding an event, a sensitivity override
@@ -185,13 +202,17 @@ Every knob is a named parameter of `DetectionParams`; one sensitivity setting fr
 noise-spread multiple and the minimum length together.
 
 `SleepRepository.findEvents` stores the events and the chosen threshold as annotations of the
-producer `loudness`, whose version combines the detector's and the feature format's versions.
+producer `loudness`, whose version combines the detector's and the feature format's versions. It
+only stores them while the sleep is still finished as it was when the search began, so a sleep
+continued by a new recording meanwhile is searched again after that recording.
 `AppContainer` searches every finished sleep without annotations of the current version: after
 each recording ends and once at process start, which also covers a recording a killed process left
 behind and a detector that changed with an update.
 
 The sleep screen reads the same track to draw the timeline: the smoothed speech-band level, grey
-except where an event lies, with the baseline as a dashed line. `SleepLoudness` keeps maxima of
+except where an event lies, with the baseline as a dashed line. The timeline runs on the clock axis
+(see [Time model](#time-model)), so gaps between recordings take their real width; they and the
+stretches in which the microphone was unavailable are hatched. `SleepLoudness` keeps maxima of
 16, 256 and 4 096 hops, so every column of the timeline reads only a few values at any zoom.
 
 ## Playback
@@ -207,7 +228,10 @@ PCM format without encoder delay, so ExoPlayer moves from file to file on the sa
 without a gap. Speed changes keep the pitch. The player belongs to the sleep screen's `ViewModel`
 and pauses when the screen is no longer visible, because there is no notification to control it.
 An event is played on its own as a stretch from the *lead-in* before it to the tail after it, both
-from the settings; the player pauses itself at the stretch's end.
+from the settings; the player pauses itself at the stretch's end. Lead-in and tail stop at the
+start of a recording and at a stretch in which the microphone was unavailable
+(`SleepTimeline.uninterrupted`), so neither the audio before a gap nor the silence of a taken
+microphone is played around an event.
 
 ## Time model
 
@@ -223,6 +247,12 @@ correction during the night does not move them.
 A position in a sleep is the time into its audio. The gap between two recordings is never played
 and takes up no position; `SleepTimeline` maps a position to the recording that holds it and,
 through that recording's `RecordingClock`, to its instant.
+
+To show the gaps, `SleepTimeline` also has a clock axis: the time since the sleep's first sample,
+on which each recording starts at its own instant and each gap takes its real time. A moment in a
+gap plays from the start of the next recording. A recording that starts before the previous one
+ended on the clock, because the clock was set back, follows it there without a gap, so the clock
+axis keeps the order of the audio.
 
 `SleepDate` names a sleep by the local time of its start: 18:00 to 11:59 is a night named after
 the evening it belongs to, 12:00 to 17:59 a nap of that day. Because names follow the device's zone,

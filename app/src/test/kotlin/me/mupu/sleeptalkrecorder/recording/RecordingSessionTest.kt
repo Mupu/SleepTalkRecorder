@@ -127,6 +127,29 @@ class RecordingSessionTest {
         assertEquals(0.0, last.levelDbfs, 0.01)
     }
 
+    @Test
+    fun `a stretch in which the system silenced the microphone is marked`() = runBlocking {
+        // Silenced while the 4th to 6th buffer of 1,600 samples were captured.
+        val source = FakeSource(buffers = 10, bufferFrames = 1_600, silencedBuffers = 4..6)
+
+        val job = launch(Dispatchers.IO) { session(source).record {} }
+        source.allDelivered.await()
+        job.cancelAndJoin()
+
+        assertEquals(mapOf(4_800L to 9_600L), store.recordings.single().unavailable)
+    }
+
+    @Test
+    fun `a stretch still silenced at the stop ends with the recording`() = runBlocking {
+        val source = FakeSource(buffers = 5, bufferFrames = 1_600, silencedBuffers = 3..5)
+
+        val job = launch(Dispatchers.IO) { session(source).record {} }
+        source.allDelivered.await()
+        job.cancelAndJoin()
+
+        assertEquals(mapOf(3_200L to 8_000L), store.recordings.single().unavailable)
+    }
+
     private class FakeSource(
         private val buffers: Int,
         private val bufferFrames: Int,
@@ -134,6 +157,7 @@ class RecordingSessionTest {
         private val sample: Short = 100,
         private val failAfterBuffers: Boolean = false,
         private val startFails: Boolean = false,
+        private val silencedBuffers: IntRange = IntRange.EMPTY,
     ) : PcmSource {
         override val sampleRate = 16_000
         val allDelivered = CompletableDeferred<Unit>()
@@ -156,6 +180,8 @@ class RecordingSessionTest {
 
         override fun timestamp(): AudioTimestampSample? = timestamp?.takeIf { delivered > 0 }
 
+        override fun isSilenced(): Boolean = delivered in silencedBuffers
+
         override fun close() {
             closed = true
         }
@@ -165,11 +191,14 @@ class RecordingSessionTest {
         class Recording(val id: Long, val sleepId: Long, var startedAt: Instant) {
             val progress = mutableListOf<Long>()
             var finishedFrames: Long? = null
+
+            /** The stretches the microphone was unavailable: their first sample and the sample after their last. */
+            val unavailable = mutableMapOf<Long, Long>()
         }
 
         val recordings = mutableListOf<Recording>()
 
-        override suspend fun startSleep(startedAt: Instant, sampleRate: Int): NewRecording {
+        override suspend fun startRecording(startedAt: Instant, sampleRate: Int): NewRecording {
             val recording = Recording(id = recordings.size + 1L, sleepId = 100L + recordings.size, startedAt = startedAt)
             recordings += recording
             return NewRecording(sleepId = recording.sleepId, recordingId = recording.id)
@@ -185,6 +214,10 @@ class RecordingSessionTest {
 
         override suspend fun finish(recordingId: Long, frames: Long) {
             recordings.single { it.id == recordingId }.finishedFrames = frames
+        }
+
+        override suspend fun markMicrophoneUnavailable(recordingId: Long, fromFrame: Long, untilFrame: Long) {
+            recordings.single { it.id == recordingId }.unavailable[fromFrame] = untilFrame
         }
     }
 }

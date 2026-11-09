@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
@@ -43,16 +44,19 @@ import androidx.core.graphics.toColorInt
 import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
+import me.mupu.sleeptalkrecorder.playback.Stretch
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.formatDuration
 import java.time.Duration
 import java.time.ZoneId
 
 /**
- * The loudness of a sleep over its audio, as in the sleep screen's timeline: the [window] shown
- * large, with everything that is not an event grey, events in their kind's colour, the baseline as
- * a dashed line and the playhead; below it the whole sleep as an overview strip with the window
- * marked, and buttons to zoom.
+ * The loudness of a sleep over the clock, as in the sleep screen's timeline: the [window] of the
+ * timeline's clock axis shown large, with everything that is not an event grey, events in their
+ * kind's colour, the gaps between recordings and the stretches in which the microphone was
+ * [unavailable] hatched, the baseline as a dashed line and the playhead; below it the whole sleep
+ * as an overview strip with the window marked, and buttons to zoom. [position] is a position in
+ * the sleep's audio, as the player plays it.
  *
  * Dragging the large timeline pans it, pinching zooms it, and a tap moves the playhead there.
  * Tapping or dragging the overview moves the window and the playhead along.
@@ -62,6 +66,7 @@ fun LoudnessTimeline(
     timeline: SleepTimeline,
     loudness: SleepLoudness?,
     events: List<SleepEvent>,
+    unavailable: List<Stretch>,
     position: Duration,
     window: TimelineWindow,
     onWindowChange: (TimelineWindow) -> Unit,
@@ -91,7 +96,9 @@ fun LoudnessTimeline(
                 .clip(RoundedCornerShape(12.dp))
                 .semantics { contentDescription = description }
                 .pointerInput(Unit) {
-                    detectTapGestures { offset -> seek(currentWindow.positionAt(offset.x / size.width.toDouble())) }
+                    detectTapGestures { offset ->
+                        seek(timeline.positionAtClock(currentWindow.positionAt(offset.x / size.width.toDouble())))
+                    }
                 }
                 .pointerInput(Unit) {
                     detectTransformGestures { centroid, pan, zoom, _ ->
@@ -104,11 +111,12 @@ fun LoudnessTimeline(
             drawRect(colors.surfaceContainerLow)
             val ticksHeight = 18.dp.toPx()
             val plot = Size(size.width, size.height - ticksHeight - 6.dp.toPx())
-            drawLoudness(loudness, events, window, plot, top = 6.dp.toPx(), colors, step = 2.dp.toPx(), baseline = true)
-            drawPlayhead(window, position, top = 0f, height = plot.height + 6.dp.toPx(), colors.onSurface)
+            val axis = Axis(timeline, unavailable)
+            drawLoudness(axis, loudness, events, window, plot, top = 6.dp.toPx(), colors, step = 2.dp.toPx(), baseline = true)
+            drawPlayhead(window, timeline.clockOf(position), top = 0f, height = plot.height + 6.dp.toPx(), colors.onSurface)
 
             // Clock-time ticks at round times, labelled with the time recorded there.
-            val start = timeline.takeIf { it.pieces.isNotEmpty() }?.instantAt(window.start) ?: return@Canvas
+            val start = timeline.takeIf { it.pieces.isNotEmpty() }?.instantAtClock(window.start) ?: return@Canvas
             val room = size.width / 64.dp.toPx()
             val step = TICK_STEPS.firstOrNull { window.span.toMillis() / it.toMillis() <= room } ?: TICK_STEPS.last()
             val stepMillis = step.toMillis()
@@ -118,7 +126,7 @@ fun LoudnessTimeline(
                 val at = window.start + tick
                 val x = (window.shareOf(at) * size.width).toFloat()
                 drawLine(colors.outlineVariant, Offset(x, size.height - ticksHeight), Offset(x, size.height - ticksHeight + 4.dp.toPx()))
-                val label = clock.format(timeline.instantAt(at), zone, seconds = step < Duration.ofMinutes(1))
+                val label = clock.format(timeline.instantAtClock(at), zone, seconds = step < Duration.ofMinutes(1))
                 val text = textMeasurer.measure(label, labelStyle)
                 // Kept clear of the rounded corners, which would clip a label at the very edge.
                 val inset = 6.dp.toPx()
@@ -140,7 +148,7 @@ fun LoudnessTimeline(
                         fun moveTo(x: Float) {
                             val target = whole.positionAt((x / size.width.toDouble()).coerceIn(0.0, 1.0))
                             changeWindow(currentWindow.centredOn(target))
-                            scrub(target)
+                            scrub(timeline.positionAtClock(target))
                         }
                         moveTo(awaitFirstDown().position.x)
                         do {
@@ -157,8 +165,8 @@ fun LoudnessTimeline(
                 },
         ) {
             val whole = TimelineWindow.whole(window.total)
-            drawLoudness(loudness, events, whole, size, top = 0f, colors, step = 1.dp.toPx(), baseline = false)
-            drawPlayhead(whole, position, top = 0f, height = size.height, colors.onSurface)
+            drawLoudness(Axis(timeline, unavailable), loudness, events, whole, size, top = 0f, colors, step = 1.dp.toPx(), baseline = false)
+            drawPlayhead(whole, timeline.clockOf(position), top = 0f, height = size.height, colors.onSurface)
             val left = (whole.shareOf(window.start) * size.width).toFloat()
             val right = (whole.shareOf(window.end) * size.width).toFloat()
             val stroke = 1.5.dp.toPx()
@@ -171,10 +179,11 @@ fun LoudnessTimeline(
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { onWindowChange(window.zoom(2.0, window.shareOf(position).coerceIn(0.0, 1.0))) }) {
+            val playhead = window.shareOf(timeline.clockOf(position)).coerceIn(0.0, 1.0)
+            IconButton(onClick = { onWindowChange(window.zoom(2.0, playhead)) }) {
                 Icon(painterResource(R.drawable.ic_zoom_out), contentDescription = stringResource(R.string.zoom_out))
             }
-            IconButton(onClick = { onWindowChange(window.zoom(0.5, window.shareOf(position).coerceIn(0.0, 1.0))) }) {
+            IconButton(onClick = { onWindowChange(window.zoom(0.5, playhead)) }) {
                 Icon(painterResource(R.drawable.ic_zoom_in), contentDescription = stringResource(R.string.zoom_in))
             }
             IconButton(onClick = { onWindowChange(TimelineWindow.whole(window.total)) }) {
@@ -184,8 +193,8 @@ fun LoudnessTimeline(
                 Text(
                     stringResource(
                         R.string.timeline_span,
-                        clock.format(timeline.instantAt(window.start), zone),
-                        clock.format(timeline.instantAt(window.end), zone),
+                        clock.format(timeline.instantAtClock(window.start), zone),
+                        clock.format(timeline.instantAtClock(window.end), zone),
                         formatDuration(resources, window.span),
                     ),
                     style = MaterialTheme.typography.bodySmall,
@@ -197,11 +206,24 @@ fun LoudnessTimeline(
     }
 }
 
+/** The clock axis of a sleep's [timeline], with the stretches of it that hold no sound from the room. */
+private class Axis(val timeline: SleepTimeline, private val unavailable: List<Stretch>) {
+
+    /** Whether the moment at [clock] lies in a gap or where the microphone was unavailable. */
+    fun isInterrupted(clock: Duration): Boolean {
+        if (timeline.gaps.any { clock >= it.start && clock < it.end }) return true
+        val position = timeline.positionAtClock(clock)
+        return unavailable.any { position >= it.start && position < it.end }
+    }
+}
+
 /**
- * Draws the loudness of [window] into [plot] below [top]: one bar per [step] pixels, as high as the
- * loudest level in its stretch, coloured when an event lies in it and grey otherwise.
+ * Draws the loudness of [window], a stretch of the clock axis, into [plot] below [top]: one bar per
+ * [step] pixels, as high as the loudest level in its stretch, coloured when an event lies in it and
+ * grey otherwise; gaps and stretches without the microphone are hatched.
  */
 private fun DrawScope.drawLoudness(
+    axis: Axis,
     loudness: SleepLoudness?,
     events: List<SleepEvent>,
     window: TimelineWindow,
@@ -214,12 +236,23 @@ private fun DrawScope.drawLoudness(
     if (loudness == null || window.span <= Duration.ZERO) return
     fun heightOf(db: Float) = ((db - loudness.lowDb) / (loudness.highDb - loudness.lowDb)).coerceIn(0f, 1f) * plot.height
 
+    val timeline = axis.timeline
+    // Runs of columns to hatch, from their left to their right edge in pixels.
+    val hatched = ArrayList<Pair<Float, Float>>()
     var x = 0f
     var nextEvent = 0
     while (x < plot.width) {
-        val from = window.positionAt(x / plot.width.toDouble())
-        val until = window.positionAt(((x + step) / plot.width).toDouble().coerceAtMost(1.0))
-        val loudest = loudness.loudestIn(from, until)
+        val clockFrom = window.positionAt(x / plot.width.toDouble())
+        val clockUntil = window.positionAt(((x + step) / plot.width).toDouble().coerceAtMost(1.0))
+        if (axis.isInterrupted(clockFrom + (clockUntil - clockFrom).dividedBy(2))) {
+            val last = hatched.lastOrNull()
+            if (last != null && last.second == x) hatched[hatched.lastIndex] = last.first to x + step else hatched += x to x + step
+            x += step
+            continue
+        }
+        val from = timeline.positionAtClock(clockFrom)
+        val until = timeline.positionAtClock(clockUntil)
+        val loudest = if (until > from) loudness.loudestIn(from, until) else null
         if (loudest != null) {
             while (nextEvent < events.size && events[nextEvent].end <= from) nextEvent++
             val event = events.getOrNull(nextEvent)?.takeIf { it.start < until }
@@ -229,13 +262,21 @@ private fun DrawScope.drawLoudness(
         }
         x += step
     }
+    for ((left, right) in hatched) drawHatch(left, right.coerceAtMost(plot.width), top, plot.height, colors.outline)
 
     if (baseline) {
         val dash = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx()))
         var previous: Offset? = null
         var px = 0f
         while (px <= plot.width) {
-            val db = loudness.baselineAt(window.positionAt(px / plot.width.toDouble())) ?: break
+            val clock = window.positionAt(px / plot.width.toDouble())
+            val db = if (axis.isInterrupted(clock)) null else loudness.baselineAt(timeline.positionAtClock(clock))
+            if (db == null) {
+                // The line breaks where nothing was recorded.
+                previous = null
+                px += 4.dp.toPx()
+                continue
+            }
             val point = Offset(px, top + plot.height - heightOf(db))
             previous?.let { drawLine(colors.onSurfaceVariant, it, point, strokeWidth = 1.dp.toPx(), pathEffect = dash) }
             previous = point
@@ -244,8 +285,23 @@ private fun DrawScope.drawLoudness(
     }
 }
 
-private fun DrawScope.drawPlayhead(window: TimelineWindow, position: Duration, top: Float, height: Float, color: Color) {
-    val share = window.shareOf(position)
+/** Diagonal lines from [left] to [right] and [top] to [top] + [height], marking a stretch without sound from the room. */
+private fun DrawScope.drawHatch(left: Float, right: Float, top: Float, height: Float, color: Color) {
+    val spacing = 5.dp.toPx()
+    clipRect(left, top, right, top + height) {
+        // Each line rises to the right by its height; starting a height early covers the left corner,
+        // and starting on the spacing grid keeps the lines of neighbouring runs in step.
+        var start = left - height - (left - height).mod(spacing)
+        while (start < right) {
+            drawLine(color, Offset(start, top + height), Offset(start + height, top), strokeWidth = 1.dp.toPx())
+            start += spacing
+        }
+    }
+}
+
+/** Draws the playhead at [clock], a moment on the clock axis, if the [window] shows it. */
+private fun DrawScope.drawPlayhead(window: TimelineWindow, clock: Duration, top: Float, height: Float, color: Color) {
+    val share = window.shareOf(clock)
     if (share !in 0.0..1.0) return
     val x = (share * size.width).toFloat()
     drawRect(color, topLeft = Offset(x - 1.dp.toPx(), top), size = Size(2.dp.toPx(), height))

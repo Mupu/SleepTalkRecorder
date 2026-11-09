@@ -80,7 +80,8 @@ class ChunkedWavWriter(
             StandardOpenOption.TRUNCATE_EXISTING,
             StandardOpenOption.WRITE,
         )
-        open.write(emptyHeader())
+        // A header for an empty data chunk; patchHeader fills in the sizes as audio arrives.
+        open.write(header(sampleRate, dataBytes = 0))
         channel = open
         return open
     }
@@ -101,24 +102,6 @@ class ChunkedWavWriter(
         open.write(littleEndianInt(dataBytes), DATA_SIZE_OFFSET)
     }
 
-    /** A header for an empty data chunk; [patchHeader] fills in the sizes as audio arrives. */
-    private fun emptyHeader(): ByteBuffer = ByteBuffer.allocate(HEADER_BYTES).order(ByteOrder.LITTLE_ENDIAN).apply {
-            put("RIFF".toByteArray(Charsets.US_ASCII))
-            putInt(36)
-            put("WAVE".toByteArray(Charsets.US_ASCII))
-            put("fmt ".toByteArray(Charsets.US_ASCII))
-            putInt(16) // size of the fmt chunk
-            putShort(1) // PCM
-            putShort(1) // mono
-            putInt(sampleRate)
-            putInt(sampleRate * BYTES_PER_FRAME) // byte rate
-            putShort(BYTES_PER_FRAME.toShort()) // block align
-            putShort(16) // bits per sample
-            put("data".toByteArray(Charsets.US_ASCII))
-            putInt(0)
-            flip()
-        }
-
     private fun littleEndianInt(value: Int): ByteBuffer =
         ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(value).apply { flip() }
 
@@ -135,5 +118,62 @@ class ChunkedWavWriter(
 
         /** The file name of the chunk with the 1-based [index]. */
         fun chunkFileName(index: Int): String = String.format(Locale.ROOT, "%04d.wav", index)
+
+        /**
+         * Repairs the chunk files of a recording whose writer never closed them, because the
+         * process was killed or the phone shut down, and returns the samples they hold in all.
+         *
+         * Each file's header is rewritten to declare every whole sample the file holds: the open
+         * file's header only counts the samples of the last flush, a file can end in half a sample,
+         * and a header written just before the power went may never have reached the storage. A
+         * file too short for a header holds no audio and is removed. The files are read in order
+         * up to the first one that is missing, as the timeline plays them.
+         */
+        fun repair(directory: File, sampleRate: Int): Long {
+            var total = 0L
+            var index = 1
+            while (true) {
+                val file = File(directory, chunkFileName(index))
+                if (!file.isFile) break
+                if (file.length() < HEADER_BYTES) {
+                    file.delete()
+                    break
+                }
+                FileChannel.open(file.toPath(), StandardOpenOption.READ, StandardOpenOption.WRITE).use { open ->
+                    val dataBytes = (open.size() - HEADER_BYTES) / BYTES_PER_FRAME * BYTES_PER_FRAME
+                    val expected = header(sampleRate, dataBytes.toInt())
+                    val found = ByteBuffer.allocate(HEADER_BYTES)
+                    while (found.hasRemaining() && open.read(found, found.position().toLong()) > 0) Unit
+                    found.flip()
+                    if (open.size() != HEADER_BYTES + dataBytes || found != expected) {
+                        open.truncate(HEADER_BYTES + dataBytes)
+                        open.write(expected, 0)
+                        open.force(false)
+                    }
+                    total += dataBytes / BYTES_PER_FRAME
+                }
+                index += 1
+            }
+            return total
+        }
+
+        /** The header of a 16-bit mono PCM WAV file with [dataBytes] bytes of audio. */
+        private fun header(sampleRate: Int, dataBytes: Int): ByteBuffer =
+            ByteBuffer.allocate(HEADER_BYTES).order(ByteOrder.LITTLE_ENDIAN).apply {
+                put("RIFF".toByteArray(Charsets.US_ASCII))
+                putInt(36 + dataBytes)
+                put("WAVE".toByteArray(Charsets.US_ASCII))
+                put("fmt ".toByteArray(Charsets.US_ASCII))
+                putInt(16) // size of the fmt chunk
+                putShort(1) // PCM
+                putShort(1) // mono
+                putInt(sampleRate)
+                putInt(sampleRate * BYTES_PER_FRAME) // byte rate
+                putShort(BYTES_PER_FRAME.toShort()) // block align
+                putShort(16) // bits per sample
+                put("data".toByteArray(Charsets.US_ASCII))
+                putInt(dataBytes)
+                flip()
+            }
     }
 }

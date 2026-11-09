@@ -7,10 +7,12 @@ import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
+import android.media.AudioRecordingConfiguration
 import android.media.AudioTimestamp
 import android.media.MediaRecorder
 import android.os.SystemClock
 import java.time.Instant
+import java.util.concurrent.Executor
 
 /**
  * The phone's built-in microphone as 16 kHz mono 16-bit PCM.
@@ -18,6 +20,10 @@ import java.time.Instant
  * The source is `VOICE_RECOGNITION` because the Android CDD requires automatic gain control and
  * noise reduction to be off for it by default, which keeps loudness comparable across a night.
  * 16 kHz covers speech fully and keeps a night near 1 GB of WAV.
+ *
+ * When a call, another app or the privacy toggle takes the microphone away, Android keeps the
+ * recording running but delivers silence; the recording callback reports it, and [isSilenced]
+ * follows it.
  */
 class MicrophoneSource(private val context: Context) : PcmSource {
 
@@ -25,6 +31,10 @@ class MicrophoneSource(private val context: Context) : PcmSource {
 
     private var record: AudioRecord? = null
     private val audioTimestamp = AudioTimestamp()
+
+    @Volatile
+    private var silenced = false
+    private var silenceCallback: AudioManager.AudioRecordingCallback? = null
 
     override fun start(): Boolean {
         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -58,8 +68,20 @@ class MicrophoneSource(private val context: Context) : PcmSource {
         // Keep recording from the phone even when a headset connects during the night.
         builtInMicrophone()?.let(audio::setPreferredDevice)
 
+        // Registered before the start, so that no change is missed.
+        val session = audio.audioSessionId
+        val callback = object : AudioManager.AudioRecordingCallback() {
+            override fun onRecordingConfigChanged(configs: List<AudioRecordingConfiguration>) {
+                configs.firstOrNull { it.clientAudioSessionId == session }?.let { silenced = it.isClientSilenced }
+            }
+        }
+        // The callback only sets a flag, so it may run on the thread that delivers it.
+        audio.registerAudioRecordingCallback(Executor(Runnable::run), callback)
+        silenceCallback = callback
+
         return try {
             audio.startRecording()
+            audio.activeRecordingConfiguration?.let { silenced = it.isClientSilenced }
             audio.recordingState == AudioRecord.RECORDSTATE_RECORDING
         } catch (_: IllegalStateException) {
             false
@@ -75,9 +97,13 @@ class MicrophoneSource(private val context: Context) : PcmSource {
         return AudioTimestampSample(audioTimestamp.framePosition, audioTimestamp.nanoTime)
     }
 
+    override fun isSilenced(): Boolean = silenced
+
     override fun close() {
         val audio = record ?: return
         record = null
+        silenceCallback?.let(audio::unregisterAudioRecordingCallback)
+        silenceCallback = null
         try {
             audio.stop()
         } catch (_: IllegalStateException) {

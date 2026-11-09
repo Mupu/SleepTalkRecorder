@@ -68,4 +68,65 @@ class SleepTimelineTest {
         assertEquals(clock.durationOf(2_000), start)
         assertEquals(clock.instantAt(2_000), timeline.instantAt(start))
     }
+
+    private fun minutes(minutes: Long) = Duration.ofMinutes(minutes)
+
+    /** Recordings of 10 and 5 minutes; the second starts an hour after the first. */
+    private val interrupted = SleepTimeline(
+        listOf(
+            recording(clock, 10 * 60 * 16_000L),
+            recording(RecordingClock(evening.plus(Duration.ofHours(1)), 16_000), 5 * 60 * 16_000L),
+        ),
+    )
+
+    @Test
+    fun `on the clock axis the gap between two recordings takes its real time`() {
+        assertEquals(minutes(65), interrupted.clockDuration)
+        assertEquals(listOf(Stretch(minutes(10), minutes(60))), interrupted.gaps)
+        assertEquals(minutes(62), interrupted.clockOf(minutes(12)))
+        assertEquals(minutes(12), interrupted.positionAtClock(minutes(62)))
+        assertEquals(Instant.parse("2026-11-08T23:11:00Z"), interrupted.instantAtClock(minutes(30)))
+    }
+
+    @Test
+    fun `a moment in a gap plays from the start of the next recording`() {
+        assertEquals(minutes(10), interrupted.positionAtClock(minutes(30)))
+    }
+
+    @Test
+    fun `a recording that starts before the previous one ended on the clock follows it without a gap`() {
+        // The clock was set back between the two recordings.
+        val second = recording(RecordingClock(evening.plus(minutes(5)), 16_000), 5 * 60 * 16_000L)
+        val timeline = SleepTimeline(listOf(recording(clock, 10 * 60 * 16_000L), second))
+
+        assertEquals(minutes(15), timeline.clockDuration)
+        assertEquals(emptyList<Stretch>(), timeline.gaps)
+    }
+
+    @Test
+    fun `the lead-in and tail around an event stop at the edges of its recording`() {
+        val event = Stretch(minutes(10).plusSeconds(1), minutes(10).plusSeconds(3))
+
+        assertEquals(
+            Stretch(minutes(10), event.end.plusSeconds(1)),
+            interrupted.uninterrupted(event.start.minusSeconds(2), event.end.plusSeconds(1), event, unavailable = emptyList()),
+        )
+        val before = Stretch(minutes(9).plusSeconds(50), minutes(9).plusSeconds(59))
+        assertEquals(
+            Stretch(before.start.minusSeconds(2), minutes(10)),
+            interrupted.uninterrupted(before.start.minusSeconds(2), before.end.plusSeconds(2), before, unavailable = emptyList()),
+        )
+    }
+
+    @Test
+    fun `the lead-in and tail around an event stop where the microphone was unavailable`() {
+        val unavailable = listOf(Stretch(minutes(5), minutes(6)))
+        val after = Stretch(minutes(6).plusSeconds(1), minutes(6).plusSeconds(2))
+        val before = Stretch(minutes(4).plusSeconds(58), minutes(4).plusSeconds(59))
+
+        fun around(event: Stretch) = interrupted.uninterrupted(event.start.minusSeconds(2), event.end.plusSeconds(2), event, unavailable)
+
+        assertEquals(Stretch(minutes(6), after.end.plusSeconds(2)), around(after))
+        assertEquals(Stretch(before.start.minusSeconds(2), minutes(5)), around(before))
+    }
 }

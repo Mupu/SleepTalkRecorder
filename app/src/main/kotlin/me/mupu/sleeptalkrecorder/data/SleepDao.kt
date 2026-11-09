@@ -51,6 +51,14 @@ interface SleepDao {
     @Query("SELECT * FROM sleep WHERE id = :id")
     suspend fun findSleep(id: Long): SleepEntity?
 
+    /** The sleep started last, if any. */
+    @Query("SELECT * FROM sleep ORDER BY started_at DESC, id DESC LIMIT 1")
+    suspend fun latestSleep(): SleepEntity?
+
+    /** Marks a finished sleep as recorded again, because a new recording continues it. */
+    @Query("UPDATE sleep SET ended_at = NULL WHERE id = :id")
+    suspend fun reopenSleep(id: Long)
+
     /**
      * Deletes a sleep row. Every table that holds data of a sleep or of one of its recordings
      * references it with `ON DELETE CASCADE`, so their rows go with it.
@@ -82,6 +90,19 @@ interface SleepDao {
 
     @Insert
     suspend fun insertAnnotations(annotations: List<AnnotationEntity>)
+
+    /** Removes the [type] annotation of [producer] that starts at [startMillis], before it is stored anew. */
+    @Query(
+        """
+        DELETE FROM annotation WHERE sleep_id = :sleepId AND type = :type AND start_ms = :startMillis
+        AND origin = :origin AND producer = :producer
+        """,
+    )
+    suspend fun deleteResultAt(sleepId: Long, type: AnnotationType, startMillis: Long, origin: AnnotationOrigin, producer: String)
+
+    /** The stretches of a sleep with annotations of [type], in order. */
+    @Query("SELECT * FROM annotation WHERE sleep_id = :sleepId AND type = :type ORDER BY start_ms, id")
+    fun annotations(sleepId: Long, type: AnnotationType): Flow<List<AnnotationEntity>>
 
     /** Removes what [producer] found in a sleep, before it stores its new results. */
     @Query("DELETE FROM annotation WHERE sleep_id = :sleepId AND origin = :origin AND producer = :producer")
