@@ -16,6 +16,9 @@ import me.mupu.sleeptalkrecorder.ui.library.LibraryScreen
 import me.mupu.sleeptalkrecorder.ui.library.LibraryViewModel
 import me.mupu.sleeptalkrecorder.ui.settings.SettingsScreen
 import me.mupu.sleeptalkrecorder.ui.settings.SettingsViewModel
+import me.mupu.sleeptalkrecorder.ui.setup.PermissionsPlace
+import me.mupu.sleeptalkrecorder.ui.setup.PermissionsScreen
+import me.mupu.sleeptalkrecorder.ui.setup.PermissionsViewModel
 import me.mupu.sleeptalkrecorder.ui.sleep.SleepScreen
 import me.mupu.sleeptalkrecorder.ui.sleep.SleepViewModel
 
@@ -24,13 +27,14 @@ private object Routes {
     const val HOME = "home"
     const val LIBRARY = "library"
     const val SETTINGS = "settings"
+    const val PERMISSIONS = "permissions"
     const val SLEEP_ID = "sleepId"
     const val SLEEP = "sleep/{$SLEEP_ID}"
 
     fun sleep(id: Long) = "sleep/$id"
 }
 
-/** Navigation between home, library, settings and the sleep screen. */
+/** Navigation between home, library, settings, the sleep screen and the permissions page. */
 @Composable
 fun SleepTalkNavHost(container: AppContainer) {
     val navController = rememberNavController()
@@ -38,10 +42,19 @@ fun SleepTalkNavHost(container: AppContainer) {
     NavHost(navController = navController, startDestination = Routes.HOME) {
         composable(Routes.HOME) {
             HomeScreen(
-                viewModel = viewModel { HomeViewModel(container.recorder, container.sleepRepository) },
+                viewModel = viewModel { HomeViewModel(container.recorder, container.sleepRepository, container.readiness) },
                 onOpenLibrary = { navController.navigate(Routes.LIBRARY) },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                 onOpenSleep = { navController.navigate(Routes.sleep(it)) },
+                onFixReadiness = { navController.navigate(Routes.PERMISSIONS) },
+            )
+        }
+        composable(Routes.PERMISSIONS) {
+            PermissionsScreen(
+                viewModel = viewModel { PermissionsViewModel(container.settings, container.readiness) },
+                place = PermissionsPlace.FromHome,
+                onBack = { navController.popBackStack() },
+                onDone = { navController.popBackStack() },
             )
         }
         composable(Routes.LIBRARY) {

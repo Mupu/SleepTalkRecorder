@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
@@ -49,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.data.SleepSummary
+import me.mupu.sleeptalkrecorder.readiness.Requirement
 import me.mupu.sleeptalkrecorder.recording.RecorderProblem
 import me.mupu.sleeptalkrecorder.recording.RecorderState
 import me.mupu.sleeptalkrecorder.time.RecordingClock
@@ -70,6 +73,7 @@ fun HomeScreen(
     onOpenLibrary: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenSleep: (Long) -> Unit,
+    onFixReadiness: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -101,6 +105,9 @@ fun HomeScreen(
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
+            if (state.missing.isNotEmpty()) {
+                ReadinessBanner(state.missing, onFix = onFixReadiness)
+            }
             RecorderPanel(
                 state = state,
                 onRecord = onRecord,
@@ -307,5 +314,42 @@ private fun LastSleepCard(sleep: SleepSummary, onClick: () -> Unit) {
             supportingContent = { Text(sleepSubtitle(sleep, zone)) },
             trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
         )
+    }
+}
+
+/** The warning that something a whole night needs is missing, with the way to fix it. */
+@Composable
+private fun ReadinessBanner(missing: Set<Requirement>, onFix: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val names = missing.sortedBy { it.ordinal }.map { requirement ->
+        stringResource(
+            when (requirement) {
+                Requirement.MICROPHONE -> R.string.requirement_microphone
+                Requirement.NOTIFICATIONS -> R.string.requirement_notifications
+                Requirement.BATTERY_OPTIMISATION -> R.string.requirement_battery
+            },
+        )
+    }
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = colors.errorContainer,
+        contentColor = colors.onErrorContainer,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+    ) {
+        Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Icon(painterResource(R.drawable.ic_warning), contentDescription = null)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(stringResource(R.string.readiness_banner_title), style = MaterialTheme.typography.labelLarge)
+                Text(names.joinToString(), style = MaterialTheme.typography.bodySmall)
+                Button(
+                    onClick = onFix,
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.error, contentColor = colors.onError),
+                    modifier = Modifier.padding(top = 4.dp),
+                ) {
+                    Text(stringResource(R.string.fix))
+                }
+            }
+        }
     }
 }

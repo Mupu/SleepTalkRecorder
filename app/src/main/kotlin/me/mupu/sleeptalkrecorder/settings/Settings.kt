@@ -21,6 +21,18 @@ object Settings {
     /** Whether the first-start question about the app language was answered. */
     val languageChosen = booleanSetting("language_chosen", false)
 
+    /** Whether the first-start page about permissions and battery optimisation was finished. */
+    val permissionsReviewed = booleanSetting("permissions_reviewed", false)
+
+    /**
+     * Whether the app asked for the microphone permission before; Android shows its dialog only
+     * until the user refused twice, after that the app's settings page has to grant it.
+     */
+    val microphoneAsked = booleanSetting("microphone_asked", false)
+
+    /** Whether the app asked for the notification permission before, like [microphoneAsked]. */
+    val notificationsAsked = booleanSetting("notifications_asked", false)
+
     /** How much of the sound before an event cut playback plays. */
     val leadIn = durationSetting("lead_in_ms", Duration.ofMillis(1500), Duration.ZERO..Duration.ofSeconds(3))
 

@@ -21,6 +21,10 @@ import me.mupu.sleeptalkrecorder.ui.format.ClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
 import me.mupu.sleeptalkrecorder.ui.setup.LanguageQuestionScreen
 import me.mupu.sleeptalkrecorder.ui.setup.LanguageQuestionViewModel
+import me.mupu.sleeptalkrecorder.ui.setup.PermissionsPlace
+import me.mupu.sleeptalkrecorder.ui.setup.PermissionsScreen
+import me.mupu.sleeptalkrecorder.ui.setup.PermissionsViewModel
+import me.mupu.sleeptalkrecorder.ui.setup.SetupStep
 import me.mupu.sleeptalkrecorder.ui.theme.SleepTalkRecorderTheme
 import me.mupu.sleeptalkrecorder.ui.theme.isDark
 import kotlinx.coroutines.flow.combine
@@ -53,22 +57,38 @@ class MainActivity : AppCompatActivity() {
             val clock = remember(current.timeFormat) { ClockFormatter(current.timeFormat) }
             SleepTalkRecorderTheme(darkTheme) {
                 CompositionLocalProvider(LocalClockFormatter provides clock) {
-                    if (current.languageChosen) {
-                        SleepTalkNavHost(container)
-                    } else {
-                        LanguageQuestionScreen(viewModel { LanguageQuestionViewModel(container.settings) })
+                    when (current.setupStep) {
+                        null -> SleepTalkNavHost(container)
+                        SetupStep.LANGUAGE ->
+                            LanguageQuestionScreen(viewModel { LanguageQuestionViewModel(container.settings) })
+                        SetupStep.PERMISSIONS -> {
+                            val permissions = viewModel { PermissionsViewModel(container.settings, container.readiness) }
+                            PermissionsScreen(
+                                viewModel = permissions,
+                                place = PermissionsPlace.Setup(SetupStep.PERMISSIONS),
+                                onBack = permissions::backSetupStep,
+                                onDone = permissions::finishSetupStep,
+                            )
+                        }
                     }
                 }
             }
         }
     }
 
-    private class AppSettings(val theme: ThemeMode, val timeFormat: TimeFormat, val languageChosen: Boolean)
+    override fun onResume() {
+        super.onResume()
+        // Permissions and battery settings may have changed outside the app, also in the system
+        // dialog or settings page the app just returns from.
+        (application as SleepTalkApplication).container.readiness.refresh()
+    }
+
+    private class AppSettings(val theme: ThemeMode, val timeFormat: TimeFormat, val setupStep: SetupStep?)
 
     private fun appSettings(store: SettingsStore) = combine(
         store.flow(Settings.theme),
         store.flow(Settings.timeFormat),
-        store.flow(Settings.languageChosen),
+        SetupStep.current(store),
         ::AppSettings,
     )
 

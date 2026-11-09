@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import me.mupu.sleeptalkrecorder.data.SleepDatabase
 import me.mupu.sleeptalkrecorder.data.SleepRepository
+import me.mupu.sleeptalkrecorder.readiness.PhoneReadiness
 import me.mupu.sleeptalkrecorder.recording.Recorder
 import me.mupu.sleeptalkrecorder.retention.AutoDeletion
 import me.mupu.sleeptalkrecorder.settings.SettingsStore
@@ -43,6 +44,9 @@ class AppContainer(context: Context) {
 
     /** Starts and stops recordings and publishes their state. */
     val recorder = Recorder(context)
+
+    /** Whether the phone's permissions and battery settings let a whole night be recorded. */
+    val readiness = PhoneReadiness(context)
 
     /**
      * Finishes recordings a previous process left running. A new recording waits for it, so it

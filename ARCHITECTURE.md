@@ -15,6 +15,7 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 | `playback` | The `SleepTimeline` of a sleep's chunk files and the `SleepPlayer` that plays it | only in `SleepPlayer` (Media3) |
 | `retention` | Automatic deletion: which sleeps are old enough (`SleepRetention`) and the WorkManager job that deletes them | only in `AutoDeletion` (WorkManager) |
 | `settings` | The user's settings and the `SettingsStore` that keeps them; the app language | DataStore; AppCompat only in `AppLanguages` |
+| `readiness` | Whether the phone lets a whole night be recorded: the `Requirement`s it misses, the `VendorStep`s of its maker, and the `SystemPage`s that fix them | only in `PhoneReadiness` |
 | `ui` | Navigation, one sub-package per screen (`home`, `library`, `sleep`, `settings`, `setup`), shared `components`, `format` and `theme` | Compose |
 
 The root package holds `MainActivity`, the only activity, and `SleepTalkApplication` with the
@@ -34,18 +35,37 @@ setting is one declaration there. `SettingsStore` keeps them in one Preferences 
 publishes each as a flow. A stored value the app no longer accepts reads as the default or the
 nearest allowed value, and a damaged or unreadable file gives the defaults instead of an error.
 
-`MainActivity` reads the theme, the time format and whether the language question was answered
-before it draws anything, so no screen appears in the wrong theme first. The theme is applied in
+`MainActivity` reads the theme, the time format and the first-start setup step before it draws
+anything, so no screen appears in the wrong theme first. The theme is applied in
 Compose and to the system bars; the time format reaches every screen as the `ClockFormatter` in
 `LocalClockFormatter`, which writes every clock time the app shows, independent of the phone's own
 format and the app language. Time settings are picked in Android's own time picker dialog, opened
 with the user's time format and the dialog theme that matches the app's light or dark colors.
+
+The first-start setup is a sequence of `SetupStep`s (the language, then the permissions page), each
+finished once with a setting of its own; `MainActivity` shows the first unfinished step instead of
+the app, so a setup left halfway continues where it stopped.
 
 The app language is the per-app language Android keeps itself, not a DataStore setting: from
 Android 13 on the system stores it and offers it in the app's system settings (the build generates
 the list of languages from the translated `values-*` folders), and on Android 12 AppCompat stores
 it and applies it to `MainActivity`, which is therefore an `AppCompatActivity`. The first start
 asks for it with the phone's language selected.
+
+## Readiness
+
+`PhoneReadiness` checks the microphone permission, whether notifications are on and whether the app
+is exempt from battery optimisation. `MainActivity` re-checks whenever it comes to the front, also
+on return from a system dialog or settings page, and home warns while one is missing. The
+permissions page opens the system's dialog for each; once Android no longer shows a permission's
+dialog (after the second refusal) it opens the app's settings page instead. The battery exemption
+uses the direct request dialog, which Google Play restricts but this directly installed app may use.
+
+Some makers end background apps on their own (Samsung, Xiaomi, MediaTek's DuraSpeed). For them the
+page offers `VendorStep`s, each a list of pages tried in order: the vendor's own page, then the
+app's battery or info page, so a vendor page that is missing or closed to other apps never strands
+the user. Whether such a setting took effect cannot be read back, so vendor steps are offered but
+never counted as missing.
 
 ## Recording
 

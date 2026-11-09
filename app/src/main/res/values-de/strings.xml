@@ -93,6 +93,39 @@
     <string name="setup_phone_language">Sprache deines Telefons</string>
     <string name="setup_language_later">Du kannst die Sprache später in den Einstellungen ändern.</string>
 
+    <!-- First start: permissions. %1$d is the number of the step, %2$d the number of steps. -->
+    <string name="setup_step">%1$d / %2$d</string>
+    <string name="setup_permissions_title">Damit die Nacht durchläuft</string>
+    <string name="setup_permissions_text">Die App nimmt die ganze Nacht auf. Dafür braucht sie ein paar Freigaben.</string>
+    <string name="setup_recheck">Bei jedem Start prüft die App das erneut und zeigt einen Hinweis, wenn etwas fehlt.</string>
+    <string name="done">Fertig</string>
+    <string name="required">nötig</string>
+    <string name="granted">Erledigt</string>
+    <string name="allow">Erlauben</string>
+    <string name="allow_exemption">Ausnahme erlauben</string>
+    <string name="open_setting">Einstellung öffnen</string>
+    <string name="open_again">Erneut öffnen</string>
+    <string name="requirement_microphone">Mikrofon</string>
+    <string name="requirement_microphone_why">Zum Aufnehmen. Aufnahmen bleiben immer auf dem Gerät.</string>
+    <string name="requirement_notifications">Benachrichtigungen</string>
+    <string name="requirement_notifications_why">Zeigt, dass eine Aufnahme läuft, mit einer Stopp-Taste.</string>
+    <string name="requirement_battery">Akku-Optimierung aus</string>
+    <string name="requirement_battery_why">Sonst kann Android die Aufnahme nachts beenden.</string>
+    <!-- Steps for vendors that end background apps on their own. %1$s is the app's name. -->
+    <string name="vendor_samsung">Samsung: Nie schlafende Apps</string>
+    <string name="vendor_samsung_hint">Samsung-Telefone versetzen Apps zusätzlich in den Ruhezustand. Tippe auf Limits für Hintergrundnutzung, dann Nie schlafende Apps, und füge %1$s hinzu.</string>
+    <string name="vendor_xiaomi_autostart">Xiaomi: Autostart</string>
+    <string name="vendor_xiaomi_autostart_hint">Schalte Autostart für %1$s ein, sonst kann das System die App beenden.</string>
+    <string name="vendor_xiaomi_battery">Xiaomi: Akkusparmodus</string>
+    <string name="vendor_xiaomi_battery_hint">Stelle den Akkusparmodus von %1$s auf Keine Einschränkungen.</string>
+    <string name="vendor_duraspeed">DuraSpeed</string>
+    <string name="vendor_duraspeed_hint">DuraSpeed beendet Apps im Hintergrund. Öffne DuraSpeed in den Einstellungen und schalte es aus oder erlaube dort %1$s.</string>
+    <string name="vendor_fallback">Dein Telefon hat diese Seite nicht direkt geöffnet. Suche die Einstellung auf der Seite, die sich geöffnet hat.</string>
+
+    <!-- Home banner while a permission or the battery exemption is missing. -->
+    <string name="readiness_banner_title">Aufnahme könnte abbrechen</string>
+    <string name="fix">Beheben</string>
+
     <!-- Notification -->
     <string name="notification_channel_recording">Aufnahme</string>
     <string name="notification_channel_recording_description">Zeigt, dass ein Schlaf aufgenommen wird, mit einer Stopp-Taste.</string>

@@ -103,6 +103,39 @@
     <string name="setup_phone_language">Language of your phone</string>
     <string name="setup_language_later">You can change the language later in the settings.</string>
 
+    <!-- First start: permissions. %1$d is the number of the step, %2$d the number of steps. -->
+    <string name="setup_step">%1$d / %2$d</string>
+    <string name="setup_permissions_title">To keep the night running</string>
+    <string name="setup_permissions_text">The app records the whole night. It needs a few permissions for that.</string>
+    <string name="setup_recheck">The app checks this again on every start and shows a hint when something is missing.</string>
+    <string name="done">Done</string>
+    <string name="required">required</string>
+    <string name="granted">Done</string>
+    <string name="allow">Allow</string>
+    <string name="allow_exemption">Allow exemption</string>
+    <string name="open_setting">Open setting</string>
+    <string name="open_again">Open again</string>
+    <string name="requirement_microphone">Microphone</string>
+    <string name="requirement_microphone_why">To record. Recordings always stay on the device.</string>
+    <string name="requirement_notifications">Notifications</string>
+    <string name="requirement_notifications_why">Shows that a recording is running, with a Stop button.</string>
+    <string name="requirement_battery">Battery optimisation off</string>
+    <string name="requirement_battery_why">Otherwise Android may end the recording at night.</string>
+    <!-- Steps for vendors that end background apps on their own. %1$s is the app's name. -->
+    <string name="vendor_samsung">Samsung: never sleeping apps</string>
+    <string name="vendor_samsung_hint">Samsung phones put apps to sleep on top. Tap Background usage limits, then Never sleeping apps, and add %1$s.</string>
+    <string name="vendor_xiaomi_autostart">Xiaomi: autostart</string>
+    <string name="vendor_xiaomi_autostart_hint">Turn on Autostart for %1$s, otherwise the system may stop it.</string>
+    <string name="vendor_xiaomi_battery">Xiaomi: battery saver</string>
+    <string name="vendor_xiaomi_battery_hint">Set the battery saver of %1$s to No restrictions.</string>
+    <string name="vendor_duraspeed">DuraSpeed</string>
+    <string name="vendor_duraspeed_hint">DuraSpeed stops apps in the background. Open DuraSpeed in the settings and turn it off, or allow %1$s there.</string>
+    <string name="vendor_fallback">Your phone did not open this page directly. Look for the setting on the page that opened.</string>
+
+    <!-- Home banner while a permission or the battery exemption is missing. -->
+    <string name="readiness_banner_title">Recording might be stopped</string>
+    <string name="fix">Fix</string>
+
     <!-- Notification -->
     <string name="notification_channel_recording">Recording</string>
     <string name="notification_channel_recording_description">Shows that a sleep is being recorded, with a Stop button.</string>

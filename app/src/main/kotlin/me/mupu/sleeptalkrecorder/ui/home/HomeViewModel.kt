@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import me.mupu.sleeptalkrecorder.data.SleepRepository
 import me.mupu.sleeptalkrecorder.data.SleepSummary
+import me.mupu.sleeptalkrecorder.readiness.PhoneReadiness
+import me.mupu.sleeptalkrecorder.readiness.Requirement
 import me.mupu.sleeptalkrecorder.recording.Recorder
 import me.mupu.sleeptalkrecorder.recording.RecorderState
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,12 +22,15 @@ data class HomeUiState(
     val levels: List<Double> = emptyList(),
     /** The most recent finished sleep, if there is one. */
     val lastSleep: SleepSummary? = null,
+    /** What the phone does not allow yet that a whole night needs; home warns while it is not empty. */
+    val missing: Set<Requirement> = emptySet(),
 )
 
 /** State and actions of the home screen. */
 class HomeViewModel(
     private val recorder: Recorder,
     repository: SleepRepository,
+    readiness: PhoneReadiness,
 ) : ViewModel() {
 
     private val levels = recorder.state.runningFold(emptyList<Double>()) { history, state ->
@@ -35,8 +40,12 @@ class HomeViewModel(
 
     private val lastSleep = repository.sleeps().map { sleeps -> sleeps.firstOrNull { !it.isRunning } }
 
-    val state: StateFlow<HomeUiState> = combine(recorder.state, levels, lastSleep, ::HomeUiState)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState(recorder.state.value))
+    val state: StateFlow<HomeUiState> = combine(recorder.state, levels, lastSleep, readiness.missing, ::HomeUiState)
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            HomeUiState(recorder.state.value, missing = readiness.missing.value),
+        )
 
     fun startRecording() = recorder.start()
 

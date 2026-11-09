@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-feature
         android:name="android.hardware.microphone"
@@ -10,6 +11,20 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Lets the setup ask for the battery optimisation exemption in one system dialog. Google
+         Play allows this only for a few kinds of apps; this app is installed directly. -->
+    <uses-permission
+        android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        tools:ignore="BatteryLife" />
+
+    <!-- The vendor apps whose battery pages the setup opens, and DuraSpeed, whose presence decides
+         whether the setup shows its step; Android hides other apps without this list. -->
+    <queries>
+        <package android:name="com.samsung.android.lool" />
+        <package android:name="com.miui.securitycenter" />
+        <package android:name="com.miui.powerkeeper" />
+        <package android:name="com.mediatek.duraspeed" />
+    </queries>
 
     <!-- No backups (data_extraction_rules.xml says why). -->
     <application

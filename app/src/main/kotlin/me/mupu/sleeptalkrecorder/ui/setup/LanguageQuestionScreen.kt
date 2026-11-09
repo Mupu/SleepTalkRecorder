@@ -37,7 +37,6 @@ import androidx.lifecycle.viewModelScope
 import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.settings.AppLanguage
 import me.mupu.sleeptalkrecorder.settings.AppLanguages
-import me.mupu.sleeptalkrecorder.settings.Settings
 import me.mupu.sleeptalkrecorder.settings.SettingsStore
 import kotlinx.coroutines.launch
 
@@ -46,7 +45,7 @@ class LanguageQuestionViewModel(private val store: SettingsStore) : ViewModel() 
 
     fun choose(language: AppLanguage) {
         viewModelScope.launch {
-            store.set(Settings.languageChosen, true)
+            SetupStep.LANGUAGE.finish(store)
             AppLanguages.apply(language)
         }
     }
@@ -70,6 +69,7 @@ fun LanguageQuestionScreen(viewModel: LanguageQuestionViewModel) {
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            StepLabel(SetupStep.LANGUAGE)
             Icon(
                 painterResource(R.drawable.ic_bedtime),
                 contentDescription = null,
