@@ -30,6 +30,8 @@ plays back only the parts where something was said, each mapped to the wall-cloc
 - While working, run the smallest check that could fail for the change and never repeat a passing one. Run the full check once before pushing.
 - Tests cover behaviour that can break, not documentation text or file layout.
 - Tooling that only checks or reports is scope like a feature and needs owner approval.
+- Keep every test as short as it can be. Tests on the local test data under `.local/testdata/` are opt-in and never run in CI; they may move into CI once their audio is tracked.
+- Tell the owner before any test or check run that takes longer than 5 minutes, and agree whether it is worth it.
 - When checking a change will take longer than making it, ask the owner first.
 - Reviews look for substantiated blockers rather than nits and skip what passing checks enforce; findings are fixed or rejected with a reason, never logged in documents.
 
