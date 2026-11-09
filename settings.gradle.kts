@@ -19,6 +19,10 @@ dependencyResolutionManagement {
     }
 }
 
+// The Kotlin plugin keeps its project data under .local/kotlin (gradle.properties), but expects the
+// folder to exist; a fresh clone has no .local/ yet, so create it before any compilation starts.
+rootDir.resolve(".local/kotlin/sessions").mkdirs()
+
 // Build output stays under the ignored .local/ with the other machine-local files:
 // .local/build/root for the root project, .local/build/<name> for each module.
 gradle.lifecycle.beforeProject {
