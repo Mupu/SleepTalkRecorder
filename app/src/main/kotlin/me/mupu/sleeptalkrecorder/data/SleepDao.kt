@@ -19,6 +19,10 @@ interface SleepDao {
     @Query("SELECT * FROM recording WHERE id = :id")
     suspend fun recording(id: Long): RecordingEntity?
 
+    /** The recordings of a sleep in the order they were recorded. */
+    @Query("SELECT * FROM recording WHERE sleep_id = :sleepId ORDER BY started_at, id")
+    suspend fun recordingsOf(sleepId: Long): List<RecordingEntity>
+
     @Query("SELECT * FROM recording WHERE state = 'RECORDING'")
     suspend fun unfinishedRecordings(): List<RecordingEntity>
 

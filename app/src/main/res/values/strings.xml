@@ -43,6 +43,18 @@
     </plurals>
     <string name="library_empty">No sleeps yet. Start a recording on the home screen before you go to sleep.</string>
 
+    <!-- Sleep screen -->
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="timeline">Position in the sleep</string>
+    <!-- Time into the sleep's audio, for example "Pos 6:10:00". -->
+    <string name="position_short">Pos %1$s</string>
+    <!-- Playing speed, for example "1.25×". -->
+    <string name="speed_value">%1$s×</string>
+    <string name="speed_hint">Speed (until you leave this sleep)</string>
+    <string name="sleep_no_audio">This sleep holds no audio that can be played.</string>
+    <string name="playback_failed">Part of this sleep cannot be played. Its files may be damaged.</string>
+
     <!-- Notification -->
     <string name="notification_channel_recording">Recording</string>
     <string name="notification_channel_recording_description">Shows that a sleep is being recorded, with a Stop button.</string>

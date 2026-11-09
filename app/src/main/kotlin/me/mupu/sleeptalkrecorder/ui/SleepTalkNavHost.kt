@@ -1,6 +1,7 @@
 package me.mupu.sleeptalkrecorder.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -8,6 +9,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import me.mupu.sleeptalkrecorder.AppContainer
+import me.mupu.sleeptalkrecorder.playback.SleepPlayer
 import me.mupu.sleeptalkrecorder.ui.home.HomeScreen
 import me.mupu.sleeptalkrecorder.ui.home.HomeViewModel
 import me.mupu.sleeptalkrecorder.ui.library.LibraryScreen
@@ -57,8 +59,9 @@ fun SleepTalkNavHost(container: AppContainer) {
             arguments = listOf(navArgument(Routes.SLEEP_ID) { type = NavType.LongType }),
         ) { entry ->
             val sleepId = entry.arguments?.getLong(Routes.SLEEP_ID) ?: return@composable
+            val context = LocalContext.current.applicationContext
             SleepScreen(
-                viewModel = viewModel { SleepViewModel(sleepId, container.sleepRepository) },
+                viewModel = viewModel { SleepViewModel(sleepId, container.sleepRepository, SleepPlayer(context)) },
                 onBack = { navController.popBackStack() },
             )
         }

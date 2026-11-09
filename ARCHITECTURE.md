@@ -12,13 +12,14 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 | `time` | The time model: *night* and *nap* naming, the timeline of a *recording* | none |
 | `recording` | The recording session, WAV chunk writer, microphone, foreground service and its notification | only in `MicrophoneSource`, `Recorder`, `RecordingService`, `RecordingNotifications` |
 | `data` | Room database, entities and the `SleepRepository` | Room |
+| `playback` | The `SleepTimeline` of a sleep's chunk files and the `SleepPlayer` that plays it | only in `SleepPlayer` (Media3) |
 | `ui` | Navigation, one sub-package per screen (`home`, `library`, `sleep`, `settings`), shared `components`, `format` and `theme` | Compose |
 
 The root package holds `MainActivity`, the only activity, and `SleepTalkApplication` with the
 `AppContainer`, which wires the shared objects by hand: the database, the repository and the
 `Recorder`. Logic that can be tested without a device (`time`, the WAV writer, the recording
-session, level computation) is plain Kotlin behind small interfaces (`PcmSource`, `RecordingStore`,
-`Clocks`) and is unit-tested on the JVM.
+session, level computation, the sleep timeline) is plain Kotlin behind small interfaces
+(`PcmSource`, `RecordingStore`, `Clocks`) and is unit-tested on the JVM.
 
 Screens follow unidirectional data flow: a `ViewModel` combines repository and recorder flows into
 one immutable UI state, and the screen sends user actions back as calls.
@@ -56,6 +57,19 @@ The schema is exported to `app/schemas/`. Data derived from a sleep or a recordi
 tables of its own that reference it by foreign key, so these two tables stay stable. Auto backup is off: recordings never leave the phone, and a restored database without its audio would
 list sleeps that cannot be played.
 
+## Playback
+
+*Full playback* plays a sleep's audio as one continuous axis: its recordings back to back, each as
+its chunk files in order. `SleepRepository.timeline` reads the files of every recording into a
+`SleepTimeline`: each file counts with the samples its header declares, but no more than the
+database says the recording holds, so audio written after the last flush of a killed recording is
+left out; a missing or damaged file ends its recording there.
+
+`SleepPlayer` hands the files to a Media3 ExoPlayer as one playlist item each. All files share one
+PCM format without encoder delay, so ExoPlayer moves from file to file on the same audio track,
+without a gap. Speed changes keep the pitch. The player belongs to the sleep screen's `ViewModel`
+and pauses when the screen is no longer visible, because there is no notification to control it.
+
 ## Time model
 
 All instants are stored in UTC and shown in the device's current zone.
@@ -66,6 +80,10 @@ rate. The start is taken once from the audio clock: `AudioRecord.getTimestamp` r
 given sample was captured on the elapsed-since-boot clock, which is converted to the wall clock at
 that moment. Wall-clock differences are never used for positions, so setting the clock or an NTP
 correction during the night does not move them.
+
+A position in a sleep is the time into its audio. The gap between two recordings is never played
+and takes up no position; `SleepTimeline` maps a position to the recording that holds it and,
+through that recording's `RecordingClock`, to its instant.
 
 `SleepDate` names a sleep by the local time of its start: 18:00 to 11:59 is a night named after
 the evening it belongs to, 12:00 to 17:59 a nap of that day. Because names follow the device's zone,

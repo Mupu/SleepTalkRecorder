@@ -57,9 +57,13 @@ fun formatDuration(resources: Resources, duration: Duration): String {
     }
 }
 
-/** A clock time in [zone], in the 12- or 24-hour format the device is set to: "23:41". */
-fun formatClock(context: Context, instant: Instant, zone: ZoneId): String {
-    val pattern = if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm a"
+/**
+ * A clock time in [zone], in the 12- or 24-hour format the device is set to: "23:41", or
+ * "23:41:07" with [seconds].
+ */
+fun formatClock(context: Context, instant: Instant, zone: ZoneId, seconds: Boolean = false): String {
+    val minutes = if (seconds) "mm:ss" else "mm"
+    val pattern = if (DateFormat.is24HourFormat(context)) "HH:$minutes" else "h:$minutes a"
     val locale = context.resources.configuration.locales[0]
     return instant.atZone(zone).format(DateTimeFormatter.ofPattern(pattern, locale))
 }

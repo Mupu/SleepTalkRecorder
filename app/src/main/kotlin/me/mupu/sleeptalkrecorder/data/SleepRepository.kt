@@ -1,12 +1,16 @@
 package me.mupu.sleeptalkrecorder.data
 
 import androidx.room.withTransaction
+import me.mupu.sleeptalkrecorder.playback.SleepTimeline
+import me.mupu.sleeptalkrecorder.playback.TimelineRecording
 import me.mupu.sleeptalkrecorder.recording.NewRecording
 import me.mupu.sleeptalkrecorder.recording.RecordingStore
 import me.mupu.sleeptalkrecorder.time.RecordingClock
 import java.io.File
 import java.time.Instant
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 
 /**
  * Sleeps, their recordings and where the audio of each recording lives.
@@ -28,6 +32,25 @@ class SleepRepository(
 
     /** One sleep, or null once it no longer exists. */
     fun sleep(id: Long): Flow<SleepSummary?> = dao.sleep(id)
+
+    /**
+     * The audio of a sleep as it is stored now: its recordings in order, each with the chunk files
+     * that hold its saved samples. Empty if the sleep has no playable audio.
+     */
+    suspend fun timeline(sleepId: Long): SleepTimeline {
+        val recordings = dao.recordingsOf(sleepId)
+        return withContext(Dispatchers.IO) {
+            SleepTimeline(
+                recordings.map { recording ->
+                    TimelineRecording.read(
+                        clock = RecordingClock(recording.startedAt, recording.sampleRate),
+                        frames = recording.frames,
+                        directory = File(recordingsDirectory, recording.id.toString()),
+                    )
+                },
+            )
+        }
+    }
 
     override suspend fun startSleep(startedAt: Instant, sampleRate: Int): NewRecording =
         database.withTransaction {
