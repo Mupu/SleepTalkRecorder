@@ -1,6 +1,8 @@
 package me.mupu.sleeptalkrecorder.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
+import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -151,6 +153,32 @@ interface SleepDao {
     )
     fun events(sleepId: Long): Flow<List<SleepEvent>>
 
+    /** The events of all sleeps, like [events] gives those of one, by sleep and in order. */
+    @Query(
+        """
+        SELECT event.sleep_id, event.id, event.start_ms, event.end_ms, kind.id AS kind_id, kind.name AS kind_name,
+            kind.color AS kind_color, NULL AS transcript, NULL AS transcript_origin,
+            NULL AS transcript_producer, $IS_HIDDEN AS hidden
+        FROM annotation AS event
+        JOIN event_kind AS kind ON kind.id = event.kind_id
+        WHERE event.type = 'EVENT'
+        ORDER BY event.sleep_id, event.start_ms, event.id
+        """,
+    )
+    suspend fun allEvents(): List<SleepEventOf>
+
+    /** The annotations of [type] of all sleeps, by sleep and in order. */
+    @Query("SELECT * FROM annotation WHERE type = :type ORDER BY sleep_id, start_ms, id")
+    suspend fun allAnnotations(type: AnnotationType): List<AnnotationEntity>
+
+    /** The recordings of all sleeps, by sleep and in the order they were recorded. */
+    @Query("SELECT * FROM recording ORDER BY sleep_id, started_at, id")
+    suspend fun allRecordings(): List<RecordingEntity>
+
+    /** Every event kind, once. */
+    @Query("SELECT * FROM event_kind")
+    suspend fun allKinds(): List<EventKindEntity>
+
     /** Every event kind. */
     @Query("SELECT * FROM event_kind")
     fun kinds(): Flow<List<EventKindEntity>>
@@ -261,6 +289,9 @@ private const val IS_HIDDEN = """
     EXISTS (SELECT 1 FROM annotation AS mark WHERE mark.sleep_id = event.sleep_id AND mark.type = 'HIDDEN'
         AND mark.start_ms < event.end_ms AND mark.end_ms > event.start_ms)
 """
+
+/** An event of the sleep [sleepId]. */
+data class SleepEventOf(@ColumnInfo(name = "sleep_id") val sleepId: Long, @Embedded val event: SleepEvent)
 
 /** How many events of a sleep the model [producer] gave a transcript. */
 data class ModelTranscripts(val producer: String, val events: Int)

@@ -15,7 +15,7 @@ data class ChunkFile(val file: File, val frames: Long)
 data class TimelineRecording(val clock: RecordingClock, val chunks: List<ChunkFile>) {
 
     /** The samples the recording plays. */
-    val frames: Long get() = chunks.sumOf { it.frames }
+    val frames: Long = chunks.sumOf { it.frames }
 
     companion object {
         /**
@@ -100,6 +100,14 @@ class SleepTimeline(
     /** Where each of [recordings] starts on the clock axis. */
     private val clockStarts: List<Duration>
 
+    /** How long each of [recordings] lasts; a gap follows it on the clock axis, never in it. */
+    private val lengths: List<Duration> = recordings.map { it.clock.durationOf(it.frames) }
+
+    /** [clockStarts], [lengths] and [recordingPositions] in nanoseconds, for the timeline's drawing, which maps every column. */
+    private val clockStartNanos: LongArray
+    private val lengthNanos: LongArray = LongArray(recordings.size) { lengths[it].toNanos() }
+    private val positionNanos: LongArray
+
     /** How long the sleep lasts on the clock, from its first sample to its last, gaps included. */
     val clockDuration: Duration
 
@@ -109,9 +117,9 @@ class SleepTimeline(
     init {
         val placed = ArrayList<Duration>()
         var recordingStart = Duration.ZERO
-        for (recording in recordings) {
+        for (length in lengths) {
             placed += recordingStart
-            recordingStart += recording.clock.durationOf(recording.frames)
+            recordingStart += length
         }
         pieces = recordings.flatMap { recording -> recording.chunks.map { it.file } }
         recordingPositions = placed
@@ -124,9 +132,11 @@ class SleepTimeline(
             val start = maxOf(Duration.between(recordings.first().clock.startedAt, recording.clock.startedAt), clockEnd)
             if (start > clockEnd) gaps += Stretch(clockEnd, start)
             clockStarts += start
-            clockEnd = start + recording.clock.durationOf(recording.frames)
+            clockEnd = start + lengths[index]
         }
         this.clockStarts = clockStarts
+        clockStartNanos = LongArray(clockStarts.size) { clockStarts[it].toNanos() }
+        positionNanos = LongArray(placed.size) { placed[it].toNanos() }
         this.gaps = gaps
         clockDuration = clockEnd
     }
@@ -143,12 +153,15 @@ class SleepTimeline(
      * The position at [clock] on the clock axis; in a gap the start of the recording after it,
      * which is where playing from there begins.
      */
-    fun positionAtClock(clock: Duration): Duration {
-        if (recordings.isEmpty()) return Duration.ZERO
-        val recording = clockStarts.indexOfLast { it <= clock }.coerceAtLeast(0)
-        val length = recordings[recording].clock.durationOf(recordings[recording].frames)
-        val into = (clock - clockStarts[recording]).coerceIn(Duration.ZERO, length)
-        return recordingPositions[recording] + into
+    fun positionAtClock(clock: Duration): Duration = Duration.ofNanos(positionAtClockNanos(clock.toNanos()))
+
+    /** [positionAtClock] in nanoseconds on both axes, without allocating. */
+    fun positionAtClockNanos(clockNanos: Long): Long {
+        if (recordings.isEmpty()) return 0
+        var recording = clockStartNanos.size - 1
+        while (recording > 0 && clockStartNanos[recording] > clockNanos) recording--
+        val into = (clockNanos - clockStartNanos[recording]).coerceIn(0, lengthNanos[recording])
+        return positionNanos[recording] + into
     }
 
     /** The instant at [clock] on the clock axis, also in a gap. */
@@ -165,9 +178,19 @@ class SleepTimeline(
      * lead-in and tail, which itself is always kept.
      */
     fun uninterrupted(from: Duration, until: Duration, keep: Stretch, unavailable: List<Stretch>): Stretch {
-        val edges = recordingPositions.map { Stretch(it, it) } + unavailable
-        val start = edges.filter { it.end <= keep.start }.maxOfOrNull { it.end } ?: Duration.ZERO
-        val end = edges.filter { it.start >= keep.end }.minOfOrNull { it.start } ?: duration
+        // The latest edge before the kept stretch and the earliest after it; the start of each
+        // recording is an edge, as is each stretch without the microphone. Called for every
+        // event of a sleep, so it allocates nothing on the way.
+        var start = Duration.ZERO
+        var end = duration
+        for (position in recordingPositions) {
+            if (position <= keep.start && position > start) start = position
+            if (position >= keep.end && position < end) end = position
+        }
+        for (stretch in unavailable) {
+            if (stretch.end <= keep.start && stretch.end > start) start = stretch.end
+            if (stretch.start >= keep.end && stretch.start < end) end = stretch.start
+        }
         return Stretch(maxOf(from, start), minOf(until, end))
     }
 

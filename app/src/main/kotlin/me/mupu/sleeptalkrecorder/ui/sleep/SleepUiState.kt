@@ -7,16 +7,11 @@ import me.mupu.sleeptalkrecorder.playback.PlaybackKind
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
 import java.time.Duration
-import java.time.Instant
 
-/** The player of the sleep screen, once the sleep's audio is known. */
+/** The player of the sleep screen, once the sleep's audio is known; its position is [SleepViewModel.position]. */
 data class PlayerUiState(
     /** How long the whole sleep plays; zero if it has no playable audio. */
     val duration: Duration,
-    /** The position shown: the playing position, or where the timeline is being dragged to. */
-    val position: Duration,
-    /** The instant the sample at [position] was recorded; null without audio. */
-    val clock: Instant?,
     val playing: Boolean,
     /** The speed of what plays now; see [speedOf]. */
     val speed: Float,

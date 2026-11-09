@@ -153,7 +153,9 @@ data class Producer(
         ),
         ForeignKey(entity = EventKindEntity::class, parentColumns = ["id"], childColumns = ["kind_id"]),
     ],
-    indices = [Index("sleep_id", "type"), Index("kind_id")],
+    // Annotations are looked up by sleep, type and stretch: an event's transcripts and hidden
+    // marks, which the sleep screen, the library and speech recognition ask for every event.
+    indices = [Index("sleep_id", "type", "start_ms", "end_ms"), Index("kind_id")],
 )
 data class AnnotationEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

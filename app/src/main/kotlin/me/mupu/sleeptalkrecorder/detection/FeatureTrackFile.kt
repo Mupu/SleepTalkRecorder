@@ -30,23 +30,32 @@ object FeatureTrackFile {
     private const val HEADER_BYTES = 16
     private const val SAMPLE_RATE = 16_000
 
-    /** Appends hop records to a new track file at [file], replacing any file there. */
-    class Writer(file: File) : Closeable {
+    /**
+     * Appends hop records to a new track file at [file], replacing any file there; or, with
+     * [keepHops], to the track file there after its first [keepHops] hops, which must be stored.
+     */
+    class Writer(file: File, keepHops: Int? = null) : Closeable {
 
-        private val channel = FileChannel.open(
-            file.toPath(),
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING,
-            StandardOpenOption.WRITE,
-        )
+        private val channel = if (keepHops == null) {
+            FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)
+        } else {
+            FileChannel.open(file.toPath(), StandardOpenOption.WRITE)
+        }
         private val buffer = ByteBuffer.allocate(BUFFER_HOPS * FeatureTrack.RECORD_BYTES)
 
         init {
-            val header = ByteBuffer.allocate(HEADER_BYTES).order(ByteOrder.LITTLE_ENDIAN)
-            header.put(MAGIC.toByteArray(Charsets.US_ASCII))
-            header.putInt(VERSION).putInt(SAMPLE_RATE).putInt(FeatureTrack.HOP_SAMPLES)
-            header.flip()
-            writeFully(header)
+            if (keepHops == null) {
+                val header = ByteBuffer.allocate(HEADER_BYTES).order(ByteOrder.LITTLE_ENDIAN)
+                header.put(MAGIC.toByteArray(Charsets.US_ASCII))
+                header.putInt(VERSION).putInt(SAMPLE_RATE).putInt(FeatureTrack.HOP_SAMPLES)
+                header.flip()
+                writeFully(header)
+            } else {
+                // A partial record after the kept hops goes; the next record follows the last kept one.
+                val end = HEADER_BYTES + keepHops.toLong() * FeatureTrack.RECORD_BYTES
+                channel.truncate(end)
+                channel.position(end)
+            }
         }
 
         /** Appends one hop's [record]. */

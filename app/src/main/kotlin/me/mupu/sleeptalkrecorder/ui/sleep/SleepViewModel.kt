@@ -11,6 +11,8 @@ import me.mupu.sleeptalkrecorder.detection.Detection
 import me.mupu.sleeptalkrecorder.detection.EventDetector
 import me.mupu.sleeptalkrecorder.detection.SleepTrack
 import me.mupu.sleeptalkrecorder.playback.CutPlan
+import me.mupu.sleeptalkrecorder.playback.PlaybackKind
+import me.mupu.sleeptalkrecorder.playback.PlaybackState
 import me.mupu.sleeptalkrecorder.playback.SleepPlayer
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
@@ -29,6 +31,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -75,15 +78,24 @@ class SleepViewModel(
             timeline.value = loaded
 
             val track = repository.track(sleepId)
-            val detection = withContext(Dispatchers.Default) { EventDetector.detect(track.track) }
+            // Both take a while for a long night, so they stay off the main thread.
+            val (detection, drawn) = withContext(Dispatchers.Default) {
+                val detection = EventDetector.detect(track.track)
+                detection to SleepLoudness(track, detection.level, detection.baseline)
+            }
             analysis.value = track to detection
-            loudness.value = SleepLoudness(track, detection.level, detection.baseline)
+            loudness.value = drawn
         }
     }
 
+    /**
+     * The sleep, its events and the stretches without the microphone. Every stored annotation
+     * reads them anew (speech recognition stores a few a second), so they are combined off the
+     * main thread and published only when they changed.
+     */
     private val sleepAndEvents = combine(repository.sleep(sleepId), repository.events(sleepId), unavailable) { sleep, events, unavailable ->
         Triple(sleep, if (sleep?.eventsFound == true) events else emptyList(), unavailable)
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, Triple<SleepSummary?, List<SleepEvent>, List<Stretch>>(null, emptyList(), emptyList()))
+    }.distinctUntilChanged().flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, Triple<SleepSummary?, List<SleepEvent>, List<Stretch>>(null, emptyList(), emptyList()))
 
     /**
      * The events the list shows, each with the settings' lead-in and tail as far as they reach
@@ -99,12 +111,12 @@ class SleepViewModel(
                 if (timeline == null) Stretch(event.start, event.end) else eventWithLeadInAndTail(event, timeline, leadIn, tail, unavailable)
             },
         )
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, ListedEvents(EventFilter.All, emptyList(), emptyList()))
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, ListedEvents(EventFilter.All, emptyList(), emptyList()))
 
     /** What cut playback plays; null while full playback is chosen or the audio is still being read. */
     private val cutPlan = combine(listed, timeline, cut) { listed, timeline, cut ->
         if (!cut || timeline == null) null else CutPlan.of(listed.played)
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     init {
         viewModelScope.launch { cutPlan.collect(player::setCutPlan) }
@@ -131,19 +143,33 @@ class SleepViewModel(
     val filterKinds: StateFlow<List<EventKindEntity>> =
         repository.filterKinds().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /**
+     * The position shown: where the timeline is being dragged to, else where the player is. It
+     * changes 20 times a second while playing, so it is published on its own, apart from [state].
+     */
+    val position: StateFlow<Duration> = combine(player.state, scrubPosition) { playback, scrub -> scrub ?: playback.position }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), Duration.ZERO)
+
+    /** What the player does, without its position, so that a moving position changes none of it. */
+    private val playback = player.state
+        .map { PlaybackControls(it.playing, it.speed, it.speedOf, it.failed, playsStretch = it.until != null) }
+        .distinctUntilChanged()
+
+    /** The event at the playhead, published only when another one is current. */
+    private val current = combine(listed, position) { listed, position -> currentEvent(listed.events, listed.played, position) }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
+
     val state: StateFlow<SleepUiState> = combine(
         sleepAndEvents,
         combine(timeline, loudness, ::Pair),
-        combine(player.state, scrubPosition, ::Pair),
+        combine(playback, current, ::Pair),
         combine(eventPlayed, cut, cutPlan, ::Triple),
         listed,
-    ) { (sleep, events, unavailable), (timeline, loudness), (playback, scrub), (played, cut, plan), listed ->
-        val position = scrub ?: playback.position
+    ) { (sleep, events, unavailable), (timeline, loudness), (playback, current), (played, cut, plan), listed ->
         val player = timeline?.let {
             PlayerUiState(
                 duration = it.duration,
-                position = position,
-                clock = if (it.pieces.isEmpty()) null else it.instantAt(position),
                 playing = playback.playing,
                 speed = playback.speed,
                 speedOf = playback.speedOf,
@@ -162,11 +188,11 @@ class SleepViewModel(
             filter = listed.filter,
             listedEvents = listed.events,
             unavailable = unavailable,
-            playingEventId = played.takeIf { playback.playing && playback.until != null },
-            currentEvent = currentEvent(listed.events, listed.played, position),
+            playingEventId = played.takeIf { playback.playing && playback.playsStretch },
+            currentEvent = current,
             sensitivityAvailable = loudness != null && sleep?.eventsFound == true && !sleep.isRunning,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SleepUiState())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SleepUiState())
 
     private val overrides = repository.sensitivityOverrides(sleepId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -411,6 +437,15 @@ private fun eventWithLeadInAndTail(
     val wanted = Stretch((event.start - leadIn).coerceAtLeast(Duration.ZERO), event.end + tail)
     return timeline.uninterrupted(wanted.start, wanted.end, Stretch(event.start, event.end), unavailable)
 }
+
+/** The [PlaybackState] of the player without its position; [playsStretch] while a stretch plays on its own. */
+private data class PlaybackControls(
+    val playing: Boolean,
+    val speed: Float,
+    val speedOf: PlaybackKind,
+    val failed: Boolean,
+    val playsStretch: Boolean,
+)
 
 /** The events the list shows, and the stretch around each that cut playback plays, in the same order. */
 private data class ListedEvents(val filter: EventFilter, val events: List<SleepEvent>, val played: List<Stretch>)

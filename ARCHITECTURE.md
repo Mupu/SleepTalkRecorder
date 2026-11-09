@@ -202,9 +202,12 @@ extracts it live from the buffers it records, which costs little next to keeping
 open, and `FeatureTrackFile` stores it as an append-only file whose header names its format
 version. Finding events uses only the speech band.
 
-When a track is missing, of an older format version, or shorter than its audio, the repository
-extracts it again from the chunk files before using it. That takes seconds per hour of audio but
-happens only after a storage failure or a change of the format.
+When a track is missing or of an older format version, the repository extracts it again from the
+chunk files before using it. That takes about 16 s per hour of audio on the development emulator
+(over two minutes for an 8.5-hour night) and happens only after a storage failure or a change of
+the format. A track shorter than its audio, as a killed recording leaves it (its audio runs up to
+ten seconds past the track's last flush), keeps its hops, and only the hops after them are
+extracted and appended.
 
 `EventDetector` works on the tracks of a sleep's recordings back to back (`SleepTrack`, which maps
 each hop to its exact position in the sleep):
@@ -241,6 +244,10 @@ except where an event lies that is not hidden, with the baseline as a dashed lin
 (see [Time model](#time-model)), so gaps between recordings take their real width; they and the
 stretches in which the microphone was unavailable are hatched. `SleepLoudness` keeps maxima of
 16, 256 and 4 096 hops, so every column of the timeline reads only a few values at any zoom.
+`LoudnessColumns` maps the columns of a window once for its width and the timeline then only draws
+them; the playhead is a layer of its own, and the view model publishes the playing position apart
+from the rest of the screen's state, so playback redraws the playhead and the clock and nothing
+else.
 
 ### Sensitivity
 
@@ -271,7 +278,8 @@ their origin, producer and version come out. `SpeechRecognition` is the phone's 
 analysis on a server would be another beside it.
 
 `SpeechRecognition` hands the clip to the active model through `SherpaTranscriber` (sherpa-onnx's
-offline recognizer, four threads), in pieces of at most 30 s; clips under 0.3 s are not sent,
+offline recognizer, four threads at background priority, so the screen keeps the cores it needs),
+in pieces of at most 30 s; clips under 0.3 s are not sent,
 because sherpa-onnx fails on input without frames. `TranscriptFilter` then decides from the text:
 tags are removed, short outputs with phrases models write on silence and repetition loops are
 dropped, and output of fillers only ("mhm", "uh") makes a *murmur*. The result is one `TRANSCRIPT`
@@ -393,7 +401,8 @@ off, its button on again.
 
 The stats screen shows the numbers of one sleep, opened from the sleep screen, or of all nights,
 opened from the library or switched to. `SleepRepository.storedSleeps` reads every finished sleep
-whose events are found, with its recordings and events, again whenever an annotation changes, and
+whose events are found, with its recordings and events, again whenever an annotation changes (one
+query each for all recordings, events and transcripts, however many sleeps there are), and
 plain Kotlin computes the numbers from them: `CountedSleep` maps each event that is not hidden to
 the instant it happened through the recordings' start instants and lengths (the database's sample
 counts, without reading the audio files), `SleepStats` counts one sleep in ten-minute steps of the

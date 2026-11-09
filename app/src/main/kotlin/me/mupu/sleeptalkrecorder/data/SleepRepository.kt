@@ -15,7 +15,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.sync.Mutex
@@ -50,19 +52,26 @@ class SleepRepository(
     /** All sleeps, the most recently started first; the running one, if any, is among them. */
     fun sleeps(): Flow<List<SleepSummary>> = dao.sleeps(DETECTOR.id, DETECTOR.version)
 
-    /** One sleep, or null once it no longer exists. */
-    fun sleep(id: Long): Flow<SleepSummary?> = dao.sleep(id, DETECTOR.id, DETECTOR.version)
+    /** One sleep, or null once it no longer exists; published only when it changed. */
+    fun sleep(id: Long): Flow<SleepSummary?> = dao.sleep(id, DETECTOR.id, DETECTOR.version).distinctUntilChanged()
 
     /**
      * The events of a sleep in order, each with the kind and words of its winning transcript
      * ([withTranscripts]). Until they are found after the stop ([SleepSummary.eventsFound]),
      * these are none or those of an older detector.
+     *
+     * Every stored annotation reads them anew, also one that changes none of them, as speech
+     * recognition stores a few a second; so they are put together off the main thread, the
+     * latest reading replaces any not yet taken, and only a changed list is published.
      */
     fun events(sleepId: Long): Flow<List<SleepEvent>> = combine(
         dao.events(sleepId),
         dao.annotations(sleepId, AnnotationType.TRANSCRIPT),
         dao.kinds(),
     ) { events, transcripts, kinds -> withTranscripts(events, transcripts, kinds.associateBy { it.id }) }
+        .conflate()
+        .flowOn(Dispatchers.Default)
+        .distinctUntilChanged()
 
     /** How many of a sleep's events each model gave a transcript of the phone, by the model's id. */
     fun transcriptModels(sleepId: Long): Flow<Map<String, Int>> =
@@ -71,17 +80,18 @@ class SleepRepository(
     /**
      * Every finished sleep whose events are found, the most recently started first, with its
      * recordings and all its events, hidden ones included. Read anew whenever a sleep, a recording
-     * or an annotation changes.
+     * or an annotation changes: the recordings, events and transcripts of all sleeps in one query
+     * each, however many sleeps there are.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     fun storedSleeps(): Flow<List<StoredSleep>> = sleeps().mapLatest { summaries ->
-        summaries.filter { !it.isRunning && it.eventsFound }.map { summary ->
-            StoredSleep(summary, dao.recordingsOf(summary.id), events(summary.id).first())
+        database.withTransaction {
+            storedSleeps(summaries, dao.allRecordings(), dao.allEvents(), dao.allAnnotations(AnnotationType.TRANSCRIPT), dao.allKinds())
         }
     }
 
-    /** How far speech recognition got through a sleep's events. */
-    fun transcriptionCount(sleepId: Long): Flow<TranscriptionCount> = dao.transcriptionCount(sleepId)
+    /** How far speech recognition got through a sleep's events; published only when it changed. */
+    fun transcriptionCount(sleepId: Long): Flow<TranscriptionCount> = dao.transcriptionCount(sleepId).distinctUntilChanged()
 
     /** The event kinds the sleep screen offers a filter for. */
     fun filterKinds(): Flow<List<EventKindEntity>> = dao.filterKinds()

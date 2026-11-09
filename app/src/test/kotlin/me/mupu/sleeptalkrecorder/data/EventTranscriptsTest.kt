@@ -1,6 +1,10 @@
 package me.mupu.sleeptalkrecorder.data
 
+import me.mupu.sleeptalkrecorder.time.SleepDate
+import me.mupu.sleeptalkrecorder.time.SleepKind
 import java.time.Duration
+import java.time.Instant
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -138,5 +142,26 @@ class EventTranscriptsTest {
         )
 
         assertEquals(EventKinds.EVENT, shown[1].kind)
+    }
+
+    @Test
+    fun `the readings of all sleeps are put together by sleep, each event with its own sleep's transcript`() {
+        fun summary(id: Long, ended: Boolean) = SleepSummary(
+            id, Instant.EPOCH, Instant.EPOCH.takeIf { ended }, SleepDate(SleepKind.NIGHT, LocalDate.EPOCH),
+            recordingCount = 1, eventCount = 1, eventMillis = 1_000, eventsFound = true,
+        )
+        fun recording(sleepId: Long) = RecordingEntity(sleepId, sleepId, Instant.EPOCH, 16_000, 16_000, RecordingState.FINISHED)
+        // The same stretch is an event in every sleep; only the second sleep has a transcript of it.
+        val stored = storedSleeps(
+            summaries = listOf(summary(3, ended = false), summary(2, ended = true), summary(1, ended = true)),
+            recordings = listOf(recording(1), recording(2), recording(3)),
+            events = (1L..3L).map { SleepEventOf(it, event(it, 1_000, 2_000)) },
+            transcripts = listOf(transcript(1_000, 2_000, EventKinds.SPEECH, "hello").copy(sleepId = 2)),
+            kinds = kinds.values.toList(),
+        )
+
+        assertEquals(listOf(2L, 1L), stored.map { it.summary.id })
+        assertEquals(listOf(listOf(2L), listOf(1L)), stored.map { sleep -> sleep.recordings.map { it.sleepId } })
+        assertEquals(listOf("hello", null), stored.map { it.events.single().transcript })
     }
 }

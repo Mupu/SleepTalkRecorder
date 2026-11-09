@@ -1,12 +1,13 @@
 package me.mupu.sleeptalkrecorder.ui.sleep
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,10 +20,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -30,6 +34,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
@@ -47,6 +52,7 @@ import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.ThemeRole
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
+import me.mupu.sleeptalkrecorder.ui.format.ClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.formatDuration
 import java.time.Duration
@@ -57,13 +63,17 @@ import java.time.ZoneId
  * timeline's clock axis shown large, with everything that is not an event grey, events in their
  * kind's colour, the gaps between recordings and the stretches in which the microphone was
  * [unavailable] hatched, the baseline as a dashed line and the playhead; below it the whole sleep
- * as an overview strip with the window marked, and buttons to zoom. [position] is a position in
- * the sleep's audio, as the player plays it.
+ * as an overview strip with the window marked, and buttons to zoom. [position] gives the position
+ * in the sleep's audio, as the player plays it.
  *
  * Dragging the large timeline pans it, pinching zooms it, and a tap moves the playhead there.
  * Tapping or dragging the overview moves the window and the playhead along. Every such change of
  * the window by hand is reported through [onWindowChange]; the auto zoom button shows [autoZoom]
  * and switches it.
+ *
+ * The bars are computed once for each window and size and then only drawn again; the playhead
+ * and the overview's window mark are layers of their own, so a moving playhead redraws nothing
+ * else, and the position is read only while drawing, so it recomposes nothing.
  */
 @Composable
 fun LoudnessTimeline(
@@ -71,7 +81,7 @@ fun LoudnessTimeline(
     loudness: SleepLoudness?,
     events: List<SleepEvent>,
     unavailable: List<Stretch>,
-    position: Duration,
+    position: () -> Duration,
     window: TimelineWindow,
     onWindowChange: (TimelineWindow) -> Unit,
     autoZoom: Boolean,
@@ -93,9 +103,53 @@ fun LoudnessTimeline(
     val scrub by rememberUpdatedState(onScrub)
     val finishScrub by rememberUpdatedState(onScrubFinished)
     val description = stringResource(R.string.timeline)
+    // Only where the events lie and their colours change the bars; a new transcript changes neither.
+    val drawn = remember(events) { DrawnEvents(events.map { it.stretch }, events.map { it.kindColor }) }
+
+    val bars = remember(timeline, loudness, drawn, unavailable, window, colors, clock, zone, textMeasurer, labelStyle) {
+        Modifier.drawWithCache {
+            val ticksHeight = 18.dp.toPx()
+            val top = 6.dp.toPx()
+            val plot = Size(size.width, size.height - ticksHeight - top)
+            val step = 2.dp.toPx()
+            val columns = loudness?.let {
+                LoudnessColumns.of(timeline, it, drawn.stretches, unavailable, window, plot.width, plot.height, step, baselineStep = 4.dp.toPx())
+            }
+            val barColors = columns?.let { barColors(it, drawn.colors, colors) }
+            val ticks = ticks(timeline, window, clock, zone, room = size.width / 64.dp.toPx()).map { (share, label) ->
+                (share * size.width).toFloat() to textMeasurer.measure(label, labelStyle)
+            }
+            onDrawBehind {
+                drawRect(colors.surfaceContainerLow)
+                if (columns != null && barColors != null) drawColumns(columns, barColors, top, plot.height, step, colors, baseline = true)
+                // Clock-time ticks at round times, labelled with the time recorded there.
+                val inset = 6.dp.toPx()
+                for ((x, text) in ticks) {
+                    drawLine(colors.outlineVariant, Offset(x, size.height - ticksHeight), Offset(x, size.height - ticksHeight + 4.dp.toPx()))
+                    // Kept clear of the rounded corners, which would clip a label at the very edge.
+                    val left = (x - text.size.width / 2).coerceIn(inset, size.width - text.size.width - inset)
+                    drawText(text, topLeft = Offset(left, size.height - ticksHeight + 5.dp.toPx()))
+                }
+            }
+        }
+    }
+    // The whole sleep does not change with the window, so the overview's bars stay as they are.
+    val overviewBars = remember(timeline, loudness, drawn, unavailable, colors) {
+        Modifier.drawWithCache {
+            val step = 1.dp.toPx()
+            val whole = TimelineWindow.whole(timeline.clockDuration)
+            val columns = loudness?.let {
+                LoudnessColumns.of(timeline, it, drawn.stretches, unavailable, whole, size.width, size.height, step, baselineStep = null)
+            }
+            val barColors = columns?.let { barColors(it, drawn.colors, colors) }
+            onDrawBehind {
+                if (columns != null && barColors != null) drawColumns(columns, barColors, top = 0f, size.height, step, colors, baseline = false)
+            }
+        }
+    }
 
     Column {
-        Canvas(
+        Box(
             Modifier
                 .fillMaxWidth()
                 .height(150.dp)
@@ -114,35 +168,20 @@ fun LoudnessTimeline(
                     }
                 },
         ) {
-            drawRect(colors.surfaceContainerLow)
-            val ticksHeight = 18.dp.toPx()
-            val plot = Size(size.width, size.height - ticksHeight - 6.dp.toPx())
-            val axis = Axis(timeline, unavailable)
-            drawLoudness(axis, loudness, events, window, plot, top = 6.dp.toPx(), colors, step = 2.dp.toPx(), baseline = true)
-            drawPlayhead(window, timeline.clockOf(position), top = 0f, height = plot.height + 6.dp.toPx(), colors.onSurface)
-
-            // Clock-time ticks at round times, labelled with the time recorded there.
-            val start = timeline.takeIf { it.pieces.isNotEmpty() }?.instantAtClock(window.start) ?: return@Canvas
-            val room = size.width / 64.dp.toPx()
-            val step = TICK_STEPS.firstOrNull { window.span.toMillis() / it.toMillis() <= room } ?: TICK_STEPS.last()
-            val stepMillis = step.toMillis()
-            val startMillis = start.toEpochMilli()
-            var tick = Duration.ofMillis(Math.floorDiv(startMillis + stepMillis - 1, stepMillis) * stepMillis - startMillis)
-            while (window.start + tick <= window.end) {
-                val at = window.start + tick
-                val x = (window.shareOf(at) * size.width).toFloat()
-                drawLine(colors.outlineVariant, Offset(x, size.height - ticksHeight), Offset(x, size.height - ticksHeight + 4.dp.toPx()))
-                val label = clock.format(timeline.instantAtClock(at), zone, seconds = step < Duration.ofMinutes(1))
-                val text = textMeasurer.measure(label, labelStyle)
-                // Kept clear of the rounded corners, which would clip a label at the very edge.
-                val inset = 6.dp.toPx()
-                val left = (x - text.size.width / 2).coerceIn(inset, size.width - text.size.width - inset)
-                drawText(text, topLeft = Offset(left, size.height - ticksHeight + 5.dp.toPx()))
-                tick += step
-            }
+            Spacer(Modifier.matchParentSize().then(bars))
+            Spacer(
+                Modifier
+                    .matchParentSize()
+                    .graphicsLayer()
+                    .drawBehind {
+                        // Down to the ticks, through the 6 dp above the bars.
+                        val height = size.height - 18.dp.toPx()
+                        drawPlayhead(window, timeline.clockOf(position()), top = 0f, height = height, colors.onSurface)
+                    },
+            )
         }
 
-        Canvas(
+        Box(
             Modifier
                 .fillMaxWidth()
                 .padding(top = 4.dp)
@@ -170,26 +209,34 @@ fun LoudnessTimeline(
                     }
                 },
         ) {
-            val whole = TimelineWindow.whole(window.total)
-            drawLoudness(Axis(timeline, unavailable), loudness, events, whole, size, top = 0f, colors, step = 1.dp.toPx(), baseline = false)
-            drawPlayhead(whole, timeline.clockOf(position), top = 0f, height = size.height, colors.onSurface)
-            val left = (whole.shareOf(window.start) * size.width).toFloat()
-            val right = (whole.shareOf(window.end) * size.width).toFloat()
-            val stroke = 1.5.dp.toPx()
-            drawRect(
-                colors.onSurface,
-                topLeft = Offset(left + stroke / 2, stroke / 2),
-                size = Size((right - left - stroke).coerceAtLeast(3.dp.toPx()), size.height - stroke),
-                style = Stroke(stroke),
+            Spacer(Modifier.matchParentSize().then(overviewBars))
+            Spacer(
+                Modifier
+                    .matchParentSize()
+                    .graphicsLayer()
+                    .drawBehind {
+                        val whole = TimelineWindow.whole(window.total)
+                        drawPlayhead(whole, timeline.clockOf(position()), top = 0f, height = size.height, colors.onSurface)
+                        val left = (whole.shareOf(window.start) * size.width).toFloat()
+                        val right = (whole.shareOf(window.end) * size.width).toFloat()
+                        val stroke = 1.5.dp.toPx()
+                        drawRect(
+                            colors.onSurface,
+                            topLeft = Offset(left + stroke / 2, stroke / 2),
+                            size = Size((right - left - stroke).coerceAtLeast(3.dp.toPx()), size.height - stroke),
+                            style = Stroke(stroke),
+                        )
+                    },
             )
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            val playhead = window.shareOf(timeline.clockOf(position)).coerceIn(0.0, 1.0)
-            IconButton(onClick = { onWindowChange(window.zoom(2.0, playhead)) }) {
+            // Zooming keeps the playhead in place; the position is read only when a button is tapped.
+            fun playhead() = window.shareOf(timeline.clockOf(position())).coerceIn(0.0, 1.0)
+            IconButton(onClick = { onWindowChange(window.zoom(2.0, playhead())) }) {
                 Icon(painterResource(R.drawable.ic_zoom_out), contentDescription = stringResource(R.string.zoom_out))
             }
-            IconButton(onClick = { onWindowChange(window.zoom(0.5, playhead)) }) {
+            IconButton(onClick = { onWindowChange(window.zoom(0.5, playhead())) }) {
                 Icon(painterResource(R.drawable.ic_zoom_in), contentDescription = stringResource(R.string.zoom_in))
             }
             IconButton(onClick = { onWindowChange(TimelineWindow.whole(window.total)) }) {
@@ -215,81 +262,69 @@ fun LoudnessTimeline(
     }
 }
 
-/** The clock axis of a sleep's [timeline], with the stretches of it that hold no sound from the room. */
-private class Axis(val timeline: SleepTimeline, private val unavailable: List<Stretch>) {
-
-    /** Whether the moment at [clock] lies in a gap or where the microphone was unavailable. */
-    fun isInterrupted(clock: Duration): Boolean {
-        if (timeline.gaps.any { clock >= it.start && clock < it.end }) return true
-        val position = timeline.positionAtClock(clock)
-        return unavailable.any { position >= it.start && position < it.end }
+/**
+ * The clock-time ticks of [window] at round times, as shares of its width with their labels: the
+ * time recorded there. The shortest distance between ticks that leaves [room] labels across the
+ * width is used.
+ */
+private fun ticks(timeline: SleepTimeline, window: TimelineWindow, clock: ClockFormatter, zone: ZoneId, room: Float): List<Pair<Double, String>> {
+    val start = timeline.takeIf { it.pieces.isNotEmpty() }?.instantAtClock(window.start) ?: return emptyList()
+    val step = TICK_STEPS.firstOrNull { window.span.toMillis() / it.toMillis() <= room } ?: TICK_STEPS.last()
+    val stepMillis = step.toMillis()
+    val startMillis = start.toEpochMilli()
+    var tick = Duration.ofMillis(Math.floorDiv(startMillis + stepMillis - 1, stepMillis) * stepMillis - startMillis)
+    val ticks = ArrayList<Pair<Double, String>>()
+    while (window.start + tick <= window.end) {
+        val at = window.start + tick
+        ticks += window.shareOf(at) to clock.format(timeline.instantAtClock(at), zone, seconds = step < Duration.ofMinutes(1))
+        tick += step
     }
+    return ticks
 }
 
+/** What the bars show of the events: their stretches and, in the same order, their kinds' colours. */
+private data class DrawnEvents(val stretches: List<Stretch>, val colors: List<KindColor>)
+
+/** The colour of each bar of [columns]: the kind colour of its event in [eventColors], or grey outside events. */
+private fun barColors(columns: LoudnessColumns, eventColors: List<KindColor>, colors: ColorScheme): Array<Color> =
+    Array(columns.bars) { bar -> eventColors.getOrNull(columns.events[bar])?.let { kindColor(it, colors) } ?: colors.outlineVariant }
+
 /**
- * Draws the loudness of [window], a stretch of the clock axis, into [plot] below [top]: one bar per
- * [step] pixels, as high as the loudest level in its stretch, coloured when an event lies in it and
- * grey otherwise; gaps and stretches without the microphone are hatched.
+ * Draws [columns] into a plot of [height] below [top]: the bars in [barColors], [step] pixels
+ * apart, the hatched runs and, if wanted, the [baseline] as a dashed line that breaks where
+ * nothing was recorded.
  */
-private fun DrawScope.drawLoudness(
-    axis: Axis,
-    loudness: SleepLoudness?,
-    events: List<SleepEvent>,
-    window: TimelineWindow,
-    plot: Size,
+private fun DrawScope.drawColumns(
+    columns: LoudnessColumns,
+    barColors: Array<Color>,
     top: Float,
-    colors: ColorScheme,
+    height: Float,
     step: Float,
+    colors: ColorScheme,
     baseline: Boolean,
 ) {
-    if (loudness == null || window.span <= Duration.ZERO) return
-    fun heightOf(db: Float) = ((db - loudness.lowDb) / (loudness.highDb - loudness.lowDb)).coerceIn(0f, 1f) * plot.height
-
-    val timeline = axis.timeline
-    // Runs of columns to hatch, from their left to their right edge in pixels.
-    val hatched = ArrayList<Pair<Float, Float>>()
-    var x = 0f
-    var nextEvent = 0
-    while (x < plot.width) {
-        val clockFrom = window.positionAt(x / plot.width.toDouble())
-        val clockUntil = window.positionAt(((x + step) / plot.width).toDouble().coerceAtMost(1.0))
-        if (axis.isInterrupted(clockFrom + (clockUntil - clockFrom).dividedBy(2))) {
-            val last = hatched.lastOrNull()
-            if (last != null && last.second == x) hatched[hatched.lastIndex] = last.first to x + step else hatched += x to x + step
-            x += step
-            continue
-        }
-        val from = timeline.positionAtClock(clockFrom)
-        val until = timeline.positionAtClock(clockUntil)
-        val loudest = if (until > from) loudness.loudestIn(from, until) else null
-        if (loudest != null) {
-            while (nextEvent < events.size && events[nextEvent].end <= from) nextEvent++
-            val event = events.getOrNull(nextEvent)?.takeIf { it.start < until }
-            val color = event?.let { kindColor(it.kindColor, colors) } ?: colors.outlineVariant
-            val height = heightOf(loudest).coerceAtLeast(1f)
-            drawRect(color, topLeft = Offset(x, top + plot.height - height), size = Size((step - 1f).coerceAtLeast(1f), height))
-        }
-        x += step
+    val barWidth = (step - 1f).coerceAtLeast(1f)
+    for (bar in 0 until columns.bars) {
+        val barHeight = columns.heights[bar]
+        drawRect(barColors[bar], topLeft = Offset(columns.lefts[bar], top + height - barHeight), size = Size(barWidth, barHeight))
     }
-    for ((left, right) in hatched) drawHatch(left, right.coerceAtMost(plot.width), top, plot.height, colors.outline)
+    val hatched = columns.hatched
+    for (run in hatched.indices step 2) drawHatch(hatched[run], hatched[run + 1], top, height, colors.outline)
 
     if (baseline) {
         val dash = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx()))
-        var previous: Offset? = null
-        var px = 0f
-        while (px <= plot.width) {
-            val clock = window.positionAt(px / plot.width.toDouble())
-            val db = if (axis.isInterrupted(clock)) null else loudness.baselineAt(timeline.positionAtClock(clock))
-            if (db == null) {
-                // The line breaks where nothing was recorded.
-                previous = null
-                px += 4.dp.toPx()
-                continue
-            }
-            val point = Offset(px, top + plot.height - heightOf(db))
-            previous?.let { drawLine(colors.onSurfaceVariant, it, point, strokeWidth = 1.dp.toPx(), pathEffect = dash) }
-            previous = point
-            px += 4.dp.toPx()
+        val points = columns.baseline
+        for (point in 2 until points.size step 2) {
+            val from = points[point - 1]
+            val to = points[point + 1]
+            if (from.isNaN() || to.isNaN()) continue
+            drawLine(
+                colors.onSurfaceVariant,
+                Offset(points[point - 2], top + from),
+                Offset(points[point], top + to),
+                strokeWidth = 1.dp.toPx(),
+                pathEffect = dash,
+            )
         }
     }
 }

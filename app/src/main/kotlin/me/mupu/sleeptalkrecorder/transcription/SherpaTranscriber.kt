@@ -7,6 +7,10 @@ import com.k2fsa.sherpa.onnx.OfflineTransducerModelConfig
 import com.k2fsa.sherpa.onnx.OfflineWhisperModelConfig
 import me.mupu.sleeptalkrecorder.models.TranscriptionModel
 import java.io.File
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
  * A [TranscriptionModel] loaded into sherpa-onnx's offline recognizer, which keeps the model in
@@ -16,13 +20,20 @@ import java.io.File
  * speech in another one, so it first detects the language itself and is asked again with the
  * user's language only when it detected neither that nor English. (sherpa-onnx 2.0.1 cannot limit
  * the detection to those two.) Parakeet recognises its 25 languages without being told.
+ *
+ * The model is loaded and run on a [thread] of its own at background priority, which the
+ * recognizer's worker threads take over when it creates them, so a run on all cores never slows
+ * the screen down: the system gives the app's main and render threads the cores first.
  */
 class SherpaTranscriber private constructor(
     private val recognizer: OfflineRecognizer,
     private val language: String?,
+    private val thread: ExecutorService,
 ) : Transcriber {
 
-    override fun transcribe(samples: FloatArray, sampleRate: Int): String {
+    override fun transcribe(samples: FloatArray, sampleRate: Int): String = thread.await { recognise(samples, sampleRate) }
+
+    private fun recognise(samples: FloatArray, sampleRate: Int): String {
         val (text, detected) = decode(samples, sampleRate)
         val whisper = recognizer.config.modelConfig.whisper
         if (language == null || whisper.encoder.isEmpty() || detected in setOf(language, ENGLISH)) return text
@@ -48,10 +59,35 @@ class SherpaTranscriber private constructor(
         }
     }
 
-    override fun close() = recognizer.release()
+    override fun close() {
+        try {
+            thread.await { recognizer.release() }
+        } finally {
+            thread.shutdown()
+        }
+    }
 
     companion object {
         private const val ENGLISH = "en"
+
+        /**
+         * Java's thread priority that Android runs at its background priority (nice 10,
+         * `Process.THREAD_PRIORITY_BACKGROUND`); set through Java, it also works where the model
+         * runs on a computer for the evaluation.
+         */
+        private const val BACKGROUND_PRIORITY = 4
+
+        /** A single thread at [BACKGROUND_PRIORITY] for loading and running a model. */
+        private fun backgroundThread(): ExecutorService = Executors.newSingleThreadExecutor { task ->
+            Thread(task, "SpeechRecognition").apply { priority = BACKGROUND_PRIORITY }
+        }
+
+        /** Runs [block] on this executor and waits for it, throwing what it throws. */
+        private fun <T> ExecutorService.await(block: () -> T): T = try {
+            submit(Callable(block)).get()
+        } catch (failed: ExecutionException) {
+            throw failed.cause ?: failed
+        }
 
         /**
          * Loads [model] from the [directory] its files are installed in; [language] is the
@@ -86,8 +122,14 @@ class SherpaTranscriber private constructor(
                     numThreads = threads,
                 )
             }
-            val recognizer = OfflineRecognizer(null, OfflineRecognizerConfig(modelConfig = config))
-            return SherpaTranscriber(recognizer, language.takeIf { model.needsLanguage })
+            val thread = backgroundThread()
+            val recognizer = try {
+                thread.await { OfflineRecognizer(null, OfflineRecognizerConfig(modelConfig = config)) }
+            } catch (failed: Throwable) {
+                thread.shutdown()
+                throw failed
+            }
+            return SherpaTranscriber(recognizer, language.takeIf { model.needsLanguage }, thread)
         }
     }
 }

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "103ef059836a6ae76d35054f29990d87",
+    "identityHash": "fc088a7ba5349ff484773fd6f498678c",
     "entities": [
       {
         "tableName": "sleep",
@@ -226,14 +226,16 @@
         },
         "indices": [
           {
-            "name": "index_annotation_sleep_id_type",
+            "name": "index_annotation_sleep_id_type_start_ms_end_ms",
             "unique": false,
             "columnNames": [
               "sleep_id",
-              "type"
+              "type",
+              "start_ms",
+              "end_ms"
             ],
             "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_annotation_sleep_id_type` ON `${TABLE_NAME}` (`sleep_id`, `type`)"
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_annotation_sleep_id_type_start_ms_end_ms` ON `${TABLE_NAME}` (`sleep_id`, `type`, `start_ms`, `end_ms`)"
           },
           {
             "name": "index_annotation_kind_id",
@@ -273,7 +275,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '103ef059836a6ae76d35054f29990d87')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'fc088a7ba5349ff484773fd6f498678c')"
     ]
   }
 }

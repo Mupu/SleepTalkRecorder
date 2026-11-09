@@ -1,14 +1,13 @@
 package me.mupu.sleeptalkrecorder.ui.sleep
 
 import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -40,15 +39,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -77,6 +80,7 @@ import me.mupu.sleeptalkrecorder.ui.format.formatPosition
 import me.mupu.sleeptalkrecorder.ui.format.sleepTitle
 import me.mupu.sleeptalkrecorder.ui.library.sleepSubtitle
 import java.text.NumberFormat
+import java.time.Duration
 import java.time.ZoneId
 
 /**
@@ -99,6 +103,9 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
     val transcription by viewModel.transcription.collectAsStateWithLifecycle()
     val filterKinds by viewModel.filterKinds.collectAsStateWithLifecycle()
     val modelChange by viewModel.modelChange.collectAsStateWithLifecycle()
+    // Read only where it is drawn or shown, so the moving playhead recomposes nothing else.
+    val positionState = viewModel.position.collectAsStateWithLifecycle()
+    val position = remember(positionState) { { positionState.value } }
     val resources = LocalResources.current
     val zone = ZoneId.systemDefault()
     val snackbars = remember { SnackbarHostState() }
@@ -145,12 +152,10 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     AppBarIcon(R.drawable.ic_bar_chart, stringResource(R.string.stats_of_sleep), onOpenStats)
                     MoreMenu(
                         listOfNotNull(
-                            MenuEntry(stringResource(R.string.sensitivity_sleep), R.drawable.ic_tune) { viewModel.openSensitivity(null) }
+                            MenuEntry(R.string.sensitivity_sleep, R.drawable.ic_tune) { viewModel.openSensitivity(null) }
                                 .takeIf { state.sensitivityAvailable },
                             MenuEntry(
-                                stringResource(
-                                    if (transcription.nothingRecognised) R.string.run_speech_recognition else R.string.run_speech_recognition_again,
-                                ),
+                                if (transcription.nothingRecognised) R.string.run_speech_recognition else R.string.run_speech_recognition_again,
                                 R.drawable.ic_subtitles,
                                 enabled = transcription.canRun,
                                 onClick = viewModel::runSpeechRecognition,
@@ -191,9 +196,13 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                 LaunchedEffect(autoZoom, current?.id) {
                     if (autoZoom && current != null) window = window.framing(timeline.clockOf(current.start), timeline.clockOf(current.end))
                 }
-                if (autoZoom && player.playing) {
-                    val followed = window.following(timeline.clockOf(player.position))
-                    if (followed != window) SideEffect { window = followed }
+                LaunchedEffect(autoZoom, player.playing, timeline) {
+                    if (autoZoom && player.playing) {
+                        snapshotFlow { positionState.value }.collect { at ->
+                            val followed = window.following(timeline.clockOf(at))
+                            if (followed != window) window = followed
+                        }
+                    }
                 }
 
                 Column(Modifier.padding(horizontal = 12.dp)) {
@@ -202,7 +211,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                         loudness = state.loudness,
                         events = state.timelineEvents,
                         unavailable = state.unavailable,
-                        position = player.position,
+                        position = position,
                         window = window,
                         onWindowChange = {
                             window = it
@@ -216,6 +225,8 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     )
                     Player(
                         player,
+                        timeline,
+                        position,
                         onTogglePlay = viewModel::togglePlay,
                         onNextSpeed = viewModel::nextSpeed,
                         onCutChange = viewModel::setCut,
@@ -256,7 +267,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     SensitivitySheet(
                         state = sheet,
                         timeline = timeline,
-                        position = player.position,
+                        position = position,
                         onThreshold = viewModel::setSensitivity,
                         onReset = viewModel::resetSensitivity,
                         onListen = viewModel::listenToSensitivity,
@@ -269,8 +280,8 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
     }
 }
 
-/** An entry of a [MoreMenu]. */
-private class MenuEntry(val label: String, @DrawableRes val icon: Int, val enabled: Boolean = true, val onClick: () -> Unit)
+/** An entry of a [MoreMenu]; its [label] is a string resource, read only while the menu is open. */
+private class MenuEntry(@StringRes val label: Int, @DrawableRes val icon: Int, val enabled: Boolean = true, val onClick: () -> Unit)
 
 /** A "more options" button with the menu [entries]; nothing without entries. */
 @Composable
@@ -284,7 +295,7 @@ private fun MoreMenu(entries: List<MenuEntry>) {
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             for (entry in entries) {
                 DropdownMenuItem(
-                    text = { Text(entry.label) },
+                    text = { Text(stringResource(entry.label)) },
                     leadingIcon = { Icon(painterResource(entry.icon), contentDescription = null) },
                     enabled = entry.enabled,
                     onClick = {
@@ -306,11 +317,14 @@ private fun eventSummary(sleep: SleepSummary): String? = when {
 }
 
 @Composable
-private fun Player(player: PlayerUiState, onTogglePlay: () -> Unit, onNextSpeed: () -> Unit, onCutChange: (Boolean) -> Unit) {
-    val clock = LocalClockFormatter.current
-    val zone = ZoneId.systemDefault()
-    val numbers = TextStyle(fontFeatureSettings = "tnum")
-
+private fun Player(
+    player: PlayerUiState,
+    timeline: SleepTimeline,
+    position: () -> Duration,
+    onTogglePlay: () -> Unit,
+    onNextSpeed: () -> Unit,
+    onCutChange: (Boolean) -> Unit,
+) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
         FilledIconButton(
             onClick = onTogglePlay,
@@ -325,17 +339,7 @@ private fun Player(player: PlayerUiState, onTogglePlay: () -> Unit, onNextSpeed:
             )
         }
         Spacer(Modifier.width(16.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                player.clock?.let { clock.format(it, zone, seconds = true) }.orEmpty(),
-                style = MaterialTheme.typography.titleLarge.merge(numbers),
-            )
-            Text(
-                stringResource(R.string.position_short, formatPosition(player.position)),
-                style = MaterialTheme.typography.bodyMedium.merge(numbers),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        PlayerPosition(timeline, position, Modifier.weight(1f))
     }
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
         PlaybackMode(cut = player.cut, enabled = player.hasAudio, onCutChange = onCutChange, modifier = Modifier.weight(1f))
@@ -355,6 +359,28 @@ private fun Player(player: PlayerUiState, onTogglePlay: () -> Unit, onNextSpeed:
             style = MaterialTheme.typography.bodyMedium,
             color = if (player.failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+        )
+    }
+}
+
+/**
+ * The clock time and position of the playhead. It reads [position] itself, so only it recomposes
+ * while the position moves.
+ */
+@Composable
+private fun PlayerPosition(timeline: SleepTimeline, position: () -> Duration, modifier: Modifier = Modifier) {
+    val clock = LocalClockFormatter.current
+    val zone = ZoneId.systemDefault()
+    val at = position()
+    Column(modifier) {
+        Text(
+            if (timeline.pieces.isEmpty()) "" else clock.format(timeline.instantAt(at), zone, seconds = true),
+            style = MaterialTheme.typography.titleLarge.merge(Numbers),
+        )
+        Text(
+            stringResource(R.string.position_short, formatPosition(at)),
+            style = MaterialTheme.typography.bodyMedium.merge(Numbers),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -485,40 +511,42 @@ private fun EventRow(
     val clock = LocalClockFormatter.current
     val resources = LocalResources.current
     val colors = MaterialTheme.colorScheme
-    val numbers = TextStyle(fontFeatureSettings = "tnum")
     val time = if (timeline.pieces.isEmpty()) "" else clock.format(timeline.instantAt(event.start), seconds = true)
+    // A hidden event is dimmed, with the grey of silence on the timeline as its colour.
+    val barColor = if (event.hidden) colors.outlineVariant else kindColor(event.kindColor, colors)
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .height(IntrinsicSize.Min)
             .heightIn(min = 64.dp)
             .clickable { onSelect(event) }
             .background(if (current || playing) colors.primary.copy(alpha = 0.1f) else colors.surface)
-            .padding(start = 16.dp, end = 4.dp),
+            // The colour bar along the row's height, drawn rather than laid out, which would need
+            // the row's intrinsic height and so measure every row twice.
+            .drawBehind {
+                val inset = 10.dp.toPx()
+                drawRoundRect(
+                    barColor,
+                    topLeft = Offset(ROW_START.toPx(), inset),
+                    size = Size(BAR_WIDTH.toPx(), (size.height - 2 * inset).coerceAtLeast(0f)),
+                    cornerRadius = CornerRadius(2.dp.toPx()),
+                )
+            }
+            .padding(start = ROW_START, end = 4.dp),
     ) {
-        // A hidden event is dimmed, with the grey of silence on the timeline as its colour.
-        Box(
-            Modifier
-                .padding(vertical = 10.dp)
-                .width(4.dp)
-                .fillMaxHeight()
-                .clip(RoundedCornerShape(2.dp))
-                .background(if (event.hidden) colors.outlineVariant else kindColor(event.kindColor, colors)),
-        )
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(BAR_WIDTH + 12.dp))
         Column(Modifier.weight(1f).padding(vertical = 8.dp).alpha(if (event.hidden) 0.6f else 1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     stringResource(R.string.event_heading, time, formatEventLength(resources, event.end - event.start)),
-                    style = MaterialTheme.typography.titleSmall.merge(numbers),
+                    style = MaterialTheme.typography.titleSmall.merge(Numbers),
                 )
                 if (event.hidden) HiddenTag()
             }
             Text(
                 stringResource(R.string.event_details, kindName(event.kindId, event.kindName), formatPosition(event.start)),
-                style = MaterialTheme.typography.bodySmall.merge(numbers),
+                style = MaterialTheme.typography.bodySmall.merge(Numbers),
                 color = colors.onSurfaceVariant,
             )
             TranscriptLine(
@@ -546,16 +574,21 @@ private fun EventRow(
         }
         MoreMenu(
             listOfNotNull(
-                MenuEntry(stringResource(R.string.hide_event), R.drawable.ic_visibility_off) { onHide(event, true) }
-                    .takeUnless { event.hidden },
-                onSensitivity?.let { MenuEntry(stringResource(R.string.sensitivity_here), R.drawable.ic_tune) { it(event) } },
-                MenuEntry(stringResource(R.string.correct_text), R.drawable.ic_edit) { onCorrect(event) }.takeIf { event.isSpeech },
-                MenuEntry(stringResource(R.string.not_speech_plain_event), R.drawable.ic_voice_over_off) { onNotSpeech(event) }
-                    .takeIf { event.isSpeech },
+                MenuEntry(R.string.hide_event, R.drawable.ic_visibility_off) { onHide(event, true) }.takeUnless { event.hidden },
+                onSensitivity?.let { MenuEntry(R.string.sensitivity_here, R.drawable.ic_tune) { it(event) } },
+                MenuEntry(R.string.correct_text, R.drawable.ic_edit) { onCorrect(event) }.takeIf { event.isSpeech },
+                MenuEntry(R.string.not_speech_plain_event, R.drawable.ic_voice_over_off) { onNotSpeech(event) }.takeIf { event.isSpeech },
             ),
         )
     }
 }
+
+/** Tabular figures, so times and positions keep their width as they change. */
+private val Numbers = TextStyle(fontFeatureSettings = "tnum")
+
+/** The space before an event row's colour bar, and the bar's width. */
+private val ROW_START = 16.dp
+private val BAR_WIDTH = 4.dp
 
 /** The small "hidden" tag after a hidden event's time. */
 @Composable

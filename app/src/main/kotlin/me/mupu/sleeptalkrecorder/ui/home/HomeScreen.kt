@@ -39,8 +39,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
@@ -204,23 +204,29 @@ private fun RecordButton(recording: Boolean, onClick: () -> Unit) {
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(212.dp)) {
         if (recording) {
             val pulse = rememberInfiniteTransition(label = "pulse")
-            val scale by pulse.animateFloat(
+            val scale = pulse.animateFloat(
                 initialValue = 0.95f,
                 targetValue = 1.12f,
                 animationSpec = infiniteRepeatable(tween(2_000), RepeatMode.Restart),
                 label = "scale",
             )
-            val alpha by pulse.animateFloat(
+            val alpha = pulse.animateFloat(
                 initialValue = 0.5f,
                 targetValue = 0f,
                 animationSpec = infiniteRepeatable(tween(2_000), RepeatMode.Restart),
                 label = "alpha",
             )
+            // The animated values are read in the layer, so the pulse only redraws the ring and
+            // never recomposes the screen, for as long as the recording runs.
             Box(
                 Modifier
                     .size(196.dp)
-                    .scale(scale)
-                    .border(3.dp, colors.error.copy(alpha = alpha), CircleShape),
+                    .graphicsLayer {
+                        scaleX = scale.value
+                        scaleY = scale.value
+                        this.alpha = alpha.value
+                    }
+                    .border(3.dp, colors.error, CircleShape),
             )
         }
         Surface(

@@ -47,3 +47,28 @@ private val AnnotationOrigin.rank: Int
         AnnotationOrigin.SERVER -> 1
         AnnotationOrigin.DEVICE -> 2
     }
+
+/**
+ * The finished sleeps of [summaries] whose events are found, in their order, each with its
+ * [recordings] and its [events] with their winning [transcripts]: the readings of all sleeps at
+ * once, as the stats count them, put together by sleep.
+ */
+fun storedSleeps(
+    summaries: List<SleepSummary>,
+    recordings: List<RecordingEntity>,
+    events: List<SleepEventOf>,
+    transcripts: List<AnnotationEntity>,
+    kinds: List<EventKindEntity>,
+): List<StoredSleep> {
+    val recordingsBySleep = recordings.groupBy { it.sleepId }
+    val eventsBySleep = events.groupBy({ it.sleepId }, { it.event })
+    val transcriptsBySleep = transcripts.groupBy { it.sleepId }
+    val kindsById = kinds.associateBy { it.id }
+    return summaries.filter { !it.isRunning && it.eventsFound }.map { summary ->
+        StoredSleep(
+            summary,
+            recordingsBySleep[summary.id].orEmpty(),
+            withTranscripts(eventsBySleep[summary.id].orEmpty(), transcriptsBySleep[summary.id].orEmpty(), kindsById),
+        )
+    }
+}

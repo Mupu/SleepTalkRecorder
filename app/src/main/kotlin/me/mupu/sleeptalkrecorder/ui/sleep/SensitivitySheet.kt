@@ -68,7 +68,7 @@ import kotlin.math.roundToInt
 fun SensitivitySheet(
     state: SensitivityUiState,
     timeline: SleepTimeline,
-    position: Duration,
+    position: () -> Duration,
     onThreshold: (Float) -> Unit,
     onReset: () -> Unit,
     onListen: () -> Unit,
@@ -161,7 +161,7 @@ fun SensitivitySheet(
  * is outlined, and clock times label the axis.
  */
 @Composable
-private fun SensitivityChartView(state: SensitivityUiState, position: Duration, clockAt: (Duration) -> String) {
+private fun SensitivityChartView(state: SensitivityUiState, position: () -> Duration, clockAt: (Duration) -> String) {
     val colors = MaterialTheme.colorScheme
     val textMeasurer = rememberTextMeasurer()
     val labelStyle = TextStyle(fontSize = 10.sp, color = colors.onSurfaceVariant, fontFeatureSettings = "tnum")
@@ -218,7 +218,7 @@ private fun SensitivityChartView(state: SensitivityUiState, position: Duration, 
             )
         }
 
-        val playhead = editor.shareOf(position)
+        val playhead = editor.shareOf(position())
         if (playhead in 0f..1f) {
             drawRect(colors.onSurface, topLeft = Offset(playhead * size.width - 1.dp.toPx(), 0f), size = Size(2.dp.toPx(), top + plot.height))
         }

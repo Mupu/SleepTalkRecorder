@@ -41,11 +41,31 @@ class FeatureTracksTest {
         assertEquals(1, track.speech[0].toInt())
     }
 
-    private fun record(samples: Int, chunkSamples: Long): TimelineRecording {
-        val clock = RecordingClock(Instant.EPOCH, 16_000)
-        ChunkedWavWriter(folder.root, 16_000, chunkSamples).use { wav ->
-            wav.write(ShortArray(samples) { (it % 50 * 200).toShort() }, samples)
+    @Test
+    fun `a track cut short is completed from the audio after it, as a full extraction would be`() {
+        // 30 whole hops over three chunk files; the stored track ends after 11 of them.
+        val recording = record(samples = 9_700, chunkSamples = 4_000)
+        val full = loadFeatureTrack(folder.newFolder(), record(samples = 9_700, chunkSamples = 4_000, into = folder.newFolder()))
+        val file = File(folder.root, FeatureTrackFile.FILE_NAME)
+        FeatureTrackFile.Writer(file).use { writer ->
+            for (hop in 0 until 11) writer.write(ByteArray(8) { feature -> if (feature == 0) 1 else full.speech[hop] })
         }
-        return TimelineRecording.read(clock, samples.toLong(), folder.root)
+
+        val track = loadFeatureTrack(folder.root, recording)
+
+        // The stored hops are kept as they are (their first column marks them), the others extracted.
+        assertEquals(30, track.size)
+        assertEquals(List(11) { 1.toByte() }, track.rms.take(11))
+        assertArrayEquals(full.rms.copyOfRange(11, 30), track.rms.copyOfRange(11, 30))
+        assertArrayEquals(full.voicing.copyOfRange(11, 30), track.voicing.copyOfRange(11, 30))
+        assertEquals(30, FeatureTrackFile.read(file)!!.size)
+    }
+
+    private fun record(samples: Int, chunkSamples: Long, into: File = folder.root): TimelineRecording {
+        val clock = RecordingClock(Instant.EPOCH, 16_000)
+        ChunkedWavWriter(into, 16_000, chunkSamples).use { wav ->
+            wav.write(ShortArray(samples) { (it % 50 * 200 + it / 7 % 13 * 300).toShort() }, samples)
+        }
+        return TimelineRecording.read(clock, samples.toLong(), into)
     }
 }

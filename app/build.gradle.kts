@@ -171,6 +171,11 @@ android {
         release {
             signingConfig = signingConfigs.findByName("release")
             ndk { abiFilters += "arm64-v8a" }
+            // R8 shrinks and optimises the code and drops unused resources, which starts the app
+            // faster; proguard-rules.pro keeps what is reached only from native code.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         debug {
             ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
