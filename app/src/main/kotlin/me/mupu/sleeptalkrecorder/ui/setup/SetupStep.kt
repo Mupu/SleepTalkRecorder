@@ -18,6 +18,9 @@ enum class SetupStep(private val finished: Setting<Boolean>) {
 
     /** Microphone, notifications, battery optimisation and the vendor's own app killers. */
     PERMISSIONS(Settings.permissionsReviewed),
+
+    /** The speech recognition model, downloaded in the background or left for later. */
+    MODEL(Settings.modelOffered),
     ;
 
     /** Marks this step as done, which shows the next one. */

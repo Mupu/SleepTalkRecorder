@@ -1,4 +1,9 @@
+import java.io.File
 import java.io.StringReader
+import java.net.URI
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
 import java.util.Properties
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
@@ -45,6 +50,67 @@ val releaseSigningValues: Map<String, String?> = mapOf(
 }
 val missingReleaseSigningValues = releaseSigningValues.filterValues { it == null }.keys
 
+/**
+ * Downloads [url] once into [target] and fails the build unless the file has the SHA-256 [sha256].
+ * A file already there with the right checksum is kept, so only the first build downloads.
+ */
+abstract class VerifiedDownload : DefaultTask() {
+    @get:Input
+    abstract val url: Property<String>
+
+    @get:Input
+    abstract val sha256: Property<String>
+
+    @get:OutputFile
+    abstract val target: RegularFileProperty
+
+    @TaskAction
+    fun download() {
+        val file = target.get().asFile
+        if (file.isFile && sha256Of(file) == sha256.get()) return
+
+        file.parentFile.mkdirs()
+        // A file of its own per download, so parallel builds never write into the same one.
+        val partial = File.createTempFile(file.name, ".part", file.parentFile)
+        try {
+            URI(url.get()).toURL().openStream().use { input -> partial.outputStream().use { input.copyTo(it) } }
+            val actual = sha256Of(partial)
+            if (actual != sha256.get()) {
+                throw GradleException(
+                    "Checksum mismatch for ${url.get()}: expected SHA-256 ${sha256.get()}, got $actual. " +
+                        "The release asset changed; check it and update the pinned checksum in app/build.gradle.kts.",
+                )
+            }
+            Files.move(partial.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        } finally {
+            partial.delete()
+        }
+    }
+
+    private fun sha256Of(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(1 shl 16)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+}
+
+// sherpa-onnx, the speech recognition runtime, is published only as an AAR on its GitHub releases
+// (no Maven artifact). The build downloads the pinned release once into the Gradle user home,
+// which CI caches too, and checks it against the checksum below, so the AAR never enters Git.
+val sherpaOnnxVersion = libs.versions.sherpaOnnx.get()
+val downloadSherpaOnnx = tasks.register<VerifiedDownload>("downloadSherpaOnnx") {
+    url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v$sherpaOnnxVersion/sherpa-onnx-$sherpaOnnxVersion.aar"
+    sha256 = "a8d09d1d32f3eb8520482c6d3d43fae674681c5b050385967c70a3c2c9bf0ee7"
+    target = gradle.gradleUserHomeDir.resolve("caches/sleeptalkrecorder/sherpa-onnx-$sherpaOnnxVersion.aar")
+}
+
 android {
     namespace = "me.mupu.sleeptalkrecorder"
     compileSdk {
@@ -71,9 +137,15 @@ android {
         }
     }
 
+    // sherpa-onnx brings its native libraries for four ABIs, about 30 MB each. Phones the app
+    // targets are arm64; debug builds also keep x86_64 for the emulator.
     buildTypes {
         release {
             signingConfig = signingConfigs.findByName("release")
+            ndk { abiFilters += "arm64-v8a" }
+        }
+        debug {
+            ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         }
     }
 
@@ -113,6 +185,7 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.work.runtime)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(files(downloadSherpaOnnx.flatMap { it.target }))
     ksp(libs.androidx.room.compiler)
     debugImplementation(libs.androidx.compose.ui.tooling)
 

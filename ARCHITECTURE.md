@@ -16,17 +16,18 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 | `playback` | The `SleepTimeline` of a sleep's chunk files and the `SleepPlayer` that plays it | only in `SleepPlayer` (Media3) |
 | `retention` | Automatic deletion: which sleeps are old enough (`SleepRetention`) and the WorkManager job that deletes them | only in `AutoDeletion` (WorkManager) |
 | `settings` | The user's settings and the `SettingsStore` that keeps them; the app language | DataStore; AppCompat only in `AppLanguages` |
+| `models` | The transcription models: the catalogue of downloadable models (`TranscriptionModel`), the `ModelInstaller` that downloads and checks their files, the `ModelLibrary` with their states and the active one, and the WorkManager job that downloads them | only in `ModelDownloadWorker` (WorkManager) |
 | `readiness` | Whether the phone lets a whole night be recorded: the `Requirement`s it misses, the `VendorStep`s of its maker, and the `SystemPage`s that fix them | only in `PhoneReadiness` |
 | `ui` | Navigation, one sub-package per screen (`home`, `library`, `sleep`, `settings`, `setup`), shared `components`, `format` and `theme` | Compose |
 
 The root package holds `MainActivity`, the only activity, and `SleepTalkApplication` with the
 `AppContainer`, which wires the shared objects by hand: the database, the repository, the
-`SettingsStore` and the `Recorder`; it also keeps automatic deletion scheduled and starts the
-search for events of finished sleeps. Logic that can be tested without a device (`time`,
-`detection`, the WAV writer, the recording session, level computation, the sleep timeline, the
-timeline view of the sleep screen, the settings, which sleeps automatic deletion removes) is plain
-Kotlin behind small interfaces (`PcmSource`, `RecordingStore`, `Clocks`) and is unit-tested on the
-JVM.
+`SettingsStore`, the `Recorder` and the `ModelLibrary`; it also keeps automatic deletion scheduled
+and starts the search for events of finished sleeps. Logic that can be tested without a device
+(`time`, `detection`, the WAV writer, the recording session, level computation, the sleep
+timeline, the timeline view of the sleep screen, the settings, which sleeps automatic deletion
+removes, the model downloads and states) is plain Kotlin behind small interfaces (`PcmSource`,
+`RecordingStore`, `Clocks`, `ByteSource`, `ModelDownloads`) and is unit-tested on the JVM.
 
 Screens follow unidirectional data flow: a `ViewModel` combines repository and recorder flows into
 one immutable UI state, and the screen sends user actions back as calls.
@@ -45,7 +46,8 @@ Compose and to the system bars; the time format reaches every screen as the `Clo
 format and the app language. Time settings are picked in Android's own time picker dialog, opened
 with the user's time format and the dialog theme that matches the app's light or dark colors.
 
-The first-start setup is a sequence of `SetupStep`s (the language, then the permissions page), each
+The first-start setup is a sequence of `SetupStep`s (the language, the permissions page, then the
+speech recognition model), each
 finished once with a setting of its own; `MainActivity` shows the first unfinished step instead of
 the app, so a setup left halfway continues where it stopped.
 
@@ -106,6 +108,7 @@ leaves a notification on a channel of its own that says why the recording stoppe
 
 ## Storage
 
+Transcription models are stored in `noBackupFilesDir/models/` ([Transcription models](#transcription-models)).
 Audio of recording `n` is stored in `noBackupFilesDir/recordings/n/` as `0001.wav`, `0002.wav`,
 ... Each chunk file holds 15 minutes, so a damaged file loses little and no file approaches the
 4 GiB WAV limit. Every 10 seconds the writer patches the size fields of the open file's header and
@@ -214,6 +217,32 @@ except where an event lies, with the baseline as a dashed line. The timeline run
 (see [Time model](#time-model)), so gaps between recordings take their real width; they and the
 stretches in which the microphone was unavailable are hatched. `SleepLoudness` keeps maxima of
 16, 256 and 4 096 hops, so every column of the timeline reads only a few values at any zoom.
+
+## Transcription models
+
+Speech is recognised on the phone with sherpa-onnx, whose native libraries are the only part of
+the speech recognition the APK carries; release builds keep only the arm64 libraries. The models
+themselves (Parakeet TDT 0.6B Ultra by default, Whisper small as an alternative) are downloaded
+on demand into `noBackupFilesDir/models/<model>/`, never bundled.
+
+`TranscriptionModel` lists each model's files with their size and SHA-256, downloaded as single
+files from the Hugging Face repository the sherpa-onnx project publishes the model in, pinned to
+one commit. Single files need no decompressor and no room for an archive beside its contents, and
+the pinned commit and checksums keep a file changed upstream from ever being installed.
+`ModelInstaller` writes each file as `<name>.part`, continues a partial file with an HTTP range
+request, and renames it only once its checksum matched, so a file under its own name is always
+complete and checked, and a model is installed when all its files are. A wrong checksum deletes
+the file and fails the download; it is not retried on its own, because a changed file would fail
+again.
+
+Each model downloads in a unique WorkManager job that waits for a network connection and runs as
+a foreground service of type `dataSync` with a progress notification. A lost connection retries
+the job with back-off, continuing where the files stopped; cancelling a running download deletes
+what it downloaded.
+`ModelLibrary` combines the jobs' progress with the files on disk into each model's state. The
+active model is a setting that only ever names an installed model, unless none is installed: the
+first model installed becomes active, and deleting the active model hands over to another
+installed one. The transcript language is shown only while the active model needs one.
 
 ## Playback
 

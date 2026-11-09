@@ -120,6 +120,30 @@
     <!-- A length in seconds with one decimal: "1.5 s". -->
     <string name="seconds_decimal">%1$.1f s</string>
 
+    <!-- Settings: speech recognition -->
+    <string name="settings_transcription">Speech recognition</string>
+    <string name="settings_models_hint">The app recognises speech on the phone. It uses the internet only to download models; recordings never leave the phone.</string>
+    <string name="settings_transcript_language">Transcript language</string>
+    <string name="settings_transcript_language_hint">Your language. English is always recognised as well.</string>
+    <string name="transcript_language_app">Same as the app</string>
+    <string name="model_languages_parakeet">25 European languages</string>
+    <string name="model_languages_whisper">99 languages, needs your language</string>
+    <string name="model_active">active</string>
+    <string name="model_download">Download</string>
+    <string name="model_waiting">Waiting for a connection…</string>
+    <!-- Bytes done of the total, for example "212 MB of 671 MB". -->
+    <string name="model_progress">%1$s of %2$s</string>
+    <string name="model_failed_network">The download failed. Check the connection and try again.</string>
+    <string name="model_failed_damaged">The download was damaged and was thrown away. Try again.</string>
+    <string name="model_failed_space">There is not enough free space on the phone.</string>
+    <string name="model_try_again">Try again</string>
+    <string name="model_cancel_download">Cancel download</string>
+    <string name="delete_model_title">Delete model?</string>
+    <!-- %1$s is the model's name, %2$s the space it takes, for example "671 MB". -->
+    <string name="delete_model_text">%1$s is removed and frees %2$s. You can download it again later.</string>
+    <!-- A share of a download: "42 %". -->
+    <string name="percent">%1$d %%</string>
+
     <!-- First start. %1$s is the app's name. -->
     <string name="setup_welcome">Welcome to %1$s</string>
     <string name="setup_language_question">Which language should the app use?</string>
@@ -131,6 +155,14 @@
     <string name="setup_permissions_title">To keep the night running</string>
     <string name="setup_permissions_text">The app records the whole night. It needs a few permissions for that.</string>
     <string name="setup_recheck">The app checks this again on every start and shows a hint when something is missing.</string>
+
+    <!-- First start: speech recognition model. %1$s is the size, for example "671 MB". -->
+    <string name="setup_model_title">Recognise speech</string>
+    <string name="setup_model_text">The app finds out on the phone itself whether something was said and what. For that it downloads a speech recognition model once.</string>
+    <string name="setup_model_name">Speech recognition model</string>
+    <string name="setup_model_size">%1$s, Wi-Fi recommended</string>
+    <string name="setup_model_later">Recording works without it; transcripts wait until the model is there. The download goes on in the background, and you can also start it later in the settings.</string>
+    <string name="model_installed">Installed</string>
     <string name="done">Done</string>
     <string name="required">required</string>
     <string name="granted">Done</string>
@@ -168,4 +200,7 @@
     <!-- %1$s is a clock time, for example "12:00". -->
     <string name="notification_stopped_title">Recording stopped at %1$s</string>
     <string name="notification_stopped_text">The latest stop time from the settings was reached.</string>
+    <string name="notification_channel_model">Model download</string>
+    <string name="notification_channel_model_description">Shows the progress while a speech recognition model is downloaded.</string>
+    <string name="notification_model_title">Downloading speech recognition model</string>
 </resources>

@@ -4,6 +4,10 @@ import android.app.Application
 import android.content.Context
 import me.mupu.sleeptalkrecorder.data.SleepDatabase
 import me.mupu.sleeptalkrecorder.data.SleepRepository
+import me.mupu.sleeptalkrecorder.models.HttpByteSource
+import me.mupu.sleeptalkrecorder.models.ModelInstaller
+import me.mupu.sleeptalkrecorder.models.ModelLibrary
+import me.mupu.sleeptalkrecorder.models.WorkManagerDownloads
 import me.mupu.sleeptalkrecorder.readiness.PhoneReadiness
 import me.mupu.sleeptalkrecorder.recording.Recorder
 import me.mupu.sleeptalkrecorder.retention.AutoDeletion
@@ -46,6 +50,12 @@ class AppContainer(context: Context) {
 
     /** Starts and stops recordings and publishes their state. */
     val recorder = Recorder(context)
+
+    /** Downloads and keeps the transcription models in `noBackupFilesDir`, like the recordings. */
+    val modelInstaller = ModelInstaller(File(context.noBackupFilesDir, "models"), HttpByteSource)
+
+    /** The transcription models, their downloads and the active one. */
+    val modelLibrary = ModelLibrary(modelInstaller, WorkManagerDownloads(context), settings)
 
     /** Whether the phone's permissions and battery settings let a whole night be recorded. */
     val readiness = PhoneReadiness(context)

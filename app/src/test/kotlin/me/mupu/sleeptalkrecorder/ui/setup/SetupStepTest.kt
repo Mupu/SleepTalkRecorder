@@ -30,6 +30,9 @@ class SetupStepTest {
         assertEquals(SetupStep.PERMISSIONS, SetupStep.current(store).first())
 
         SetupStep.PERMISSIONS.finish(store)
+        assertEquals(SetupStep.MODEL, SetupStep.current(store).first())
+
+        SetupStep.MODEL.finish(store)
         assertNull(SetupStep.current(store).first())
     }
 

@@ -11,6 +11,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Only for downloading transcription models; recordings never leave the phone. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Lets the setup ask for the battery optimisation exemption in one system dialog. Google
          Play allows this only for a few kinds of apps; this app is installed directly. -->
     <uses-permission
@@ -49,6 +52,12 @@
             android:name=".recording.RecordingService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <!-- WorkManager's foreground service, which runs model downloads with a progress notification. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
 
         <!-- Keeps the per-app language on Android 12, where the system has no setting for it. -->
         <service

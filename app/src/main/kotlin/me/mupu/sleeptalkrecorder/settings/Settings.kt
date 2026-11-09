@@ -1,5 +1,6 @@
 package me.mupu.sleeptalkrecorder.settings
 
+import me.mupu.sleeptalkrecorder.models.TranscriptionModel
 import java.time.Duration
 import java.time.LocalTime
 
@@ -32,6 +33,15 @@ object Settings {
 
     /** Whether the app asked for the notification permission before, like [microphoneAsked]. */
     val notificationsAsked = booleanSetting("notifications_asked", false)
+
+    /** Whether the first-start page offering the speech recognition model was finished. */
+    val modelOffered = booleanSetting("model_offered", false)
+
+    /** The model transcripts are written with; see `ModelLibrary` for when it changes on its own. */
+    val transcriptionModel = enumSetting("transcription_model", TranscriptionModel.DEFAULT)
+
+    /** The user's own language, for models that need it; English is always recognised as well. */
+    val transcriptLanguage = enumSetting("transcript_language", TranscriptLanguage.APP)
 
     /** How much of the sound before an event cut playback plays. */
     val leadIn = durationSetting("lead_in_ms", Duration.ofMillis(1500), Duration.ZERO..Duration.ofSeconds(3))
@@ -71,4 +81,24 @@ enum class TimeFormat {
 
     /** 12:00 AM to 11:59 PM. */
     HOURS_12,
+}
+
+/**
+ * The language a transcription model listens for besides English, for models that need one
+ * (`TranscriptionModel.needsLanguage`). [code] is its ISO 639-1 code.
+ */
+enum class TranscriptLanguage(val code: String?, val nativeName: String?) {
+    /** The app's language. */
+    APP(null, null),
+    GERMAN("de", "Deutsch"),
+    ENGLISH("en", "English"),
+    SPANISH("es", "Español"),
+    FRENCH("fr", "Français"),
+    ITALIAN("it", "Italiano"),
+    DUTCH("nl", "Nederlands"),
+    POLISH("pl", "Polski"),
+    PORTUGUESE("pt", "Português"),
+    TURKISH("tr", "Türkçe"),
+    UKRAINIAN("uk", "Українська"),
+    RUSSIAN("ru", "Русский"),
 }

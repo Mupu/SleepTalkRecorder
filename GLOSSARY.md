@@ -44,6 +44,10 @@ _Avoid_: Mumble (in code), noise
 Text of what was said in a speech event, written by a transcription model and correctable by the user; may be incomplete or wrong.
 _Avoid_: Subtitle, caption
 
+**Transcription model**:
+The speech recognition model that writes transcripts on the phone; downloaded once, and one installed model is the active one.
+_Avoid_: Engine, AI
+
 **Baseline**:
 The background loudness of a sleep at a given moment, tracked over time, against which events are found.
 _Avoid_: Noise floor (in the UI), threshold

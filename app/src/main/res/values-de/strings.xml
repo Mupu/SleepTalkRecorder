@@ -105,6 +105,27 @@
     </plurals>
     <string name="seconds_decimal">%1$.1f s</string>
 
+    <!-- Settings: speech recognition -->
+    <string name="settings_transcription">Spracherkennung</string>
+    <string name="settings_models_hint">Die App erkennt Sprache auf dem Telefon. Das Internet nutzt sie nur, um Modelle zu laden; Aufnahmen verlassen nie das Telefon.</string>
+    <string name="settings_transcript_language">Sprache des Transkripts</string>
+    <string name="settings_transcript_language_hint">Deine Sprache. Englisch wird immer mit erkannt.</string>
+    <string name="transcript_language_app">Wie die App</string>
+    <string name="model_languages_parakeet">25 europäische Sprachen</string>
+    <string name="model_languages_whisper">99 Sprachen, braucht deine Sprache</string>
+    <string name="model_active">aktiv</string>
+    <string name="model_download">Laden</string>
+    <string name="model_waiting">Wartet auf eine Verbindung…</string>
+    <string name="model_progress">%1$s von %2$s</string>
+    <string name="model_failed_network">Das Laden ist fehlgeschlagen. Prüfe die Verbindung und versuche es erneut.</string>
+    <string name="model_failed_damaged">Der Download war beschädigt und wurde verworfen. Versuche es erneut.</string>
+    <string name="model_failed_space">Auf dem Telefon ist nicht genug Speicher frei.</string>
+    <string name="model_try_again">Erneut versuchen</string>
+    <string name="model_cancel_download">Download abbrechen</string>
+    <string name="delete_model_title">Modell löschen?</string>
+    <string name="delete_model_text">%1$s wird entfernt und gibt %2$s frei. Du kannst es später erneut laden.</string>
+    <string name="percent">%1$d %%</string>
+
     <!-- First start -->
     <string name="setup_welcome">Willkommen bei %1$s</string>
     <string name="setup_language_question">Welche Sprache soll die App sprechen?</string>
@@ -116,6 +137,14 @@
     <string name="setup_permissions_title">Damit die Nacht durchläuft</string>
     <string name="setup_permissions_text">Die App nimmt die ganze Nacht auf. Dafür braucht sie ein paar Freigaben.</string>
     <string name="setup_recheck">Bei jedem Start prüft die App das erneut und zeigt einen Hinweis, wenn etwas fehlt.</string>
+
+    <!-- Erster Start: Spracherkennungsmodell -->
+    <string name="setup_model_title">Sprache erkennen</string>
+    <string name="setup_model_text">Ob und was gesagt wurde, findet die App auf dem Telefon selbst heraus. Dafür lädt sie einmal ein Spracherkennungsmodell.</string>
+    <string name="setup_model_name">Spracherkennungsmodell</string>
+    <string name="setup_model_size">%1$s, WLAN empfohlen</string>
+    <string name="setup_model_later">Aufnehmen geht auch ohne; Transkripte warten, bis das Modell da ist. Der Download läuft im Hintergrund weiter, und du kannst ihn auch später in den Einstellungen starten.</string>
+    <string name="model_installed">Installiert</string>
     <string name="done">Fertig</string>
     <string name="required">nötig</string>
     <string name="granted">Erledigt</string>
@@ -152,4 +181,7 @@
     <string name="notification_channel_stopped_description">Sagt dir, wenn eine Aufnahme zur spätesten Stoppzeit beendet wurde.</string>
     <string name="notification_stopped_title">Aufnahme um %1$s gestoppt</string>
     <string name="notification_stopped_text">Die späteste Stoppzeit aus den Einstellungen war erreicht.</string>
+    <string name="notification_channel_model">Modell-Download</string>
+    <string name="notification_channel_model_description">Zeigt den Fortschritt, während ein Spracherkennungsmodell geladen wird.</string>
+    <string name="notification_model_title">Spracherkennungsmodell wird geladen</string>
 </resources>

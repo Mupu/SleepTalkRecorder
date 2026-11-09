@@ -21,6 +21,8 @@ import me.mupu.sleeptalkrecorder.ui.format.ClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
 import me.mupu.sleeptalkrecorder.ui.setup.LanguageQuestionScreen
 import me.mupu.sleeptalkrecorder.ui.setup.LanguageQuestionViewModel
+import me.mupu.sleeptalkrecorder.ui.setup.ModelSetupScreen
+import me.mupu.sleeptalkrecorder.ui.setup.ModelSetupViewModel
 import me.mupu.sleeptalkrecorder.ui.setup.PermissionsPlace
 import me.mupu.sleeptalkrecorder.ui.setup.PermissionsScreen
 import me.mupu.sleeptalkrecorder.ui.setup.PermissionsViewModel
@@ -70,6 +72,8 @@ class MainActivity : AppCompatActivity() {
                                 onDone = permissions::finishSetupStep,
                             )
                         }
+                        SetupStep.MODEL ->
+                            ModelSetupScreen(viewModel { ModelSetupViewModel(container.settings, container.modelLibrary) })
                     }
                 }
             }

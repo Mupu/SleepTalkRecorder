@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -23,7 +25,10 @@ import me.mupu.sleeptalkrecorder.settings.TimeFormat
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
 
-/** The settings screen: appearance (theme, language, time format), recording and cut playback. */
+/**
+ * The settings screen: appearance (theme, language, time format), recording, cut playback and the
+ * speech recognition models.
+ */
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -112,6 +117,30 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 range = Settings.tail.range,
                 onChange = { viewModel.set(Settings.tail, it) },
             )
+
+            SettingsSection(stringResource(R.string.settings_transcription))
+            Text(
+                stringResource(R.string.settings_models_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 56.dp, end = 16.dp, bottom = 8.dp),
+            )
+            if (settings.needsLanguage) {
+                TranscriptLanguageSetting(settings.transcriptLanguage) { viewModel.set(Settings.transcriptLanguage, it) }
+            }
+            settings.models.forEach { status ->
+                ModelRow(
+                    status = status,
+                    onInstall = { viewModel.install(status.model) },
+                    onCancel = { viewModel.cancelDownload(status.model) },
+                    onDelete = { viewModel.askDelete(status.model) },
+                    onActivate = { viewModel.activate(status.model) },
+                )
+            }
+        }
+
+        settings.deleting?.let { model ->
+            DeleteModelDialog(model, onConfirm = viewModel::confirmDelete, onDismiss = viewModel::cancelDelete)
         }
     }
 }

@@ -6,7 +6,8 @@ background with the screen off. In the morning each night is listed, and its pla
 the whole night or a cut version that skips the silence. Every position is shown twice: as time
 into the recording (6:10:00) and as the real time it happened (07:38).
 
-Recordings never leave the phone: there is no account, no network access and no cloud.
+Recordings never leave the phone: there is no account and no cloud. Speech is recognised on the
+phone itself; the app uses the internet only to download its speech recognition models.
 
 ## Architecture
 
@@ -43,6 +44,10 @@ The **full check**, run from the repository root before pushing:
 ./gradlew check assembleDebug
 python tools/check_release.py
 ```
+
+The first build downloads the speech recognition runtime sherpa-onnx, which is published only as an
+AAR on its GitHub releases, into the Gradle user home and fails if its SHA-256 differs from the one
+pinned in `app/build.gradle.kts`.
 
 It passes when the app builds, lint reports no errors, every unit test passes, and
 `CHANGELOG.md` carries the version the commits since the last tag call for. CI runs it on every

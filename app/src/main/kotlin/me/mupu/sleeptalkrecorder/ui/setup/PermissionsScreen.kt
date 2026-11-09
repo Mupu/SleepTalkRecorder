@@ -210,7 +210,7 @@ fun PermissionsScreen(
                 }
                 Spacer(Modifier.weight(1f))
                 Button(onClick = onDone, enabled = Requirement.MICROPHONE !in state.missing) {
-                    Text(stringResource(R.string.done))
+                    Text(stringResource(if (place is PermissionsPlace.Setup) R.string.next else R.string.done))
                 }
             }
         }
