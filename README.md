@@ -48,6 +48,30 @@ It passes when the app builds, lint reports no errors, every unit test passes, a
 `CHANGELOG.md` carries the version the commits since the last tag call for. CI runs it on every
 push to `main` and tags the release ([Git policy](docs/agents/git.md#versions-and-releases)).
 
+### Detector evaluation
+
+`DetectorEvaluationTest` measures the event detector on the labelled test nights under
+`.local/testdata/nights/` (local only, described in `.local/testdata/README.md`). It is skipped
+unless the Gradle property `detectorEvaluation` names the test data directory, so the full check
+and CI never run it; with the property set and no nights there, it fails.
+
+```sh
+./gradlew :app:testDebugUnitTest --tests '*DetectorEvaluationTest' -PdetectorEvaluation=.local/testdata
+```
+
+For each night and each parameter set the test compares (the defaults and alternatives that each
+move one knob), it prints a table and writes `.local/test-output/detector/detector-evaluation.csv`:
+
+- the share of speech-like labels (`speech`, `speech_quiet`, `whisper`, `sleeptalk`,
+  `sleeptalk_real`) an event found, in total and per kind;
+- false events: events that match no label of any kind;
+- how many minutes cut playback of the events takes, with the default lead-in and tail.
+
+An event and a label match when they overlap or lie at most 1 s apart. False events include real
+sounds the labels do not cover, such as the distant speech in the DEMAND room tone and the speed
+changes of the looped fan recording. The first run extracts the feature tracks of all nights
+(one to two minutes) and keeps them in `.local/test-output/detector/tracks/`; later runs take seconds.
+
 ## Installing on a phone
 
 The app is not on Google Play; a release build signed with your own key is installed directly.

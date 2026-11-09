@@ -1,5 +1,6 @@
 import java.io.StringReader
 import java.util.Properties
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 plugins {
     alias(libs.plugins.android.application)
@@ -117,6 +118,23 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+}
+
+// The detector evaluation on the local test nights (DetectorEvaluationTest) runs only when the
+// Gradle property detectorEvaluation names the test data directory; see README.md. It then always
+// runs instead of coming from the build cache, and prints its table.
+val detectorEvaluationData: String? = providers.gradleProperty("detectorEvaluation").orNull
+    ?.let { rootProject.file(it).absolutePath }
+val detectorEvaluationOutput: String = rootProject.file(".local/test-output/detector").absolutePath
+tasks.withType<Test>().configureEach {
+    if (detectorEvaluationData != null) {
+        systemProperty("detectorEvaluation.testdata", detectorEvaluationData)
+        systemProperty("detectorEvaluation.output", detectorEvaluationOutput)
+        outputs.cacheIf { false }
+        outputs.upToDateWhen { false }
+        testLogging.showStandardStreams = true
+        testLogging.exceptionFormat = TestExceptionFormat.FULL
+    }
 }
 
 // An unsigned release APK cannot be installed, so say so after every release build without a key.

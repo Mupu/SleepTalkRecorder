@@ -39,8 +39,8 @@ data class DetectionParams(
     /** An event ends once the sound stays below the stop threshold this long. */
     val hangover: Duration = Duration.ofMillis(300),
     /** Events shorter than this are dropped: at sensitivity 0 and 1. */
-    val minLengthAtLeastSensitive: Duration = Duration.ofMillis(500),
-    val minLengthAtMostSensitive: Duration = Duration.ofMillis(150),
+    val minLengthAtLeastSensitive: Duration = Duration.ofMillis(200),
+    val minLengthAtMostSensitive: Duration = Duration.ofMillis(80),
     /** Events closer together than this are joined into one. */
     val mergeGap: Duration = Duration.ofMillis(1500),
 ) {
@@ -87,7 +87,7 @@ class Detection(
 object EventDetector {
 
     /** Identifies this detector and its rules in stored results; raise it when they change. */
-    const val VERSION = "1"
+    const val VERSION = "2"
 
     /** Finds the events of [track]. */
     fun detect(track: FeatureTrack, params: DetectionParams = DetectionParams()): Detection {

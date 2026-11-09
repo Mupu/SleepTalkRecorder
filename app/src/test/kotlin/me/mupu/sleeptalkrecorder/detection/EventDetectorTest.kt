@@ -32,7 +32,7 @@ class EventDetectorTest {
 
     @Test
     fun `a click shorter than the minimum length is no event`() {
-        val level = floor(minutes = 2, db = -60.0, spread = 1.0).burst(fromSecond = 30.0, seconds = 0.1, db = -30.0)
+        val level = floor(minutes = 2, db = -60.0, spread = 1.0).burst(fromSecond = 30.0, seconds = 0.02, db = -30.0)
 
         assertEquals(emptyList<HopRange>(), EventDetector.detect(trackOf(level)).events)
     }
