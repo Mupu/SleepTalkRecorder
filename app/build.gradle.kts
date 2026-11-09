@@ -201,8 +201,8 @@ kotlin {
     jvmToolchain(21)
 }
 
-// Exported schemas are tracked so that, from the first real release on, every schema change can
-// be checked against them and get a Room migration.
+// Exported schemas are tracked so that every schema change since the first beta release gets a
+// Room migration that is tested against them.
 room {
     schemaDirectory("$projectDir/schemas")
 }

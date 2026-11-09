@@ -2,7 +2,7 @@
 # Runs on every commit. Enable once per clone: git config core.hooksPath .githooks
 # 1. No AI or tool attribution in the message (co-author trailers of assistants, generated-by notes, session links).
 # 2. The release check with the message being written: a feat / fix / perf / breaking commit must come with
-#    the matching CHANGELOG.md section (see docs/agents/git.md#versions-and-releases).
+#    the matching section in every changelog (see docs/agents/git.md#versions-and-releases).
 set -e
 cd "$(git rev-parse --show-toplevel)"
 if grep -v '^#' "$1" | grep -qiE '^co-authored-by:.*(claude|anthropic|copilot|openai|chatgpt|codex|gemini|cursor)|generated (with|by) .*(claude|ai\b|copilot|codex)|claude\.(ai|com)/'; then

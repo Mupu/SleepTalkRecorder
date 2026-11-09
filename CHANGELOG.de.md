@@ -1,0 +1,24 @@
+# Changelog
+
+Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
+Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
+
+## [0.1.0] - 2026-11-09
+
+Die erste Beta: Die App nimmt deine Nächte auf und lässt dich nur das hören, was gesagt wurde.
+
+### Hinzugefügt
+
+- Nimm eine ganze Nacht oder einen Mittagsschlaf im Hintergrund bei ausgeschaltetem Bildschirm auf und stoppe über die Benachrichtigung oder automatisch zu einer spätesten Uhrzeit, die du wählst.
+- Jeder Schlaf steht als Nacht oder Mittagsschlaf in der Bibliothek; du wählst, wann Nacht und Mittagsschlaf beginnen, und eine neue Aufnahme in derselben Nacht setzt sie fort.
+- Spiele einen Schlaf vollständig ab oder nur seine Ereignisse, mit Vorlauf, Nachlauf und sanften Übergängen. Jede Stelle zeigt die Zeit in der Aufnahme und die Uhrzeit, zu der sie geschah.
+- Nach dem Stopp findet die App die Ereignisse der Nacht und zeigt sie auf einer Zeitleiste ihrer Lautstärke, die du zoomen und verschieben kannst.
+- Die Spracherkennung auf dem Handy schreibt auf, was gesagt wurde, und markiert Sprachereignisse; auch ein Murmeln ohne Wörter wird markiert. Lade die Modelle in den Einstellungen herunter, korrigiere einen Text, markiere ein Ereignis als keine Sprache oder lass die Erkennung mit einem anderen Modell erneut laufen.
+- Stelle die Suche für einen ganzen Schlaf oder rund um ein einzelnes Ereignis empfindlicher oder unempfindlicher ein und sieh die gefundenen Ereignisse, während du den Regler bewegst.
+- Blende Ereignisse aus, die du nicht hören willst, und sieh dir die ausgeblendeten noch einmal an.
+- Statistik eines Schlafs und über alle Nächte: wie viele Ereignisse, wie lange und wann du gesprochen hast, im Vergleich mit deinen anderen Nächten.
+- Lösche einen Schlaf durch langes Drücken, oder lass die App Schlafzeiten nach einer Anzahl von Tagen löschen.
+- Eine Einrichtung beim ersten Start fragt nach der Sprache und führt dich durch die Berechtigungen, die eine ganze Nacht braucht, auch durch die zusätzlichen Schritte mancher Handyhersteller; der Startbildschirm warnt, wenn eine fehlt.
+- Eine Aufnahme, die ein Absturz oder ein leerer Akku abgebrochen hat, wird repariert und bleibt erhalten; Lücken und Abschnitte, in denen eine andere App das Mikrofon hatte, werden markiert.
+- Wähle das Design, die Sprache (Deutsch oder Englisch), das Uhrzeitformat sowie Vorlauf und Nachlauf der Ereignisse.
+- Alles bleibt auf dem Handy: Es gibt kein Konto, und das Internet wird nur zum Herunterladen der Spracherkennungsmodelle genutzt.

@@ -5,7 +5,8 @@
 There are no pull requests, but `main` reads as if every issue had been one
 squash-merged pull request: **one commit per issue** (or per wayfinder ticket
 group that makes one feature), with the subject `type(scope): description (#N)`
-naming the issue and an empty body; the details stay on the issue.
+naming the issue and an empty body (except a
+[`Release-As` footer](#versions-and-releases)); the details stay on the issue.
 
 Work on a local branch per issue (`feature/<n>-<slug>`, `fix/<n>-<slug>`,
 `docs/<n>-<slug>`); its commits are free-form. When the work is done and
@@ -21,8 +22,8 @@ git push
 ```
 
 Every commit on `main` is complete on its own: it builds, its checks pass, it
-updates the documents it makes stale and, from 1.0.0 on, carries its
-`CHANGELOG.md` section. The history stays linear; never create merge commits.
+updates the documents it makes stale and, when it releases, carries its
+changelog sections. The history stays linear; never create merge commits.
 Work branches are not pushed unless they need to survive the machine
 ([Prototype branches](#prototype-branches)). Do not rewrite published history on
 `main` (no force-push) without the owner's explicit authorization. A larger
@@ -60,34 +61,53 @@ trailers, generated-by notes or session links.
 The app has one [Semantic Versioning 2.0](https://semver.org/) version: the
 newest `## [X.Y.Z] - YYYY-MM-DD` section of [`CHANGELOG.md`](../../CHANGELOG.md).
 The Gradle build reads `versionName` from there and derives `versionCode` from it,
-so nobody edits a version anywhere else; tags are `vX.Y.Z`.
+so nobody edits a version anywhere else (`versionCode` is
+`major * 1 000 000 + minor * 1 000 + patch`); tags are `vX.Y.Z`.
 
-**Before the first release** the app is in development and shows version `0.0.0`:
-`CHANGELOG.md` stays without sections and no commit needs one. The first release
-is `1.0.0`, the first version the owner uses on their phone for real nights; the
-owner decides when that is, and its section lists what the app can do then.
+**Beta versions 0.x** come first: public releases that real nights are recorded
+with. The first release, `0.1.0`, lists what the app could do at that point; the
+version reaches `1.0.0` only when the owner says so. A commit's type decides the
+release it needs:
 
-**From 1.0.0 on**, a commit's type decides the release it needs:
+| Type | Before 1.0.0 | From 1.0.0 on |
+|---|---|---|
+| any type with `!` or `BREAKING CHANGE` | minor | major |
+| `feat` | minor | minor |
+| `fix`, `perf` | patch | patch |
+| `docs`, `refactor`, `test`, `chore`, `ci`, `build`, `style`, `revert` | none | none |
 
-| Type | Release |
-|---|---|
-| any type with `!` or `BREAKING CHANGE` | major |
-| `feat` | minor |
-| `fix`, `perf` | patch |
-| `docs`, `refactor`, `test`, `chore`, `ci`, `build`, `style`, `revert` | none |
+**1.0.0** is released by the commit the owner names for it, with the footer
+`Release-As: 1.0.0` in its message after an empty line:
 
-Versions are never reset. A commit that needs a release adds its `CHANGELOG.md`
-section in the same commit:
-the version the bump calls for over the last tag, dated with the local date, and
-items under `### Added`, `### Changed`, `### Fixed` and `### Removed`. While the
-newest section is not tagged yet (its CI run failed or it was not pushed), add new
-items to that section, raising its version if the bump grows, instead of opening
-another one. `tools/check_release.py` enforces this in the `commit-msg` hook and
-in CI.
+```sh
+git commit -m "feat: ... (#N)" -m "Release-As: 1.0.0"
+```
+
+The footer sets the version of the release it belongs to; it must be at least the
+version the commits call for. Nothing else leaves 0.x.
+
+Versions are never reset. A commit that needs a release adds its section to every
+changelog in the same commit: the version the commits since the last tag call for,
+dated with the local date, and items under `### Added`, `### Changed`, `### Fixed`
+and `### Removed`. While the newest section is not tagged yet (its CI run failed or
+it was not pushed), add new items to that section, raising its version if the bump
+grows, instead of opening another one.
+
+There is one changelog per app language, with the same sections: `CHANGELOG.md`
+in English, the language of the app's default resources and the source of the
+version, and `CHANGELOG.<lang>.md` for each translated `values-<lang>` folder, so
+far [`CHANGELOG.de.md`](../../CHANGELOG.de.md). A new app language brings its
+changelog with every earlier section translated.
+
+`tools/check_release.py` enforces all of this in the `commit-msg` hook and in CI:
+the newest section is exactly the version the commits since the last tag call for,
+and every changelog has the same section headings, none of them empty. Its rules
+are unit-tested by `tools/test_check_release.py`.
 
 Changelog items are written for the user, because the app shows them under
 "What's new" after an update: what they notice and why it matters, in the app's own
-words, without file paths, class names or ticket numbers.
+words, without file paths, class names or ticket numbers. Each language says it in
+the words of that language's app texts.
 
 ## Checks
 

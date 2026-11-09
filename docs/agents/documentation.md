@@ -21,7 +21,7 @@ architecture, and shows how to build and install it.
 | `docs/adr/` | Hard-to-reverse decisions and their rationale | Delivery history, ticket IDs |
 | `docs/standards/` | Rules code is written and reviewed against | Workflow, tracker mechanics |
 | `docs/agents/` | Tracker, Git, release and documentation mechanics | Product design |
-| `CHANGELOG.md` | Per release, what the user notices; the app shows it under "What's new" | Internal history, file paths, ticket numbers, unannounced work |
+| `CHANGELOG.md`, `CHANGELOG.<lang>.md` | Per release, what the user notices, in each app language; the app shows it under "What's new" | Internal history, file paths, ticket numbers, unannounced work |
 | `README.md` | Purpose, architecture overview, development setup and full check, install on a phone, limitations | Status, test matrices |
 | KDoc | API reference and why-comments | Ticket IDs, progress |
 | GitHub issues | Planning, status, specs, research, decisions below the ADR bar | |

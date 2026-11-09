@@ -22,11 +22,13 @@ Input from files, the microphone, the system or the user never crashes the app.
 A missing permission, a full disk, a killed service or a damaged recording leads
 to a state the app shows and can recover from, never to an uncaught exception.
 
-Until the first release that the owner uses for real nights, a changed design
-replaces the old one directly: no migrations, dual paths or fallbacks exist only to
-keep earlier development state working. From then on, recordings and their
-metadata survive every update: a changed schema gets a Room migration, never a
-destructive fallback.
+Until the first beta release (0.1.0), a changed design replaced the old one
+directly. Since then real nights are recorded with released versions, so
+recordings and their metadata survive every update: every schema change gets a
+Room migration (an auto-migration where it fits, a manual one otherwise) with a
+test that migrates from the previous schema exported in `app/schemas/`, never a
+destructive fallback. No dual paths or fallbacks exist only to keep unreleased
+development state working.
 
 Keep implementation private to its feature until actual reuse justifies
 extraction; no speculative shared abstractions.

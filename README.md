@@ -42,6 +42,7 @@ The **full check**, run from the repository root before pushing:
 
 ```sh
 ./gradlew check assembleDebug
+python -m unittest discover -s tools
 python tools/check_release.py
 ```
 
@@ -49,10 +50,11 @@ The first build downloads the speech recognition runtime sherpa-onnx, which is p
 AAR on its GitHub releases, into the Gradle user home and fails if its SHA-256 differs from the one
 pinned in `app/build.gradle.kts`.
 
-It passes when the app builds, lint reports no errors, every unit test passes, and
-`CHANGELOG.md` carries the version the commits since the last tag call for. CI runs it on every
-push to `main`, tags the release ([Git policy](docs/agents/git.md#versions-and-releases)) and
-attaches the signed APK ([Installing on a phone](#installing-on-a-phone)).
+It passes when the app builds, lint reports no errors, every unit test of the app and of the
+release check passes, and the changelog of every app language carries the version the commits since
+the last tag call for. CI runs it on every push to `main`, tags the release
+([Git policy](docs/agents/git.md#versions-and-releases)) and attaches the signed APK
+([Installing on a phone](#installing-on-a-phone)).
 
 ### Detector evaluation
 
@@ -230,4 +232,5 @@ An update needs the same key and a version at least as high as the installed one
 - [`ARCHITECTURE.md`](ARCHITECTURE.md): how the app is built.
 - [`docs/standards/`](docs/standards/code.md): how code is written and reviewed.
 - [`docs/agents/`](docs/agents/git.md): Git policy, releases, issue tracker and documentation rules.
-- [`CHANGELOG.md`](CHANGELOG.md): what changed for users; the app shows it under "What's new".
+- [`CHANGELOG.md`](CHANGELOG.md) and [`CHANGELOG.de.md`](CHANGELOG.de.md): what changed for users
+  in each beta and release, in every app language; the app shows it under "What's new".
