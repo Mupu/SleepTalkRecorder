@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.1.1] - 2026-11-10
+
+### Fixed
+
+- On phones with DuraSpeed, the setup now tells you to search the settings for “DuraSpeed”, because the app cannot open that page directly.
+
 ## [0.1.0] - 2026-11-09
 
 The first beta: the app records your nights and lets you hear only what was said.

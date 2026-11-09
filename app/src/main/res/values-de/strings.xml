@@ -308,7 +308,7 @@
     <string name="vendor_xiaomi_battery">Xiaomi: Akkusparmodus</string>
     <string name="vendor_xiaomi_battery_hint">Stelle den Akkusparmodus von %1$s auf Keine Einschränkungen.</string>
     <string name="vendor_duraspeed">DuraSpeed</string>
-    <string name="vendor_duraspeed_hint">DuraSpeed beendet Apps im Hintergrund. Öffne DuraSpeed in den Einstellungen und schalte es aus oder erlaube dort %1$s.</string>
+    <string name="vendor_duraspeed_hint">DuraSpeed beendet Apps im Hintergrund. Suche in den Einstellungen nach „DuraSpeed“ und schalte es aus oder erlaube dort %1$s.</string>
     <string name="vendor_fallback">Dein Telefon hat diese Seite nicht direkt geöffnet. Suche die Einstellung auf der Seite, die sich geöffnet hat.</string>
 
     <!-- Home banner while a permission or the battery exemption is missing. -->

@@ -348,7 +348,7 @@
     <string name="vendor_xiaomi_battery">Xiaomi: battery saver</string>
     <string name="vendor_xiaomi_battery_hint">Set the battery saver of %1$s to No restrictions.</string>
     <string name="vendor_duraspeed">DuraSpeed</string>
-    <string name="vendor_duraspeed_hint">DuraSpeed stops apps in the background. Open DuraSpeed in the settings and turn it off, or allow %1$s there.</string>
+    <string name="vendor_duraspeed_hint">DuraSpeed stops apps in the background. In the settings, search for “DuraSpeed” and turn it off, or allow %1$s there.</string>
     <string name="vendor_fallback">Your phone did not open this page directly. Look for the setting on the page that opened.</string>
 
     <!-- Home banner while a permission or the battery exemption is missing. -->
