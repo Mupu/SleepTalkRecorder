@@ -8,7 +8,6 @@ import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
-import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -51,6 +50,7 @@ import me.mupu.sleeptalkrecorder.settings.Settings
 import me.mupu.sleeptalkrecorder.settings.SettingsStore
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
+import me.mupu.sleeptalkrecorder.ui.components.texts
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -237,13 +237,7 @@ private fun ask(activity: Activity, permission: String, askedBefore: Boolean, la
 
 @Composable
 private fun RequirementRow(requirement: Requirement, met: Boolean, onAllow: () -> Unit) {
-    val (icon, title, why, button) = when (requirement) {
-        Requirement.MICROPHONE -> RowTexts(R.drawable.ic_mic, R.string.requirement_microphone, R.string.requirement_microphone_why, R.string.allow)
-        Requirement.NOTIFICATIONS ->
-            RowTexts(R.drawable.ic_notifications, R.string.requirement_notifications, R.string.requirement_notifications_why, R.string.allow)
-        Requirement.BATTERY_OPTIMISATION ->
-            RowTexts(R.drawable.ic_battery, R.string.requirement_battery, R.string.requirement_battery_why, R.string.allow_exemption)
-    }
+    val (icon, title, why, button) = requirement.texts
     SetupRow(
         icon = if (met) R.drawable.ic_check_circle else icon,
         done = met,
@@ -290,13 +284,6 @@ private fun VendorStepRow(step: VendorStep, opened: Boolean, fellBack: Boolean, 
         }
     }
 }
-
-private data class RowTexts(
-    @param:DrawableRes val icon: Int,
-    @param:StringRes val title: Int,
-    @param:StringRes val why: Int,
-    @param:StringRes val button: Int,
-)
 
 /** One card of the page: an icon, a title, why it matters, and what to do below. */
 @Composable

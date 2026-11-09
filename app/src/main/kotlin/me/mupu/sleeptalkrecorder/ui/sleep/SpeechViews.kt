@@ -49,9 +49,12 @@ import me.mupu.sleeptalkrecorder.transcription.ModelChange
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionStatus
 import me.mupu.sleeptalkrecorder.transcription.WaitReason
 
-/** Whether speech recognition can be started on the sleep: it has events and none is being recognised. */
+/**
+ * Whether speech recognition can be started on the sleep: it is on, the sleep has events and none
+ * is being recognised.
+ */
 internal val TranscriptionStatus.canRun: Boolean
-    get() = this != TranscriptionStatus.NoEvents && this !is TranscriptionStatus.Running
+    get() = this != TranscriptionStatus.NoEvents && this != TranscriptionStatus.Off && this !is TranscriptionStatus.Running
 
 /** Whether speech recognition has not yet recognised any event of the sleep. */
 internal val TranscriptionStatus.nothingRecognised: Boolean
@@ -59,14 +62,15 @@ internal val TranscriptionStatus.nothingRecognised: Boolean
 
 /**
  * The top bar's speech recognition status: a spinner while it runs on the sleep, an hourglass
- * while events wait and a check mark once all are done, which each open what is running.
+ * while events wait and a check mark once all are done, which each open what is running; nothing
+ * while speech recognition is off.
  */
 @Composable
 internal fun SpeechRecognitionStatus(status: TranscriptionStatus, events: List<SleepEvent>, modelChange: ModelChange?, onRun: () -> Unit) {
     var showing by remember { mutableStateOf(false) }
     val label = stringResource(R.string.settings_transcription)
 
-    if (status != TranscriptionStatus.NoEvents) {
+    if (status != TranscriptionStatus.NoEvents && status != TranscriptionStatus.Off) {
         IconButton(onClick = { showing = true }) {
             when (status) {
                 // Turning until the first event is done, which includes loading the model.

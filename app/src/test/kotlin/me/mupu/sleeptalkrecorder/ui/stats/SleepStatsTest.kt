@@ -1,9 +1,11 @@
 package me.mupu.sleeptalkrecorder.ui.stats
 
+import me.mupu.sleeptalkrecorder.data.KindColor
 import me.mupu.sleeptalkrecorder.data.RecordingEntity
 import me.mupu.sleeptalkrecorder.data.RecordingState
 import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.SleepSummary
+import me.mupu.sleeptalkrecorder.data.ThemeRole
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDateTime
@@ -23,7 +25,8 @@ class SleepStatsTest {
     private fun stored(startMinute: Double, seconds: Double, speech: Boolean = false, hidden: Boolean = false): SleepEvent {
         val start = (startMinute * 60_000).toLong()
         val kind = if (speech) "speech" else "event"
-        return SleepEvent(0, start, start + (seconds * 1_000).toLong(), kind, null, if (speech) "tertiary" else "primary", hidden = hidden)
+        val color = KindColor.Theme(if (speech) ThemeRole.TERTIARY else ThemeRole.PRIMARY)
+        return SleepEvent(0, Duration.ofMillis(start), Duration.ofMillis(start + (seconds * 1_000).toLong()), kind, null, color, hidden = hidden)
     }
 
     private fun summary(id: Long, start: Instant, end: Instant) = SleepSummary(id, start, end, 1, 0, 0, eventsFound = true)

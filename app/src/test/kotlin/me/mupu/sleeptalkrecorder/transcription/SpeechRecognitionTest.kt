@@ -36,13 +36,12 @@ class SpeechRecognitionTest {
     private fun transcript(kind: String, text: String?) = AnnotationEntity(
         sleepId = 7,
         type = AnnotationType.TRANSCRIPT,
-        startMillis = 61_000,
-        endMillis = 63_500,
+        start = Duration.ofMillis(61_000),
+        end = Duration.ofMillis(63_500),
         kindId = kind,
         text = text,
         origin = AnnotationOrigin.DEVICE,
-        producer = "parakeet-ultra",
-        producerVersion = SpeechRecognition(TranscriptionModel.PARAKEET_ULTRA, FakeTranscriber()).version,
+        producer = SpeechRecognition(TranscriptionModel.PARAKEET_ULTRA, FakeTranscriber()).producer,
     )
 
     @Test

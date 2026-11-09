@@ -20,13 +20,13 @@ fun withTranscripts(
 ): List<SleepEvent> {
     val (user, analyses) = transcripts.partition { it.origin == AnnotationOrigin.USER }
     val byStretch = analyses
-        .groupBy { it.startMillis to it.endMillis }
+        .groupBy { it.stretch }
         .mapValues { (_, over) -> over.minWith(compareBy<AnnotationEntity> { it.origin.rank }.thenByDescending { it.id }) }
 
     return events.map { event ->
         // The user's annotations are few, one per event they changed, so they are searched in full.
-        val winner = user.filter { it.startMillis < event.endMillis && it.endMillis > event.startMillis }.maxByOrNull { it.id }
-            ?: byStretch[event.startMillis to event.endMillis]
+        val winner = user.filter { it.start < event.end && it.end > event.start }.maxByOrNull { it.id }
+            ?: byStretch[event.stretch]
             ?: return@map event
         val kind = winner.kindId?.let(kinds::get)
         event.copy(
@@ -35,7 +35,7 @@ fun withTranscripts(
             kindColor = kind?.color ?: event.kindColor,
             transcript = winner.text,
             transcriptOrigin = winner.origin,
-            transcriptProducer = winner.producer,
+            transcriptProducer = winner.producer?.id,
         )
     }
 }

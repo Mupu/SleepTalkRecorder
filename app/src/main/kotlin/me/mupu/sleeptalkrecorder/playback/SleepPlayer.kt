@@ -42,6 +42,8 @@ data class PlaybackState(
     val position: Duration = Duration.ZERO,
     /** Playing speed; 1 is the recorded speed, and the pitch stays the same at every speed. */
     val speed: Float = 1f,
+    /** Whose speed [speed] is: a stretch played on its own has a speed of its own. */
+    val speedOf: PlaybackKind = PlaybackKind.SLEEP,
     /** Whether the last attempt to play failed, for example on a damaged file. */
     val failed: Boolean = false,
     /** Where playback pauses on its own while a stretch is played with [SleepPlayer.playRange]. */
@@ -57,6 +59,9 @@ data class PlaybackState(
  * the stream, so the fades sit exactly at the stretch edges whenever the jump itself happens; the
  * jump only decides how long the silence between two stretches lasts. The processor also fades in
  * after every seek, in full playback too, so playback never starts with a click.
+ *
+ * A stretch played on its own ([playRange]) plays at the event speed, everything else at the
+ * sleep speed ([PlaybackSpeeds]).
  *
  * The player lives on the main thread; call [release] when it is no longer needed.
  */
@@ -78,6 +83,7 @@ class SleepPlayer(context: Context) {
     private var timeline: SleepTimeline? = null
     private var sampleRate = 0
     private var plan: CutPlan? = null
+    private var speeds = PlaybackSpeeds()
 
     private val mutableState = MutableStateFlow(PlaybackState())
 
@@ -131,7 +137,7 @@ class SleepPlayer(context: Context) {
      * it starts at the next stretch, and after the last one again at the first.
      */
     fun play() {
-        mutableState.value = mutableState.value.copy(until = null)
+        setUntil(null)
         val plan = plan
         if (plan != null) {
             val from = plan.continueFrom(currentPosition()) ?: plan.stretches.firstOrNull()?.start ?: return
@@ -143,7 +149,7 @@ class SleepPlayer(context: Context) {
     /** Plays the stretch from [from] until [until] and pauses there, as when an event is played on its own. */
     fun playRange(from: Duration, until: Duration) {
         seekTo(from)
-        mutableState.value = mutableState.value.copy(until = until)
+        setUntil(until)
         start()
     }
 
@@ -156,22 +162,43 @@ class SleepPlayer(context: Context) {
         player.play()
     }
 
+    /** Pauses at the current position; a stretch being played on its own ends there. */
     fun pause() {
-        mutableState.value = mutableState.value.copy(until = null)
+        setUntil(null)
         player.pause()
     }
 
     /** Moves to [position] of the sleep, held within its start and end; a stretch being played ends there. */
     fun seekTo(position: Duration) {
-        mutableState.value = mutableState.value.copy(until = null)
+        setUntil(null)
         val timeline = timeline?.takeIf { it.pieces.isNotEmpty() } ?: return
         player.seekTo(position.coerceIn(Duration.ZERO, timeline.duration).toMillis())
         publish()
     }
 
-    /** Plays at [speed] times the recorded speed with the recorded pitch. */
-    fun setSpeed(speed: Float) {
-        player.setPlaybackSpeed(speed)
+    /**
+     * Switches the speed of what plays now, a stretch on its own or the sleep, to the next one;
+     * the other keeps its speed.
+     */
+    fun nextSpeed() {
+        speeds = speeds.next(playingKind())
+        applySpeed()
+        publish()
+    }
+
+    /** Whose speed applies now: that of a stretch played on its own while one plays, else the sleep's. */
+    private fun playingKind(): PlaybackKind = if (mutableState.value.until != null) PlaybackKind.EVENT else PlaybackKind.SLEEP
+
+    /** Sets where playback pauses on its own, or with null that it plays on, and the speed that goes with it. */
+    private fun setUntil(until: Duration?) {
+        mutableState.value = mutableState.value.copy(until = until)
+        applySpeed()
+    }
+
+    /** Plays at the speed of what plays now, with the recorded pitch. */
+    private fun applySpeed() {
+        val speed = speeds.of(playingKind())
+        if (player.playbackParameters.speed != speed) player.setPlaybackSpeed(speed)
     }
 
     /** Stops playing and frees the player. */
@@ -202,11 +229,13 @@ class SleepPlayer(context: Context) {
             if (jumpTo(next)) return
         }
 
+        if (until != null && !playing) setUntil(null)
+        val kind = playingKind()
         mutableState.value = mutableState.value.copy(
             playing = playing,
             position = position,
-            speed = player.playbackParameters.speed,
-            until = until?.takeIf { playing },
+            speed = speeds.of(kind),
+            speedOf = kind,
         )
     }
 

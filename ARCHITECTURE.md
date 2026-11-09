@@ -12,17 +12,18 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 | `time` | The time model: *night* and *nap* naming, the timeline of a *recording*, the latest stop time | none |
 | `recording` | The recording session, WAV chunk writer, microphone, foreground service and its notifications | only in `MicrophoneSource`, `Recorder`, `RecordingService`, `RecordingNotifications` |
 | `detection` | The feature track (extraction and file format) and the `EventDetector` with its baseline | none |
-| `data` | Room database, entities, the `SleepRepository`, and loading feature tracks for a sleep | Room |
+| `data` | Room database, entities, the `SleepRepository` through which screens read and change sleeps, `SleepRecordings` (the recording session's `RecordingStore`), `SleepTranscripts` (speech recognition's `TranscriptStore`), the `RecordingFiles` of each recording, and loading feature tracks for a sleep | Room |
 | `playback` | The `SleepTimeline` of a sleep's chunk files, the `SleepAudio` stream made of them, the `CutPlan` of cut playback and the `SleepPlayer` that plays it | only in `SleepPlayer` (Media3) |
 | `retention` | Automatic deletion: which sleeps are old enough (`SleepRetention`) and the WorkManager job that deletes them | only in `AutoDeletion` (WorkManager) |
 | `settings` | The user's settings and the `SettingsStore` that keeps them; the app language | DataStore; AppCompat only in `AppLanguages` |
 | `models` | The transcription models: the catalogue of downloadable models (`TranscriptionModel`), the `ModelInstaller` that downloads and checks their files, the `ModelLibrary` with their states and the active one, and the WorkManager job that downloads them | only in `ModelDownloadWorker` (WorkManager) |
 | `transcription` | Speech recognition of events: the `EventAnalysis` interface, the `SpeechRecognition` with its `TranscriptFilter`, the sherpa-onnx `SherpaTranscriber`, the `TranscriptionRunner` that works through the events, and the WorkManager jobs that run it | only in `TranscriptionWork` (WorkManager, notifications, battery) |
+| `notifications` | The ids of all notifications and the progress notification that model downloads and speech recognition share | Android notifications, WorkManager's `ForegroundInfo` |
 | `readiness` | Whether the phone lets a whole night be recorded: the `Requirement`s it misses, the `VendorStep`s of its maker, and the `SystemPage`s that fix them | only in `PhoneReadiness` |
 | `ui` | Navigation, one sub-package per screen (`home`, `library`, `sleep`, `stats`, `settings`, `setup`), shared `components`, `format` and `theme` | Compose |
 
 The root package holds `MainActivity`, the only activity, and `SleepTalkApplication` with the
-`AppContainer`, which wires the shared objects by hand: the database, the repository, the
+`AppContainer`, which wires the shared objects by hand: the database with the repository and stores, the
 `SettingsStore`, the `Recorder`, the `ModelLibrary` and the speech recognition; it also keeps
 automatic deletion scheduled, starts the search for events of finished sleeps and schedules their
 speech recognition. Logic that can be tested without a device
@@ -163,8 +164,8 @@ stats show.
 
 The schema is exported to `app/schemas/`. Data derived from a sleep or a recording goes into
 tables of its own that reference it by foreign key, so the `sleep` and `recording` tables stay
-stable. Auto backup is off: recordings never leave the phone, and a restored database without its audio would
-list sleeps that cannot be played.
+stable. Auto backup is off: the audio lies in `noBackupFilesDir`, which no backup includes, and a
+restored database without its audio would list sleeps that cannot be played.
 
 ## Deletion
 
@@ -192,8 +193,7 @@ bands below 300 Hz, from 300 to 3400 Hz (the speech band) and above, spectral fl
 speech band, zero crossings and voicing. Levels are dBFS in steps of 0.5 dB. `RecordingSession`
 extracts it live from the buffers it records, which costs little next to keeping the microphone
 open, and `FeatureTrackFile` stores it as an append-only file whose header names its format
-version. Only the speech band is used to find events yet; the other columns are there so later
-kinds of events can be told apart without reading the audio again.
+version. Finding events uses only the speech band.
 
 When a track is missing, of an older format version, or shorter than its audio, the repository
 extracts it again from the chunk files before using it. That takes seconds per hour of audio but
@@ -302,8 +302,10 @@ When it runs is a setting:
 - **Only while charging**: only the job that requires charging; WorkManager stops it when the
   charger is unplugged and runs it again on the next one.
 - **Only manually**: no job of its own. The sleep's menu ("Run speech recognition", "... again"
-  once events were recognised) starts a job for that sleep in every mode, which recognises all its
-  events again.
+  once events were recognised) starts a job for that sleep in every mode but off, which
+  recognises all its events again.
+- **Off**: no job at all, and switching it off cancels every job, also one started for a sleep.
+  The sleep screen offers no run and shows no status; transcripts made before stay.
 
 A job runs as a foreground service with a progress notification when Android allows one (from
 the background only for an app exempt from battery optimisation), else as normal work, which
@@ -348,7 +350,8 @@ left out; a missing or damaged file ends its recording there.
 sizes, so a sleep of any length fits) followed by the samples of every chunk file the timeline
 plays, served to a Media3 ExoPlayer by a data source of its own. All recordings share the
 microphone's PCM format, so the stream is one audio track without gaps, and a position in it is
-the position in the sleep down to the sample. Speed changes keep the pitch. The player belongs to
+the position in the sleep down to the sample. Speed changes keep the pitch. The sleep and a stretch played on its
+own (`PlaybackSpeeds`) each have their own speed, which lasts as long as the player. The player belongs to
 the sleep screen's `ViewModel` and pauses when the screen is no longer visible, because there is
 no notification to control it.
 
@@ -361,8 +364,8 @@ microphone is played around an event.
 *Cut playback*, the default, plays the events the list shows in this way, one after the other.
 The list's filter chips exclude each other: "All" lists every event that is not hidden, "Speech
 only" (one chip per event kind that has a filter) those of the kind that are not hidden, and
-"Hidden" only the hidden events, so they can be gone through by ear and unhidden. Hiding is
-undone from a snackbar.
+"Hidden" only the hidden events, so they can be gone through by ear and unhidden with the button
+on their row. Hiding is undone from a snackbar.
 `CutPlan` joins the stretches of events that overlap, so close events play without a jump, and
 keeps stretches apart that only touch where a recording starts. While playing, the player jumps
 from the end of a stretch to 200 ms before the next (ExoPlayer starts a seeked WAV stream at its

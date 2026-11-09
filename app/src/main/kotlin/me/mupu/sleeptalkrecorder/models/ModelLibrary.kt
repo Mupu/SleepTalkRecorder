@@ -49,8 +49,10 @@ interface ModelDownloads {
     /** Every model with a queued, running or failed download, as [ModelState.Waiting], [ModelState.Downloading] or [ModelState.Failed]. */
     val states: Flow<Map<TranscriptionModel, ModelState>>
 
+    /** Starts downloading [model], unless its download is already queued or running. */
     fun start(model: TranscriptionModel)
 
+    /** Stops the download of [model] and throws away what it downloaded so far. */
     fun cancel(model: TranscriptionModel)
 }
 

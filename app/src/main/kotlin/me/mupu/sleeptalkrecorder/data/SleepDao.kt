@@ -1,10 +1,11 @@
 package me.mupu.sleeptalkrecorder.data
 
-import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import me.mupu.sleeptalkrecorder.playback.Stretch
+import java.time.Duration
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 
@@ -12,12 +13,15 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface SleepDao {
 
+    /** Stores a new sleep and returns its id. */
     @Insert
     suspend fun insertSleep(sleep: SleepEntity): Long
 
+    /** Stores a new recording and returns its id. */
     @Insert
     suspend fun insertRecording(recording: RecordingEntity): Long
 
+    /** The recording with [id], or null if there is none. */
     @Query("SELECT * FROM recording WHERE id = :id")
     suspend fun recording(id: Long): RecordingEntity?
 
@@ -25,15 +29,19 @@ interface SleepDao {
     @Query("SELECT * FROM recording WHERE sleep_id = :sleepId ORDER BY started_at, id")
     suspend fun recordingsOf(sleepId: Long): List<RecordingEntity>
 
+    /** The recordings still marked as being written: the running one, or those a killed process left. */
     @Query("SELECT * FROM recording WHERE state = 'RECORDING'")
     suspend fun unfinishedRecordings(): List<RecordingEntity>
 
+    /** Sets the instant of a recording's first sample, once the audio clock has told it. */
     @Query("UPDATE recording SET started_at = :startedAt WHERE id = :id")
     suspend fun setRecordingStart(id: Long, startedAt: Instant)
 
+    /** Sets how many samples of a recording are safely written. */
     @Query("UPDATE recording SET frames = :frames WHERE id = :id")
     suspend fun setRecordingFrames(id: Long, frames: Long)
 
+    /** Marks a recording as finished with [frames] samples. */
     @Query("UPDATE recording SET frames = :frames, state = 'FINISHED' WHERE id = :id")
     suspend fun finishRecording(id: Long, frames: Long)
 
@@ -46,9 +54,11 @@ interface SleepDao {
     )
     suspend fun alignSleepStart(id: Long)
 
+    /** Sets the instant after a sleep's last sample, which marks it as finished. */
     @Query("UPDATE sleep SET ended_at = :endedAt WHERE id = :id")
     suspend fun setSleepEnd(id: Long, endedAt: Instant)
 
+    /** The sleep with [id], or null if there is none. */
     @Query("SELECT * FROM sleep WHERE id = :id")
     suspend fun findSleep(id: Long): SleepEntity?
 
@@ -69,10 +79,11 @@ interface SleepDao {
 
     /** All sleeps, the most recently started first, with their events found by [producer] [version]. */
     @Query("$SUMMARY ORDER BY sleep.started_at DESC")
-    fun sleeps(producer: String, version: String): Flow<List<SleepSummary>>
+    fun sleeps(producer: String, version: String?): Flow<List<SleepSummary>>
 
+    /** One sleep, like [sleeps] lists it; null once it no longer exists. */
     @Query("$SUMMARY WHERE sleep.id = :id")
-    fun sleep(id: Long, producer: String, version: String): Flow<SleepSummary?>
+    fun sleep(id: Long, producer: String, version: String?): Flow<SleepSummary?>
 
     /** The ids of finished sleeps whose events [producer] [version] has not yet found. */
     @Query(
@@ -83,23 +94,24 @@ interface SleepDao {
         )
         """,
     )
-    suspend fun sleepsWithoutEvents(producer: String, version: String): List<Long>
+    suspend fun sleepsWithoutEvents(producer: String, version: String?): List<Long>
 
     /** Adds the kinds that are not stored yet; kinds that exist keep the user's changes. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertKinds(kinds: List<EventKindEntity>)
 
+    /** Stores new annotations. */
     @Insert
     suspend fun insertAnnotations(annotations: List<AnnotationEntity>)
 
-    /** Removes the [type] annotation of [producer] that starts at [startMillis], before it is stored anew. */
+    /** Removes the [type] annotation of the producer [producerId] that starts at [start], before it is stored anew. */
     @Query(
         """
-        DELETE FROM annotation WHERE sleep_id = :sleepId AND type = :type AND start_ms = :startMillis
-        AND origin = :origin AND producer = :producer
+        DELETE FROM annotation WHERE sleep_id = :sleepId AND type = :type AND start_ms = :start
+        AND origin = :origin AND producer = :producerId
         """,
     )
-    suspend fun deleteResultAt(sleepId: Long, type: AnnotationType, startMillis: Long, origin: AnnotationOrigin, producer: String)
+    suspend fun deleteResultAt(sleepId: Long, type: AnnotationType, start: Duration, origin: AnnotationOrigin, producerId: String)
 
     /** The stretches of a sleep with annotations of [type], in order. */
     @Query("SELECT * FROM annotation WHERE sleep_id = :sleepId AND type = :type ORDER BY start_ms, id")
@@ -113,12 +125,13 @@ interface SleepDao {
     @Query("SELECT * FROM annotation WHERE sleep_id = :sleepId AND type = 'SENSITIVITY' AND origin = 'USER' ORDER BY id")
     fun userSensitivityFlow(sleepId: Long): Flow<List<AnnotationEntity>>
 
+    /** Removes the annotations with the [ids]. */
     @Query("DELETE FROM annotation WHERE id IN (:ids)")
     suspend fun deleteAnnotations(ids: List<Long>)
 
-    /** Removes what [producer] found in a sleep, before it stores its new results. */
-    @Query("DELETE FROM annotation WHERE sleep_id = :sleepId AND origin = :origin AND producer = :producer")
-    suspend fun deleteResults(sleepId: Long, origin: AnnotationOrigin, producer: String)
+    /** Removes what the producer [producerId] found in a sleep, in any version, before it stores its new results. */
+    @Query("DELETE FROM annotation WHERE sleep_id = :sleepId AND origin = :origin AND producer = :producerId")
+    suspend fun deleteResults(sleepId: Long, origin: AnnotationOrigin, producerId: String)
 
     /**
      * The events of a sleep in order, with the detector's kind and without their transcripts,
@@ -146,11 +159,11 @@ interface SleepDao {
     @Query(
         """
         SELECT * FROM annotation WHERE sleep_id = :sleepId AND type = 'TRANSCRIPT' AND origin = 'USER'
-            AND start_ms < :endMillis AND end_ms > :startMillis
+            AND start_ms < :end AND end_ms > :start
         ORDER BY id
         """,
     )
-    suspend fun userTranscripts(sleepId: Long, startMillis: Long, endMillis: Long): List<AnnotationEntity>
+    suspend fun userTranscripts(sleepId: Long, start: Duration, end: Duration): List<AnnotationEntity>
 
     /** How many of a sleep's events each model gave a transcript of the phone, by the model's id. */
     @Query(
@@ -163,8 +176,8 @@ interface SleepDao {
     fun transcriptModels(sleepId: Long): Flow<List<ModelTranscripts>>
 
     /** Removes the hidden marks that overlap a stretch, which shows the events in it again. */
-    @Query("DELETE FROM annotation WHERE sleep_id = :sleepId AND type = 'HIDDEN' AND start_ms < :endMillis AND end_ms > :startMillis")
-    suspend fun deleteHidden(sleepId: Long, startMillis: Long, endMillis: Long)
+    @Query("DELETE FROM annotation WHERE sleep_id = :sleepId AND type = 'HIDDEN' AND start_ms < :end AND end_ms > :start")
+    suspend fun deleteHidden(sleepId: Long, start: Duration, end: Duration)
 
     /** The kinds the sleep screen offers a filter for. */
     @Query("SELECT * FROM event_kind WHERE has_filter ORDER BY id")
@@ -173,12 +186,12 @@ interface SleepDao {
     /** The stretches of a sleep's events, in order; with [onlyPending] those without a transcript of the phone. */
     @Query(
         """
-        SELECT start_ms, end_ms FROM annotation AS event WHERE sleep_id = :sleepId AND type = 'EVENT'
+        SELECT start_ms AS start, end_ms AS `end` FROM annotation AS event WHERE sleep_id = :sleepId AND type = 'EVENT'
             AND (NOT :onlyPending OR NOT $HAS_DEVICE_TRANSCRIPT)
         ORDER BY start_ms, id
         """,
     )
-    suspend fun eventStretches(sleepId: Long, onlyPending: Boolean): List<EventStretch>
+    suspend fun eventStretches(sleepId: Long, onlyPending: Boolean): List<Stretch>
 
     /**
      * Finished sleeps whose events [producer] [version] found and that have events without a
@@ -194,7 +207,7 @@ interface SleepDao {
         ORDER BY started_at DESC
         """,
     )
-    suspend fun sleepsToTranscribe(producer: String, version: String): List<Long>
+    suspend fun sleepsToTranscribe(producer: String, version: String?): List<Long>
 
     /** How many of a sleep's events there are and how many have a transcript of the phone. */
     @Query(
@@ -205,17 +218,18 @@ interface SleepDao {
     )
     fun transcriptionCount(sleepId: Long): Flow<TranscriptionCount>
 
-    @Query("SELECT EXISTS (SELECT 1 FROM annotation WHERE sleep_id = :sleepId AND type = 'EVENT' AND start_ms = :startMillis AND end_ms = :endMillis)")
-    suspend fun hasEvent(sleepId: Long, startMillis: Long, endMillis: Long): Boolean
+    /** Whether a sleep has an event over exactly the stretch from [start] until [end]. */
+    @Query("SELECT EXISTS (SELECT 1 FROM annotation WHERE sleep_id = :sleepId AND type = 'EVENT' AND start_ms = :start AND end_ms = :end)")
+    suspend fun hasEvent(sleepId: Long, start: Duration, end: Duration): Boolean
 
     /** Removes the transcripts of [origin] over one stretch, before the new one is stored. */
     @Query(
         """
         DELETE FROM annotation WHERE sleep_id = :sleepId AND type = 'TRANSCRIPT' AND origin = :origin
-            AND start_ms = :startMillis AND end_ms = :endMillis
+            AND start_ms = :start AND end_ms = :end
         """,
     )
-    suspend fun deleteTranscripts(sleepId: Long, startMillis: Long, endMillis: Long, origin: AnnotationOrigin)
+    suspend fun deleteTranscripts(sleepId: Long, start: Duration, end: Duration, origin: AnnotationOrigin)
 
     /** Removes the phone's transcripts of stretches that are no longer an event, after the events were found anew. */
     @Query(
@@ -227,6 +241,7 @@ interface SleepDao {
     )
     suspend fun deleteOrphanedTranscripts(sleepId: Long)
 
+    /** Whether a recording is being written. */
     @Query("SELECT EXISTS (SELECT 1 FROM recording WHERE state = 'RECORDING')")
     suspend fun isRecording(): Boolean
 }
@@ -249,12 +264,6 @@ private const val IS_HIDDEN = """
 
 /** How many events of a sleep the model [producer] gave a transcript. */
 data class ModelTranscripts(val producer: String, val events: Int)
-
-/** The stretch of an event in milliseconds of the sleep's audio. */
-data class EventStretch(
-    @ColumnInfo(name = "start_ms") val startMillis: Long,
-    @ColumnInfo(name = "end_ms") val endMillis: Long,
-)
 
 /**
  * A sleep with its recordings and the events that are not hidden. Only the events of a finished

@@ -96,6 +96,9 @@ enum class TranscriptionMode {
 
     /** Only when the user starts it from a sleep's menu. */
     MANUAL,
+
+    /** Never: the sleep screen offers no run, and transcripts made before stay as they are. */
+    OFF,
 }
 
 /**

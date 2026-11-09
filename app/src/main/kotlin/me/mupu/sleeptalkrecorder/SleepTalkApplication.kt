@@ -3,8 +3,11 @@ package me.mupu.sleeptalkrecorder
 import android.app.Application
 import android.content.Context
 import android.util.Log
+import me.mupu.sleeptalkrecorder.data.RecordingFiles
 import me.mupu.sleeptalkrecorder.data.SleepDatabase
+import me.mupu.sleeptalkrecorder.data.SleepRecordings
 import me.mupu.sleeptalkrecorder.data.SleepRepository
+import me.mupu.sleeptalkrecorder.data.SleepTranscripts
 import me.mupu.sleeptalkrecorder.models.HttpByteSource
 import me.mupu.sleeptalkrecorder.models.ModelInstaller
 import me.mupu.sleeptalkrecorder.models.ModelLibrary
@@ -51,11 +54,16 @@ class AppContainer(context: Context) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    /** Sleeps and recordings; audio lives in `noBackupFilesDir`, which backups never include. */
-    val sleepRepository = SleepRepository(
-        database = SleepDatabase.open(context),
-        recordingsDirectory = File(context.noBackupFilesDir, "recordings"),
-    )
+    private val database = SleepDatabase.open(context)
+
+    /** The recordings' audio, in `noBackupFilesDir`, which backups never include. */
+    val recordingFiles = RecordingFiles(File(context.noBackupFilesDir, "recordings"))
+
+    /** Sleeps, their recordings and their events, as the screens read and change them. */
+    val sleepRepository = SleepRepository(database, recordingFiles)
+
+    /** Where the recording service stores its recordings. */
+    val sleepRecordings = SleepRecordings(database, recordingFiles)
 
     /** The user's settings. */
     val settings = SettingsStore.open(context)
@@ -73,7 +81,11 @@ class AppContainer(context: Context) {
     val transcriptionScheduler = TranscriptionScheduler(context)
 
     /** Runs speech recognition over the events of sleeps; jobs of [transcriptionScheduler] call it. */
-    val transcriptionRunner = TranscriptionRunner(sleepRepository, battery = { batteryState(context) })
+    val transcriptionRunner = TranscriptionRunner(
+        SleepTranscripts(database, recordingFiles),
+        battery = { batteryState(context) },
+        onFailure = { message, error -> Log.w("Transcription", message, error) },
+    )
 
     /** Speech recognition as the screens see it. */
     val transcriptions = Transcriptions(transcriptionRunner, transcriptionScheduler, settings, modelLibrary)
@@ -87,7 +99,7 @@ class AppContainer(context: Context) {
      * Finishes recordings a previous process left running. A new recording waits for it, so it
      * can never finish the recording that just started.
      */
-    val interruptedRecordingsFinished: Job = scope.launch { sleepRepository.finishInterruptedRecordings() }
+    val interruptedRecordingsFinished: Job = scope.launch { sleepRecordings.finishInterruptedRecordings() }
 
     /** One search for events at a time, so a sleep is never searched twice at once. */
     private val eventSearch = Mutex()

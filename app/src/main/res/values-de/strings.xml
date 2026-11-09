@@ -57,6 +57,8 @@
     <string name="position_short">Pos %1$s</string>
     <string name="speed_value">%1$s×</string>
     <string name="speed_hint">Tempo (bis du diesen Schlaf verlässt)</string>
+    <string name="speed_value_event">%1$s× Ereignis</string>
+    <string name="speed_hint_event">Tempo einzelner Ereignisse (bis du diesen Schlaf verlässt)</string>
     <string name="sleep_no_audio">Dieser Schlaf enthält kein Audio, das sich abspielen lässt.</string>
     <string name="playback_failed">Ein Teil dieses Schlafs lässt sich nicht abspielen. Seine Dateien sind vielleicht beschädigt.</string>
     <string name="zoom_in">Vergrößern</string>
@@ -237,7 +239,9 @@
     <string name="transcription_mode_after_stop_hint">Gleich nach der Aufnahme. Pausiert unter 30 Prozent Akku, bis das Handy lädt.</string>
     <string name="transcription_mode_while_charging_hint">Nur während das Handy lädt.</string>
     <string name="transcription_mode_manual_hint">Nur wenn du sie im Menü eines Schlafs startest.</string>
-    <string name="settings_models_hint">Die App erkennt Sprache auf dem Telefon. Das Internet nutzt sie nur, um Modelle zu laden; Aufnahmen verlassen nie das Telefon.</string>
+    <string name="transcription_mode_off">Aus</string>
+    <string name="transcription_mode_off_hint">Die Spracherkennung läuft nicht. Bereits erkannte Texte bleiben erhalten.</string>
+    <string name="settings_models_hint">Diese Version der App verarbeitet alles auf dem Telefon, auch die Spracherkennung. Das Internet nutzt sie nur, um Modelle zu laden.</string>
     <string name="settings_transcript_language">Sprache des Transkripts</string>
     <string name="settings_transcript_language_hint">Deine Sprache. Englisch wird immer mit erkannt.</string>
     <string name="transcript_language_app">Wie die App</string>
@@ -283,7 +287,7 @@
     <string name="open_setting">Einstellung öffnen</string>
     <string name="open_again">Erneut öffnen</string>
     <string name="requirement_microphone">Mikrofon</string>
-    <string name="requirement_microphone_why">Zum Aufnehmen. Aufnahmen bleiben immer auf dem Gerät.</string>
+    <string name="requirement_microphone_why">Zum Aufnehmen. Diese Version behält Aufnahmen auf dem Telefon.</string>
     <string name="requirement_notifications">Benachrichtigungen</string>
     <string name="requirement_notifications_why">Zeigt, dass eine Aufnahme läuft, mit einer Stopp-Taste.</string>
     <string name="requirement_battery">Akku-Optimierung aus</string>

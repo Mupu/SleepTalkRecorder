@@ -1,10 +1,12 @@
 package me.mupu.sleeptalkrecorder.data
 
 import androidx.room.ColumnInfo
+import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import me.mupu.sleeptalkrecorder.playback.Stretch
 import java.time.Duration
 import java.time.Instant
 
@@ -54,7 +56,7 @@ data class RecordingEntity(
 )
 
 /**
- * A kind of event, such as a plain loudness event or (later) a speech event. Kinds are rows, not a
+ * A kind of event, such as a plain loudness event or a speech event. Kinds are rows, not a
  * list in code: what an event's kind is comes from its annotations, and how it looks and filters
  * comes from here, so new kinds need no schema or UI change.
  */
@@ -64,11 +66,8 @@ data class EventKindEntity(
     @PrimaryKey val id: String,
     /** The user's name for the kind; null for the kinds the app ships, which it names in the app language. */
     val name: String?,
-    /**
-     * The colour events of this kind are drawn in: a colour role of the app's theme (`primary`,
-     * `secondary`, `tertiary`), so it follows light and dark mode, or a fixed `#RRGGBB`.
-     */
-    val color: String,
+    /** The colour events of this kind are drawn in. */
+    val color: KindColor,
     /** Whether the sleep screen offers a filter that shows only events of this kind. */
     @ColumnInfo(name = "has_filter") val hasFilter: Boolean,
 )
@@ -118,6 +117,16 @@ enum class AnnotationOrigin {
 }
 
 /**
+ * Who stated an annotation: the analysis or model with the id [id], such as `loudness`, in its
+ * [version], which changes whenever the same input could give other annotations; null for a
+ * producer whose results never change, such as the recorder.
+ */
+data class Producer(
+    @ColumnInfo(name = "producer") val id: String,
+    @ColumnInfo(name = "producer_version") val version: String? = null,
+)
+
+/**
  * One result about a stretch of a sleep, with its origin. Everything found in or said about a
  * sleep is an annotation: the events the detector found and the sensitivity it chose, the
  * transcripts of speech recognition, the events the user hid and the user's corrections.
@@ -144,10 +153,10 @@ data class AnnotationEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     @ColumnInfo(name = "sleep_id") val sleepId: Long,
     val type: AnnotationType,
-    /** The start of the stretch: its position in the sleep's audio, in milliseconds. */
-    @ColumnInfo(name = "start_ms") val startMillis: Long,
-    /** The end of the stretch (exclusive), in milliseconds of the sleep's audio. */
-    @ColumnInfo(name = "end_ms") val endMillis: Long,
+    /** The start of the stretch: its position in the sleep's audio, stored in milliseconds. */
+    @ColumnInfo(name = "start_ms") val start: Duration,
+    /** The end of the stretch (exclusive) in the sleep's audio, stored in milliseconds. */
+    @ColumnInfo(name = "end_ms") val end: Duration,
     /** The event kind an [AnnotationType.EVENT] annotation gives its stretch. */
     @ColumnInfo(name = "kind_id") val kindId: String? = null,
     /** A number whose meaning depends on [type]. */
@@ -155,11 +164,12 @@ data class AnnotationEntity(
     /** A text whose meaning depends on [type]. */
     val text: String? = null,
     val origin: AnnotationOrigin,
-    /** The analysis or model that made it, such as `loudness`; null for the user. */
-    val producer: String? = null,
-    /** The version of [producer] that made it. */
-    @ColumnInfo(name = "producer_version") val producerVersion: String? = null,
-)
+    /** The analysis or model that made it; null for the user. */
+    @Embedded val producer: Producer? = null,
+) {
+    /** The stretch of the sleep's audio it is about. */
+    val stretch: Stretch get() = Stretch(start, end)
+}
 
 /** How far speech recognition got through a sleep's events. */
 data class TranscriptionCount(
@@ -195,12 +205,14 @@ data class SleepSummary(
  */
 data class SleepEvent(
     val id: Long,
-    @ColumnInfo(name = "start_ms") val startMillis: Long,
-    @ColumnInfo(name = "end_ms") val endMillis: Long,
+    /** Where the event starts in the sleep's audio, stored in milliseconds. */
+    @ColumnInfo(name = "start_ms") val start: Duration,
+    /** Where it ends in the sleep's audio, stored in milliseconds. */
+    @ColumnInfo(name = "end_ms") val end: Duration,
     /** The kind's id; see [EventKindEntity] for [kindName] and [kindColor]. */
     @ColumnInfo(name = "kind_id") val kindId: String,
     @ColumnInfo(name = "kind_name") val kindName: String?,
-    @ColumnInfo(name = "kind_color") val kindColor: String,
+    @ColumnInfo(name = "kind_color") val kindColor: KindColor,
     /** The words recognised in the event; null if none were or it was not transcribed yet. */
     val transcript: String? = null,
     /** Who wrote [transcript]: the user or an analysis; null without a transcript annotation. */
@@ -216,11 +228,8 @@ data class SleepEvent(
     /** Whether this is a speech event: one with words, or a murmur without them. */
     val isSpeech: Boolean get() = kindId == EventKinds.SPEECH
 
-    /** Where the event starts in the sleep's audio. */
-    val start: Duration get() = Duration.ofMillis(startMillis)
-
-    /** Where it ends in the sleep's audio. */
-    val end: Duration get() = Duration.ofMillis(endMillis)
+    /** The stretch of the sleep's audio the event takes. */
+    val stretch: Stretch get() = Stretch(start, end)
 }
 
 /** A finished sleep with its recordings in order and all its events, hidden ones included. */

@@ -6,8 +6,8 @@ background with the screen off. In the morning each night is listed, and its pla
 the whole night or a cut version that skips the silence. Every position is shown twice: as time
 into the recording (6:10:00) and as the real time it happened (07:38).
 
-Recordings never leave the phone: there is no account and no cloud. Speech is recognised on the
-phone itself; the app uses the internet only to download its speech recognition models.
+This version processes everything on the phone: there is no account, and speech is recognised on
+the phone itself; the app uses the internet only to download its speech recognition models.
 
 ## Architecture
 

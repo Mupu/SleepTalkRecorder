@@ -57,10 +57,10 @@ class FeatureExtractorTest {
         val noise = extract(noise(amplitude = 0.1, seconds = 1.0))
         val tone = extract(tone(hertz = 200.0, amplitude = 0.1, seconds = 1.0))
 
-        assertTrue("noise flatness ${noise.flatness(20)}", noise.flatness(20) > 0.4f)
-        assertTrue("noise voicing ${noise.voicing(20)}", noise.voicing(20) < 0.35f)
-        assertTrue("tone flatness ${tone.flatness(20)}", tone.flatness(20) < 0.1f)
-        assertTrue("tone voicing ${tone.voicing(20)}", tone.voicing(20) > 0.9f)
+        assertTrue("noise flatness ${noise.flatnessAt(20)}", noise.flatnessAt(20) > 0.4f)
+        assertTrue("noise voicing ${noise.voicingAt(20)}", noise.voicingAt(20) < 0.35f)
+        assertTrue("tone flatness ${tone.flatnessAt(20)}", tone.flatnessAt(20) < 0.1f)
+        assertTrue("tone voicing ${tone.voicingAt(20)}", tone.voicingAt(20) > 0.9f)
     }
 
     @Test
@@ -68,7 +68,7 @@ class FeatureExtractorTest {
         val track = extract(tone(hertz = 1_000.0, amplitude = 0.1, seconds = 1.0))
 
         // 20 periods in a hop of 20 ms.
-        assertEquals(40.0, track.zeroCrossings(20).toDouble(), 1.0)
+        assertEquals(40.0, track.zeroCrossingsAt(20).toDouble(), 1.0)
     }
 
     @Test
@@ -101,3 +101,13 @@ class FeatureExtractorTest {
         const val FULL_SCALE = 32_767.0
     }
 }
+
+// The track's columns read as the extractor's units: levels in dBFS, flatness and voicing from 0 to 1.
+private fun FeatureTrack.rmsDb(hop: Int) = FeatureTrack.levelDb(rms[hop])
+private fun FeatureTrack.peakDb(hop: Int) = FeatureTrack.levelDb(peak[hop])
+private fun FeatureTrack.lowDb(hop: Int) = FeatureTrack.levelDb(low[hop])
+private fun FeatureTrack.speechDb(hop: Int) = FeatureTrack.levelDb(speech[hop])
+private fun FeatureTrack.highDb(hop: Int) = FeatureTrack.levelDb(high[hop])
+private fun FeatureTrack.flatnessAt(hop: Int) = FeatureTrack.unsigned(flatness[hop]) / 255f
+private fun FeatureTrack.voicingAt(hop: Int) = FeatureTrack.unsigned(voicing[hop]) / 255f
+private fun FeatureTrack.zeroCrossingsAt(hop: Int) = FeatureTrack.unsigned(zeroCrossings[hop])

@@ -58,6 +58,7 @@ import me.mupu.sleeptalkrecorder.time.RecordingClock
 import me.mupu.sleeptalkrecorder.time.SleepDate
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.AppBarIcon
+import me.mupu.sleeptalkrecorder.ui.components.texts
 import me.mupu.sleeptalkrecorder.ui.format.formatPosition
 import me.mupu.sleeptalkrecorder.ui.format.sleepTitle
 import me.mupu.sleeptalkrecorder.ui.library.SleepKindIcon
@@ -321,15 +322,7 @@ private fun LastSleepCard(sleep: SleepSummary, onClick: () -> Unit) {
 @Composable
 private fun ReadinessBanner(missing: Set<Requirement>, onFix: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    val names = missing.sortedBy { it.ordinal }.map { requirement ->
-        stringResource(
-            when (requirement) {
-                Requirement.MICROPHONE -> R.string.requirement_microphone
-                Requirement.NOTIFICATIONS -> R.string.requirement_notifications
-                Requirement.BATTERY_OPTIMISATION -> R.string.requirement_battery
-            },
-        )
-    }
+    val names = missing.sortedBy { it.ordinal }.map { stringResource(it.texts.title) }
 
     Surface(
         shape = RoundedCornerShape(16.dp),

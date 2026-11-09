@@ -167,6 +167,7 @@ private val TranscriptionMode.label: Int
         TranscriptionMode.AFTER_STOP -> R.string.transcription_mode_after_stop
         TranscriptionMode.WHILE_CHARGING -> R.string.transcription_mode_while_charging
         TranscriptionMode.MANUAL -> R.string.transcription_mode_manual
+        TranscriptionMode.OFF -> R.string.transcription_mode_off
     }
 
 private val TranscriptionMode.hint: Int
@@ -174,6 +175,7 @@ private val TranscriptionMode.hint: Int
         TranscriptionMode.AFTER_STOP -> R.string.transcription_mode_after_stop_hint
         TranscriptionMode.WHILE_CHARGING -> R.string.transcription_mode_while_charging_hint
         TranscriptionMode.MANUAL -> R.string.transcription_mode_manual_hint
+        TranscriptionMode.OFF -> R.string.transcription_mode_off_hint
     }
 
 private val TimeFormat.label: Int

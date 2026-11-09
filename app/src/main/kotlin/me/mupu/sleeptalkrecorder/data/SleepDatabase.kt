@@ -9,6 +9,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
+import java.time.Duration
 import java.time.Instant
 
 /**
@@ -20,7 +21,7 @@ import java.time.Instant
     entities = [SleepEntity::class, RecordingEntity::class, EventKindEntity::class, AnnotationEntity::class],
     version = 1,
 )
-@TypeConverters(InstantConverter::class)
+@TypeConverters(InstantConverter::class, DurationConverter::class, KindColorConverter::class)
 abstract class SleepDatabase : RoomDatabase() {
 
     abstract fun sleepDao(): SleepDao
@@ -41,7 +42,7 @@ private object AddBuiltInKinds : RoomDatabase.Callback() {
             val values = ContentValues().apply {
                 put("id", kind.id)
                 put("name", kind.name)
-                put("color", kind.color)
+                put("color", kind.color.spec)
                 put("has_filter", kind.hasFilter)
             }
             db.insert("event_kind", SQLiteDatabase.CONFLICT_IGNORE, values)
@@ -57,4 +58,24 @@ class InstantConverter {
 
     @TypeConverter
     fun fromEpochMillis(epochMillis: Long?): Instant? = epochMillis?.let(Instant::ofEpochMilli)
+}
+
+/** Stores positions in a sleep's audio and other lengths of time in whole milliseconds. */
+class DurationConverter {
+
+    @TypeConverter
+    fun toMillis(duration: Duration?): Long? = duration?.toMillis()
+
+    @TypeConverter
+    fun fromMillis(millis: Long?): Duration? = millis?.let(Duration::ofMillis)
+}
+
+/** Stores an event kind's colour as its [KindColor.spec]. */
+class KindColorConverter {
+
+    @TypeConverter
+    fun toSpec(color: KindColor?): String? = color?.spec
+
+    @TypeConverter
+    fun fromSpec(spec: String?): KindColor? = spec?.let(KindColor::parse)
 }

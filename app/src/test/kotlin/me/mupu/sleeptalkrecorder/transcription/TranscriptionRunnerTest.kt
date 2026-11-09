@@ -3,6 +3,7 @@ package me.mupu.sleeptalkrecorder.transcription
 import me.mupu.sleeptalkrecorder.data.AnnotationEntity
 import me.mupu.sleeptalkrecorder.data.AnnotationOrigin
 import me.mupu.sleeptalkrecorder.data.AnnotationType
+import me.mupu.sleeptalkrecorder.data.Producer
 import me.mupu.sleeptalkrecorder.playback.Stretch
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionRunner.Outcome
 import java.time.Duration
@@ -39,8 +40,7 @@ class TranscriptionRunnerTest {
         var clips = 0
         var closed = false
         override val origin = AnnotationOrigin.DEVICE
-        override val producer = "fake"
-        override val version = "1"
+        override val producer = Producer("fake", "1")
 
         override suspend fun analyse(clip: EventClip): List<AnnotationEntity> {
             clips += 1
@@ -49,8 +49,8 @@ class TranscriptionRunnerTest {
                 AnnotationEntity(
                     sleepId = clip.sleepId,
                     type = AnnotationType.TRANSCRIPT,
-                    startMillis = clip.event.start.toMillis(),
-                    endMillis = clip.event.end.toMillis(),
+                    start = clip.event.start,
+                    end = clip.event.end,
                     origin = origin,
                 ),
             )

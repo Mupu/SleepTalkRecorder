@@ -4,6 +4,7 @@ import android.app.TimePickerDialog
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.toggleable
@@ -79,11 +80,16 @@ internal fun <T> ChoiceSetting(
     Column {
         SettingLabel(icon, label)
         SingleChoiceSegmentedButtonRow((if (hint == null) ControlPadding else HintedControlPadding).fillMaxWidth()) {
+            val crowded = options.size > MAX_OPTIONS_WITH_CHECK
             options.forEachIndexed { index, option ->
                 SegmentedButton(
                     selected = option == selected,
                     onClick = { onSelect(option) },
                     shape = SegmentedButtonDefaults.itemShape(index, options.size),
+                    // Four or more labels leave no room for the check mark and the usual padding on
+                    // a phone; the fill alone marks the choice then.
+                    icon = if (crowded) ({}) else ({ SegmentedButtonDefaults.Icon(option == selected) }),
+                    contentPadding = if (crowded) CrowdedPadding else SegmentedButtonDefaults.ContentPadding,
                 ) {
                     Text(optionLabel(option), maxLines = 1)
                 }
@@ -315,3 +321,9 @@ private fun SettingLabel(
         trailingContent = trailing,
     )
 }
+
+/** The most options a [ChoiceSetting] shows with a check mark on the chosen one. */
+private const val MAX_OPTIONS_WITH_CHECK = 3
+
+/** The padding of a segment in a [ChoiceSetting] with more than [MAX_OPTIONS_WITH_CHECK] options. */
+private val CrowdedPadding = PaddingValues(horizontal = 4.dp)

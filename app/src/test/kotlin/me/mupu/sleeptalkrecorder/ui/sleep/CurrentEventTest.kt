@@ -1,6 +1,8 @@
 package me.mupu.sleeptalkrecorder.ui.sleep
 
+import me.mupu.sleeptalkrecorder.data.KindColor
 import me.mupu.sleeptalkrecorder.data.SleepEvent
+import me.mupu.sleeptalkrecorder.data.ThemeRole
 import me.mupu.sleeptalkrecorder.playback.Stretch
 import java.time.Duration
 import org.junit.Assert.assertEquals
@@ -9,7 +11,7 @@ import org.junit.Test
 
 class CurrentEventTest {
 
-    private fun event(id: Long, startMillis: Long, endMillis: Long) = SleepEvent(id, startMillis, endMillis, "event", null, "primary")
+    private fun event(id: Long, startMillis: Long, endMillis: Long) = SleepEvent(id, Duration.ofMillis(startMillis), Duration.ofMillis(endMillis), "event", null, KindColor.Theme(ThemeRole.PRIMARY))
     private fun stretch(startMillis: Long, endMillis: Long) = Stretch(Duration.ofMillis(startMillis), Duration.ofMillis(endMillis))
 
     private val events = listOf(event(1, 10_000, 12_000), event(2, 13_500, 14_000), event(3, 30_000, 31_000))

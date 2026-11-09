@@ -65,6 +65,9 @@
     <!-- Playing speed, for example "1.25×". -->
     <string name="speed_value">%1$s×</string>
     <string name="speed_hint">Speed (until you leave this sleep)</string>
+    <!-- The speed of single events, kept apart from that of the sleep, for example "1.25× event". -->
+    <string name="speed_value_event">%1$s× event</string>
+    <string name="speed_hint_event">Speed of single events (until you leave this sleep)</string>
     <string name="sleep_no_audio">This sleep holds no audio that can be played.</string>
     <string name="playback_failed">Part of this sleep cannot be played. Its files may be damaged.</string>
     <string name="zoom_in">Zoom in</string>
@@ -271,7 +274,9 @@
     <string name="transcription_mode_after_stop_hint">Right after the recording. Pauses below 30 percent battery until the phone charges.</string>
     <string name="transcription_mode_while_charging_hint">Only while the phone is charging.</string>
     <string name="transcription_mode_manual_hint">Only when you start it from the menu of a sleep.</string>
-    <string name="settings_models_hint">The app recognises speech on the phone. It uses the internet only to download models; recordings never leave the phone.</string>
+    <string name="transcription_mode_off">Off</string>
+    <string name="transcription_mode_off_hint">Speech recognition does not run. Texts recognised before are kept.</string>
+    <string name="settings_models_hint">This version of the app processes everything on the phone, speech recognition too. It uses the internet only to download models.</string>
     <string name="settings_transcript_language">Transcript language</string>
     <string name="settings_transcript_language_hint">Your language. English is always recognised as well.</string>
     <string name="transcript_language_app">Same as the app</string>
@@ -320,7 +325,7 @@
     <string name="open_setting">Open setting</string>
     <string name="open_again">Open again</string>
     <string name="requirement_microphone">Microphone</string>
-    <string name="requirement_microphone_why">To record. Recordings always stay on the device.</string>
+    <string name="requirement_microphone_why">To record. This version keeps recordings on the phone.</string>
     <string name="requirement_notifications">Notifications</string>
     <string name="requirement_notifications_why">Shows that a recording is running, with a Stop button.</string>
     <string name="requirement_battery">Battery optimisation off</string>

@@ -1,28 +1,22 @@
 package me.mupu.sleeptalkrecorder.models
 
 import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.os.SystemClock
-import androidx.core.content.ContextCompat
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
-import androidx.work.ForegroundInfo
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
-import me.mupu.sleeptalkrecorder.MainActivity
 import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.SleepTalkApplication
+import me.mupu.sleeptalkrecorder.notifications.NotificationIds
+import me.mupu.sleeptalkrecorder.notifications.ProgressNotifications
 import java.io.IOException
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
@@ -145,57 +139,32 @@ class ModelDownloadWorker(context: Context, params: WorkerParameters) : Coroutin
 /** The progress notification of a model download, with a Cancel action. */
 private class ModelDownloadNotifications(private val context: Context, private val workId: UUID) {
 
-    private val manager = context.getSystemService(NotificationManager::class.java)
+    private val progress = ProgressNotifications(
+        context,
+        NotificationIds.MODEL_DOWNLOAD,
+        channelId = "model_download",
+        channelName = R.string.notification_channel_model,
+        channelDescription = R.string.notification_channel_model_description,
+    )
 
-    // The texts in the per-app language, which Android 12 applies to activities only.
-    private val texts = ContextCompat.getContextForLanguage(context)
-
-    init {
-        // Low: shown in the shade without a sound; repeated calls keep what the user changed.
-        manager.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                texts.getString(R.string.notification_channel_model),
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply { description = texts.getString(R.string.notification_channel_model_description) },
-        )
-    }
-
-    fun foregroundInfo(model: TranscriptionModel, percent: Long?) =
-        ForegroundInfo(NOTIFICATION_ID, notification(model, percent), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+    fun foregroundInfo(model: TranscriptionModel, percent: Long?) = progress.foregroundInfo(notification(model, percent))
 
     fun show(model: TranscriptionModel, percent: Long) {
-        manager.notify(NOTIFICATION_ID, notification(model, percent))
+        progress.show(notification(model, percent))
     }
 
     private fun notification(model: TranscriptionModel, percent: Long?): Notification {
-        val openApp = PendingIntent.getActivity(
-            context,
-            0,
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            PendingIntent.FLAG_IMMUTABLE,
-        )
+        val texts = progress.texts
         val cancel = WorkManager.getInstance(context).createCancelPendingIntent(workId)
-
-        return Notification.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_download)
-            .setContentTitle(texts.getString(R.string.notification_model_title))
-            .setContentText(model.displayName)
-            .setSubText(percent?.let { texts.getString(R.string.percent, it.toInt()) })
-            .setProgress(100, percent?.toInt() ?: 0, percent == null)
-            .setContentIntent(openApp)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setCategory(Notification.CATEGORY_PROGRESS)
-            .addAction(
+        return progress.build {
+            setSmallIcon(R.drawable.ic_download)
+            setContentTitle(texts.getString(R.string.notification_model_title))
+            setContentText(model.displayName)
+            setSubText(percent?.let { texts.getString(R.string.percent, it.toInt()) })
+            setProgress(100, percent?.toInt() ?: 0, percent == null)
+            addAction(
                 Notification.Action.Builder(Icon.createWithResource(context, R.drawable.ic_stop), texts.getString(R.string.cancel), cancel).build(),
             )
-            .build()
-    }
-
-    private companion object {
-        // The recording service uses 1 and 2.
-        const val NOTIFICATION_ID = 3
-        const val CHANNEL_ID = "model_download"
+        }
     }
 }

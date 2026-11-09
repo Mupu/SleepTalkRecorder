@@ -24,6 +24,9 @@ sealed interface TranscriptionStatus {
     /** Every event has a result. */
     data object Done : TranscriptionStatus
 
+    /** The user switched speech recognition off. */
+    data object Off : TranscriptionStatus
+
     companion object {
         /**
          * The status of sleep [sleepId] from its [count], the run in [progress], the [mode] of the
@@ -38,6 +41,8 @@ sealed interface TranscriptionStatus {
             hasModel: Boolean,
             batteryPause: Boolean,
         ): TranscriptionStatus = when {
+            // Switching it off cancels a run, which may report progress a moment longer.
+            mode == TranscriptionMode.OFF -> Off
             progress?.sleepId == sleepId -> Running(progress.done, progress.total)
             count.events == 0 -> NoEvents
             count.pending == 0 -> Done

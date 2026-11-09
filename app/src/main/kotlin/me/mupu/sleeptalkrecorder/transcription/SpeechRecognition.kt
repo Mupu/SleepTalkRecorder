@@ -4,6 +4,7 @@ import me.mupu.sleeptalkrecorder.data.AnnotationEntity
 import me.mupu.sleeptalkrecorder.data.AnnotationOrigin
 import me.mupu.sleeptalkrecorder.data.AnnotationType
 import me.mupu.sleeptalkrecorder.data.EventKinds
+import me.mupu.sleeptalkrecorder.data.Producer
 import me.mupu.sleeptalkrecorder.models.TranscriptionModel
 import java.time.Duration
 import kotlin.math.ceil
@@ -24,8 +25,7 @@ interface Transcriber : AutoCloseable {
 class SpeechRecognition(model: TranscriptionModel, private val transcriber: Transcriber) : EventAnalysis {
 
     override val origin = AnnotationOrigin.DEVICE
-    override val producer = model.id
-    override val version = "${TranscriptFilter.VERSION}"
+    override val producer = Producer(model.id, "${TranscriptFilter.VERSION}")
 
     override suspend fun analyse(clip: EventClip): List<AnnotationEntity> {
         val minSamples = clip.sampleRate * MIN_CLIP.toMillis() / 1000
@@ -40,13 +40,12 @@ class SpeechRecognition(model: TranscriptionModel, private val transcriber: Tran
             AnnotationEntity(
                 sleepId = clip.sleepId,
                 type = AnnotationType.TRANSCRIPT,
-                startMillis = clip.event.start.toMillis(),
-                endMillis = clip.event.end.toMillis(),
+                start = clip.event.start,
+                end = clip.event.end,
                 kindId = if (verdict == Verdict.NoSpeech) EventKinds.EVENT else EventKinds.SPEECH,
                 text = (verdict as? Verdict.Speech)?.text,
                 origin = origin,
                 producer = producer,
-                producerVersion = version,
             ),
         )
     }

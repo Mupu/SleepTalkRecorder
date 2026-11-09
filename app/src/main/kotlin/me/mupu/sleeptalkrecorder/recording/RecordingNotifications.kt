@@ -5,11 +5,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
 import android.graphics.drawable.Icon
 import androidx.core.content.ContextCompat
-import me.mupu.sleeptalkrecorder.MainActivity
 import me.mupu.sleeptalkrecorder.R
+import me.mupu.sleeptalkrecorder.notifications.NotificationIds
+import me.mupu.sleeptalkrecorder.notifications.openAppIntent
 import me.mupu.sleeptalkrecorder.time.SleepDate
 import me.mupu.sleeptalkrecorder.ui.format.ClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.sleepTitle
@@ -59,7 +59,7 @@ internal class RecordingNotifications(private val context: Context) {
         val builder = Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_mic)
             .setContentTitle(texts.getString(R.string.notification_recording_title))
-            .setContentIntent(openApp())
+            .setContentIntent(openAppIntent(context))
             .setOngoing(true)
             .setCategory(Notification.CATEGORY_SERVICE)
             .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
@@ -83,7 +83,7 @@ internal class RecordingNotifications(private val context: Context) {
 
     /** Replaces the shown notification, for example once the recording's start is known. */
     fun update(notification: Notification) {
-        manager.notify(NOTIFICATION_ID, notification)
+        manager.notify(NotificationIds.RECORDING, notification)
     }
 
     /**
@@ -95,30 +95,21 @@ internal class RecordingNotifications(private val context: Context) {
             .setSmallIcon(R.drawable.ic_alarm_off)
             .setContentTitle(texts.getString(R.string.notification_stopped_title, clock.format(stoppedAt)))
             .setContentText(texts.getString(R.string.notification_stopped_text))
-            .setContentIntent(openApp())
+            .setContentIntent(openAppIntent(context))
             .setAutoCancel(true)
             .setWhen(stoppedAt.toEpochMilli())
             .setShowWhen(true)
             .build()
-        manager.notify(STOPPED_NOTIFICATION_ID, notification)
+        manager.notify(NotificationIds.RECORDING_STOPPED, notification)
     }
 
     /** Removes the notification of an earlier automatic stop, which a new recording outdates. */
     fun cancelStoppedAtLatest() {
-        manager.cancel(STOPPED_NOTIFICATION_ID)
+        manager.cancel(NotificationIds.RECORDING_STOPPED)
     }
 
-    private fun openApp() = PendingIntent.getActivity(
-        context,
-        0,
-        Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-        PendingIntent.FLAG_IMMUTABLE,
-    )
-
-    companion object {
-        const val NOTIFICATION_ID = 1
-        private const val STOPPED_NOTIFICATION_ID = 2
-        private const val CHANNEL_ID = "recording"
-        private const val STOPPED_CHANNEL_ID = "recording_stopped"
+    private companion object {
+        const val CHANNEL_ID = "recording"
+        const val STOPPED_CHANNEL_ID = "recording_stopped"
     }
 }

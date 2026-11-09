@@ -49,20 +49,6 @@ class FeatureTrack(
         )
     }
 
-    fun rmsDb(hop: Int): Float = levelDb(rms[hop])
-    fun peakDb(hop: Int): Float = levelDb(peak[hop])
-    fun lowDb(hop: Int): Float = levelDb(low[hop])
-    fun speechDb(hop: Int): Float = levelDb(speech[hop])
-    fun highDb(hop: Int): Float = levelDb(high[hop])
-
-    /** Spectral flatness of [hop] from 0 to 1. */
-    fun flatness(hop: Int): Float = unsigned(flatness[hop]) / 255f
-
-    fun zeroCrossings(hop: Int): Int = unsigned(zeroCrossings[hop])
-
-    /** Voicing of [hop] from 0 to 1. */
-    fun voicing(hop: Int): Float = unsigned(voicing[hop]) / 255f
-
     companion object {
         /** Samples per hop: 20 ms at 16 kHz. */
         const val HOP_SAMPLES = 320

@@ -1,14 +1,17 @@
 package me.mupu.sleeptalkrecorder.ui.sleep
 
 import me.mupu.sleeptalkrecorder.data.EventKinds
+import me.mupu.sleeptalkrecorder.data.KindColor
 import me.mupu.sleeptalkrecorder.data.SleepEvent
+import me.mupu.sleeptalkrecorder.data.ThemeRole
+import java.time.Duration
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class EventFilterTest {
 
     private fun event(id: Long, kind: String, hidden: Boolean = false) =
-        SleepEvent(id, id * 10_000, id * 10_000 + 1_000, kind, null, "primary", hidden = hidden)
+        SleepEvent(id, Duration.ofSeconds(id * 10), Duration.ofSeconds(id * 10 + 1), kind, null, KindColor.Theme(ThemeRole.PRIMARY), hidden = hidden)
 
     private val events = listOf(
         event(1, EventKinds.EVENT),

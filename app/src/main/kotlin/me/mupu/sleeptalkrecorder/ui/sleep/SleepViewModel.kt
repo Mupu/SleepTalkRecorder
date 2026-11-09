@@ -2,7 +2,6 @@ package me.mupu.sleeptalkrecorder.ui.sleep
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import me.mupu.sleeptalkrecorder.data.AnnotationEntity
 import me.mupu.sleeptalkrecorder.data.EventKindEntity
 import me.mupu.sleeptalkrecorder.data.EventKinds
 import me.mupu.sleeptalkrecorder.data.SleepEvent
@@ -21,7 +20,6 @@ import me.mupu.sleeptalkrecorder.transcription.ModelChange
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionStatus
 import me.mupu.sleeptalkrecorder.transcription.Transcriptions
 import java.time.Duration
-import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
@@ -37,81 +35,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-/** The player of the sleep screen, once the sleep's audio is known. */
-data class PlayerUiState(
-    /** How long the whole sleep plays; zero if it has no playable audio. */
-    val duration: Duration,
-    /** The position shown: the playing position, or where the timeline is being dragged to. */
-    val position: Duration,
-    /** The instant the sample at [position] was recorded; null without audio. */
-    val clock: Instant?,
-    val playing: Boolean,
-    val speed: Float,
-    val failed: Boolean,
-    /** Whether only the listed events are played (cut playback) rather than the whole sleep. */
-    val cut: Boolean,
-    /** Whether cut playback is chosen but no event is listed, so it has nothing to play. */
-    val cutIsEmpty: Boolean,
-) {
-    /** Whether there is anything to play. */
-    val hasAudio: Boolean get() = duration > Duration.ZERO
-}
-
-/** Everything the sleep screen shows. */
-data class SleepUiState(
-    /** The sleep, or null while loading or once it is gone. */
-    val sleep: SleepSummary? = null,
-    /** The sleep's audio; null while it is being read. */
-    val timeline: SleepTimeline? = null,
-    /** Null while the sleep's audio is being read. */
-    val player: PlayerUiState? = null,
-    /** The loudness the timeline draws; null while it is being read. */
-    val loudness: SleepLoudness? = null,
-    /** The events of the sleep, hidden ones too; empty until they are found ([SleepSummary.eventsFound]). */
-    val events: List<SleepEvent> = emptyList(),
-    /** The events the timeline colours: those that are not hidden. */
-    val timelineEvents: List<SleepEvent> = emptyList(),
-    /** Which events the list shows. */
-    val filter: EventFilter = EventFilter.All,
-    /** The events the list shows and cut playback plays: those the [filter] shows. */
-    val listedEvents: List<SleepEvent> = emptyList(),
-    /** The stretches of the sleep's audio in which the microphone was unavailable. */
-    val unavailable: List<Stretch> = emptyList(),
-    /** The event being played on its own, if any. */
-    val playingEventId: Long? = null,
-    /** The event at the playhead (see [currentEvent]), which the list highlights and auto zoom frames. */
-    val currentEvent: SleepEvent? = null,
-    /** Whether the sensitivity can be set: the sleep is finished, its events found and its loudness read. */
-    val sensitivityAvailable: Boolean = false,
-)
-
-/** The sensitivity sheet while it is open, for the whole sleep or around one event. */
-data class SensitivityUiState(
-    /** The event the sheet was opened from; null for the whole sleep. */
-    val event: SleepEvent?,
-    /** The stretch of the sleep's audio and the settings it is shown with. */
-    val editor: SensitivityEditor,
-    /** The start threshold the slider shows, in dB above the baseline. */
-    val thresholdDb: Float,
-    /** Whether the user changed the setting, so that it can be applied. */
-    val changed: Boolean,
-    /** How many events the stretch held when the sheet opened. */
-    val before: Int,
-    /** The stretch re-scanned with the slider's setting; null until the first re-scan is done. */
-    val chart: SensitivityChart?,
-    /** Whether the setting is being stored and the sleep searched again. */
-    val applying: Boolean,
-)
-
-/**
- * A sensitivity was applied and the sleep searched again: [events] now lie in the stretch, which
- * is the whole sleep if [wholeSleep].
- */
-data class SensitivityApplied(val wholeSleep: Boolean, val events: Int)
-
-/** The user said [event] is not speech; [previous] are the user's transcripts over it before, which undo restores. */
-class NotSpeech(val event: SleepEvent, val previous: List<AnnotationEntity>)
 
 /** State and actions of the sleep screen: the sleep, its events, their playback and speech recognition. */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -223,6 +146,7 @@ class SleepViewModel(
                 clock = if (it.pieces.isEmpty()) null else it.instantAt(position),
                 playing = playback.playing,
                 speed = playback.speed,
+                speedOf = playback.speedOf,
                 failed = playback.failed,
                 cut = cut,
                 cutIsEmpty = plan?.stretches?.isEmpty() == true,
@@ -287,10 +211,12 @@ class SleepViewModel(
     /** Each sensitivity applied, once the sleep was searched again with it. */
     val sensitivityApplied: Flow<SensitivityApplied> = applied.receiveAsFlow()
 
+    /** Plays the sleep, in full or cut, from where it stands, or pauses it while it plays. */
     fun togglePlay() {
         if (player.state.value.playing) player.pause() else player.play()
     }
 
+    /** Pauses whatever plays, as when the screen is no longer visible. */
     fun pause() {
         player.pause()
     }
@@ -384,11 +310,11 @@ class SleepViewModel(
     /** Recognises speech in every event of the sleep again, now, whatever the settings say. */
     fun runSpeechRecognition() = transcriptions.runNow(sleepId)
 
-    /** Switches to the next speed, after the fastest back to the slowest. */
-    fun nextSpeed() {
-        val current = SPEEDS.indexOfFirst { it >= player.state.value.speed }
-        player.setSpeed(SPEEDS[(current + 1) % SPEEDS.size])
-    }
+    /**
+     * Switches what plays now, a single event or the sleep, to its next speed, after the fastest
+     * back to the slowest; the speeds apply only until the screen closes.
+     */
+    fun nextSpeed() = player.nextSpeed()
 
     /**
      * Opens the sensitivity sheet for [event] and [SENSITIVITY_MARGIN] on either side of it, or,
@@ -454,9 +380,6 @@ class SleepViewModel(
     }
 
     private companion object {
-        /** The speeds the speed button cycles through; they apply only until the screen closes. */
-        val SPEEDS = listOf(0.75f, 1f, 1.25f, 1.5f, 2f, 2.5f, 3f)
-
         /** How much of the sleep on either side of an event its sensitivity sheet shows and sets. */
         val SENSITIVITY_MARGIN: Duration = Duration.ofSeconds(30)
 

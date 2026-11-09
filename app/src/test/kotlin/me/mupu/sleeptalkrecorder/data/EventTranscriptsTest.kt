@@ -1,5 +1,6 @@
 package me.mupu.sleeptalkrecorder.data
 
+import java.time.Duration
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -9,7 +10,7 @@ class EventTranscriptsTest {
 
     /** An event as the detector stores it, a plain event until a transcript says otherwise. */
     private fun event(id: Long, startMillis: Long, endMillis: Long) =
-        SleepEvent(id, startMillis, endMillis, EventKinds.EVENT, null, "primary")
+        SleepEvent(id, Duration.ofMillis(startMillis), Duration.ofMillis(endMillis), EventKinds.EVENT, null, KindColor.Theme(ThemeRole.PRIMARY))
 
     private var nextId = 1L
 
@@ -24,12 +25,12 @@ class EventTranscriptsTest {
         id = nextId++,
         sleepId = 1,
         type = AnnotationType.TRANSCRIPT,
-        startMillis = startMillis,
-        endMillis = endMillis,
+        start = Duration.ofMillis(startMillis),
+        end = Duration.ofMillis(endMillis),
         kindId = kind,
         text = text,
         origin = origin,
-        producer = producer.takeIf { origin != AnnotationOrigin.USER },
+        producer = producer?.takeIf { origin != AnnotationOrigin.USER }?.let { Producer(it, "1") },
     )
 
     private fun correction(startMillis: Long, endMillis: Long, text: String) =

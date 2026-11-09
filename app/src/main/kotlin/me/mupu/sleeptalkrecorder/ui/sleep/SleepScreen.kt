@@ -37,6 +37,7 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -63,9 +64,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.SleepSummary
+import me.mupu.sleeptalkrecorder.playback.PlaybackKind
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.time.SleepDate
 import me.mupu.sleeptalkrecorder.transcription.ModelChange
+import me.mupu.sleeptalkrecorder.transcription.TranscriptionStatus
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.AppBarIcon
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
@@ -85,8 +88,8 @@ import java.time.ZoneId
  * pans or zooms the timeline by hand, frames that event and keeps the playhead in view.
  *
  * The sensitivity of the sleep is set from the app bar's menu, that around an event from the
- * event's menu, in [SensitivitySheet]. The event's menu also hides it, which a snackbar undoes, or
- * unhides it; the timeline draws hidden events grey like silence. A speech event's text can be
+ * event's menu, in [SensitivitySheet]. The event's menu also hides it, which a snackbar undoes; a
+ * hidden event has an Unhide button on its row, and the timeline draws it grey like silence. A speech event's text can be
  * corrected, or the event marked as not speech, which a snackbar undoes; when the active model is
  * another than the one that made the sleep's transcripts, a hint offers to recognise them again.
  */
@@ -152,7 +155,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                                 R.drawable.ic_subtitles,
                                 enabled = transcription.canRun,
                                 onClick = viewModel::runSpeechRecognition,
-                            ),
+                            ).takeUnless { transcription == TranscriptionStatus.Off },
                         ),
                     )
                 },
@@ -338,7 +341,7 @@ private fun Player(player: PlayerUiState, onTogglePlay: () -> Unit, onNextSpeed:
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
         PlaybackMode(cut = player.cut, enabled = player.hasAudio, onCutChange = onCutChange, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(8.dp))
-        SpeedChip(player.speed, enabled = player.hasAudio, onClick = onNextSpeed)
+        SpeedChip(player.speed, player.speedOf, enabled = player.hasAudio, onClick = onNextSpeed)
     }
 
     val problem = when {
@@ -387,7 +390,7 @@ private fun PlaybackMode(cut: Boolean, enabled: Boolean, onCutChange: (Boolean) 
 
 /**
  * The events the [filter] shows, in order; a tap shows one on the timeline, its button plays it
- * alone, and its menu hides or unhides it, opens the sensitivity around it while [onSensitivity]
+ * alone, a hidden one has a button that unhides it, and its menu hides it, opens the sensitivity around it while [onSensitivity]
  * is given, and for a speech event corrects its text or marks it as not speech. The event at the
  * playhead is highlighted and scrolled into view.
  */
@@ -529,6 +532,13 @@ private fun EventRow(
                 onRerun = onRerun,
             )
         }
+        if (event.hidden) {
+            TextButton(onClick = { onHide(event, false) }) {
+                Icon(painterResource(R.drawable.ic_visibility), contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.unhide_event))
+            }
+        }
         IconButton(onClick = { onTogglePlay(event) }) {
             Icon(
                 painterResource(if (playing) R.drawable.ic_pause else R.drawable.ic_play),
@@ -537,11 +547,8 @@ private fun EventRow(
         }
         MoreMenu(
             listOfNotNull(
-                if (event.hidden) {
-                    MenuEntry(stringResource(R.string.unhide_event), R.drawable.ic_visibility) { onHide(event, false) }
-                } else {
-                    MenuEntry(stringResource(R.string.hide_event), R.drawable.ic_visibility_off) { onHide(event, true) }
-                },
+                MenuEntry(stringResource(R.string.hide_event), R.drawable.ic_visibility_off) { onHide(event, true) }
+                    .takeUnless { event.hidden },
                 onSensitivity?.let { MenuEntry(stringResource(R.string.sensitivity_here), R.drawable.ic_tune) { it(event) } },
                 MenuEntry(stringResource(R.string.correct_text), R.drawable.ic_edit) { onCorrect(event) }.takeIf { event.isSpeech },
                 MenuEntry(stringResource(R.string.not_speech_plain_event), R.drawable.ic_voice_over_off) { onNotSpeech(event) }
@@ -566,18 +573,25 @@ private fun HiddenTag() {
     )
 }
 
-/** Shows the speed and switches to the next one on every tap. */
+/**
+ * Shows the speed of what plays now and switches it to the next one on every tap; while a single
+ * event plays on its own, that is the event speed, which the chip says.
+ */
 @Composable
-private fun SpeedChip(speed: Float, enabled: Boolean, onClick: () -> Unit) {
+private fun SpeedChip(speed: Float, speedOf: PlaybackKind, enabled: Boolean, onClick: () -> Unit) {
     val resources = LocalResources.current
     val number = NumberFormat.getNumberInstance(resources.configuration.locales[0]).apply {
         maximumFractionDigits = 2
     }
-    val hint = stringResource(R.string.speed_hint)
+    val hint = stringResource(if (speedOf == PlaybackKind.EVENT) R.string.speed_hint_event else R.string.speed_hint)
+    val label = when (speedOf) {
+        PlaybackKind.SLEEP -> stringResource(R.string.speed_value, number.format(speed))
+        PlaybackKind.EVENT -> stringResource(R.string.speed_value_event, number.format(speed))
+    }
     AssistChip(
         onClick = onClick,
         enabled = enabled,
-        label = { Text(stringResource(R.string.speed_value, number.format(speed))) },
+        label = { Text(label) },
         leadingIcon = { Icon(painterResource(R.drawable.ic_speed), contentDescription = null) },
         modifier = Modifier.semantics { contentDescription = hint },
     )

@@ -41,9 +41,10 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.toColorInt
 import me.mupu.sleeptalkrecorder.R
+import me.mupu.sleeptalkrecorder.data.KindColor
 import me.mupu.sleeptalkrecorder.data.SleepEvent
+import me.mupu.sleeptalkrecorder.data.ThemeRole
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
@@ -315,12 +316,14 @@ private fun DrawScope.drawPlayhead(window: TimelineWindow, clock: Duration, top:
     drawRect(color, topLeft = Offset(x - 1.dp.toPx(), top), size = Size(2.dp.toPx(), height))
 }
 
-/** The colour of an event kind: a role of the theme, which follows light and dark mode, or `#RRGGBB`. */
-internal fun kindColor(spec: String, colors: ColorScheme): Color = when (spec) {
-    "primary" -> colors.primary
-    "secondary" -> colors.secondary
-    "tertiary" -> colors.tertiary
-    else -> runCatching { Color(spec.toColorInt()) }.getOrDefault(colors.primary)
+/** The colour [color] has in the theme's [colors]. */
+internal fun kindColor(color: KindColor, colors: ColorScheme): Color = when (color) {
+    is KindColor.Theme -> when (color.role) {
+        ThemeRole.PRIMARY -> colors.primary
+        ThemeRole.SECONDARY -> colors.secondary
+        ThemeRole.TERTIARY -> colors.tertiary
+    }
+    is KindColor.Fixed -> Color(0xFF000000.toInt() or color.rgb)
 }
 
 /** Distances between clock ticks; the shortest that leaves room for the labels is used. */

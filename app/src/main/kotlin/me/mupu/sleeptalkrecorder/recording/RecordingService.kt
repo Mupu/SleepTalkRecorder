@@ -8,6 +8,7 @@ import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.os.PowerManager
 import me.mupu.sleeptalkrecorder.SleepTalkApplication
+import me.mupu.sleeptalkrecorder.notifications.NotificationIds
 import me.mupu.sleeptalkrecorder.settings.Settings
 import me.mupu.sleeptalkrecorder.time.latestStop
 import me.mupu.sleeptalkrecorder.ui.format.ClockFormatter
@@ -74,7 +75,7 @@ class RecordingService : Service() {
         notifications.cancelStoppedAtLatest()
         try {
             startForeground(
-                RecordingNotifications.NOTIFICATION_ID,
+                NotificationIds.RECORDING,
                 notifications.recording(startedAt = null),
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
             )
@@ -99,8 +100,8 @@ class RecordingService : Service() {
                     var shownStart: Instant? = null
                     RecordingSession(
                         source = MicrophoneSource(this@RecordingService),
-                        store = container.sleepRepository,
-                        recordingsDirectory = container.sleepRepository.recordingsDirectory,
+                        store = container.sleepRecordings,
+                        recordingsDirectory = container.recordingFiles.recordingsDirectory,
                         clocks = SystemClocks,
                         stopAt = { stopAt.value },
                     ).record { progress ->

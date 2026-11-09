@@ -29,6 +29,12 @@ class TranscriptionStatusTest {
     }
 
     @Test
+    fun `switched off, speech recognition neither waits nor runs`() {
+        assertEquals(TranscriptionStatus.Off, status(mode = TranscriptionMode.OFF))
+        assertEquals(TranscriptionStatus.Off, status(mode = TranscriptionMode.OFF, progress = TranscriptionProgress(1, 2, 6)))
+    }
+
+    @Test
     fun `a sleep whose events all have a result is done`() {
         assertEquals(TranscriptionStatus.Done, status(count = TranscriptionCount(events = 3, transcribed = 3)))
         assertEquals(TranscriptionStatus.NoEvents, status(count = TranscriptionCount(events = 0, transcribed = 0)))

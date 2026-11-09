@@ -1,26 +1,20 @@
 package me.mupu.sleeptalkrecorder.transcription
 
 import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import android.content.pm.ServiceInfo
 import android.os.BatteryManager
 import android.util.Log
-import androidx.core.content.ContextCompat
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
-import androidx.work.ForegroundInfo
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
-import me.mupu.sleeptalkrecorder.MainActivity
 import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.SleepTalkApplication
+import me.mupu.sleeptalkrecorder.notifications.NotificationIds
+import me.mupu.sleeptalkrecorder.notifications.ProgressNotifications
 import me.mupu.sleeptalkrecorder.settings.TranscriptionMode
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +32,8 @@ import kotlinx.coroutines.launch
  * - [TranscriptionMode.WHILE_CHARGING]: only the job that waits for the charger; WorkManager stops
  *   it when the charger is unplugged and runs it again on the next one.
  * - [TranscriptionMode.MANUAL]: no job of its own; [runNow] starts one for a sleep.
+ * - [TranscriptionMode.OFF]: no job at all; switching it off cancels every job, also those
+ *   started for a sleep.
  */
 class TranscriptionScheduler(context: Context) {
 
@@ -59,6 +55,7 @@ class TranscriptionScheduler(context: Context) {
                 workManager.cancelUniqueWork(AFTER_STOP)
                 workManager.cancelUniqueWork(ON_CHARGER)
             }
+            TranscriptionMode.OFF -> workManager.cancelAllWorkByTag(TAG)
         }
     }
 
@@ -66,6 +63,7 @@ class TranscriptionScheduler(context: Context) {
     fun runNow(sleepId: Long) {
         val request = OneTimeWorkRequestBuilder<TranscriptionWorker>()
             .setInputData(workDataOf(TranscriptionWorker.KEY_SLEEP to sleepId))
+            .addTag(TAG)
             .build()
         workManager.enqueueUniqueWork("$MANUAL$sleepId", ExistingWorkPolicy.REPLACE, request)
     }
@@ -84,6 +82,7 @@ class TranscriptionScheduler(context: Context) {
         val request = OneTimeWorkRequestBuilder<TranscriptionWorker>()
             .setInputData(workDataOf(TranscriptionWorker.KEY_PAUSE to !charging))
             .setConstraints(Constraints(requiresCharging = charging))
+            .addTag(TAG)
             .build()
         // A running job may have looked for waiting events already; the new one runs after it.
         workManager.enqueueUniqueWork(name, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
@@ -93,6 +92,9 @@ class TranscriptionScheduler(context: Context) {
         const val AFTER_STOP = "transcription-after-stop"
         const val ON_CHARGER = "transcription-on-charger"
         const val MANUAL = "transcription-sleep-"
+
+        /** Every speech recognition job carries it, so switching speech recognition off finds them all. */
+        const val TAG = "transcription"
     }
 }
 
@@ -161,52 +163,31 @@ class TranscriptionWorker(context: Context, params: WorkerParameters) : Coroutin
 }
 
 /** The progress notification of speech recognition. */
-private class TranscriptionNotifications(private val context: Context) {
+private class TranscriptionNotifications(context: Context) {
 
-    private val manager = context.getSystemService(NotificationManager::class.java)
+    private val progress = ProgressNotifications(
+        context,
+        NotificationIds.TRANSCRIPTION,
+        channelId = "transcription",
+        channelName = R.string.notification_channel_transcription,
+        channelDescription = R.string.notification_channel_transcription_description,
+    )
 
-    // The texts in the per-app language, which Android 12 applies to activities only.
-    private val texts = ContextCompat.getContextForLanguage(context)
-
-    init {
-        manager.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                texts.getString(R.string.notification_channel_transcription),
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply { description = texts.getString(R.string.notification_channel_transcription_description) },
-        )
-    }
-
-    fun foregroundInfo(progress: TranscriptionProgress) =
-        ForegroundInfo(NOTIFICATION_ID, notification(progress), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+    fun foregroundInfo(progress: TranscriptionProgress) = this.progress.foregroundInfo(notification(progress))
 
     fun show(progress: TranscriptionProgress) {
-        manager.notify(NOTIFICATION_ID, notification(progress))
+        this.progress.show(notification(progress))
     }
 
     private fun notification(progress: TranscriptionProgress): Notification {
-        val openApp = PendingIntent.getActivity(
-            context,
-            0,
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            PendingIntent.FLAG_IMMUTABLE,
-        )
-        return Notification.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_record_voice)
-            .setContentTitle(texts.getString(R.string.notification_transcription_title))
-            .setContentText(texts.resources.getQuantityString(R.plurals.notification_transcription_progress, progress.total, progress.done, progress.total))
-            .setProgress(progress.total, progress.done, false)
-            .setContentIntent(openApp)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setCategory(Notification.CATEGORY_PROGRESS)
-            .build()
-    }
-
-    private companion object {
-        // The recording service uses 1 and 2, model downloads 3.
-        const val NOTIFICATION_ID = 4
-        const val CHANNEL_ID = "transcription"
+        val texts = this.progress.texts
+        return this.progress.build {
+            setSmallIcon(R.drawable.ic_record_voice)
+            setContentTitle(texts.getString(R.string.notification_transcription_title))
+            setContentText(
+                texts.resources.getQuantityString(R.plurals.notification_transcription_progress, progress.total, progress.done, progress.total),
+            )
+            setProgress(progress.total, progress.done, false)
+        }
     }
 }

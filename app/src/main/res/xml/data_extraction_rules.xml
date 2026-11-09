@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Nothing is backed up or moved to a new device: recordings never leave the phone, and a
-     database without its audio would list sleeps that cannot be played. -->
+<!-- Nothing is backed up or moved to a new device: the audio lies in noBackupFilesDir, which
+     neither includes, and a database without its audio would list sleeps that cannot be played. -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="root" />

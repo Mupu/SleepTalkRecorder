@@ -1,6 +1,5 @@
 package me.mupu.sleeptalkrecorder.transcription
 
-import android.util.Log
 import me.mupu.sleeptalkrecorder.data.AnnotationEntity
 import me.mupu.sleeptalkrecorder.playback.Stretch
 import kotlin.coroutines.cancellation.CancellationException
@@ -55,7 +54,7 @@ class TranscriptionRunner(
     private val store: TranscriptStore,
     private val battery: () -> BatteryState,
     /** Told when the analysis fails on an event, which then waits for the next run. */
-    private val onFailure: (message: String, error: Exception) -> Unit = { message, error -> Log.w(TAG, message, error) },
+    private val onFailure: (message: String, error: Exception) -> Unit,
 ) {
     /** How it ends. */
     enum class Outcome {
@@ -147,8 +146,6 @@ class TranscriptionRunner(
     private fun batteryLow(): Boolean = battery().let { !it.charging && it.percent < LOW_BATTERY_PERCENT }
 
     private companion object {
-        const val TAG = "Transcription"
-
         /** Below this charge an automatic run pauses until the phone charges. */
         const val LOW_BATTERY_PERCENT = 30
     }
