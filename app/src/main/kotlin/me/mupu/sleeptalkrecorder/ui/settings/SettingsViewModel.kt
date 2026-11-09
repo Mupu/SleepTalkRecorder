@@ -10,6 +10,7 @@ import me.mupu.sleeptalkrecorder.settings.SettingsStore
 import me.mupu.sleeptalkrecorder.settings.ThemeMode
 import me.mupu.sleeptalkrecorder.settings.TimeFormat
 import java.time.Duration
+import java.time.LocalTime
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -22,6 +23,8 @@ data class SettingsUiState(
     val timeFormat: TimeFormat,
     val leadIn: Duration,
     val tail: Duration,
+    val stopAtEnabled: Boolean,
+    val stopAt: LocalTime,
 )
 
 /** State and actions of the settings screen. */
@@ -33,8 +36,10 @@ class SettingsViewModel(private val store: SettingsStore) : ViewModel() {
         store.flow(Settings.timeFormat),
         store.flow(Settings.leadIn),
         store.flow(Settings.tail),
-        ::SettingsUiState,
-    ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+        combine(store.flow(Settings.stopAtEnabled), store.flow(Settings.stopAt), ::Pair),
+    ) { theme, timeFormat, leadIn, tail, (stopAtEnabled, stopAt) ->
+        SettingsUiState(theme, timeFormat, leadIn, tail, stopAtEnabled, stopAt)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Stores [value] for [setting]; the state follows once it is written. */
     fun <T> set(setting: Setting<T>, value: T) {

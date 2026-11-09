@@ -3,9 +3,11 @@ package me.mupu.sleeptalkrecorder.settings
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import java.time.Duration
+import java.time.LocalTime
 
 /**
  * One user setting: the key it is stored under and the value it has until the user changes it.
@@ -71,3 +73,18 @@ class DurationSetting internal constructor(
         preferences[preferencesKey] = value.coerceIn(range).toMillis()
     }
 }
+
+/** A clock time to the minute, stored as minutes since midnight. */
+fun timeOfDaySetting(key: String, default: LocalTime): Setting<LocalTime> = object : Setting<LocalTime>(default) {
+    private val preferencesKey = intPreferencesKey(key)
+
+    override fun read(preferences: Preferences): LocalTime =
+        preferences[preferencesKey]?.let { LocalTime.ofSecondOfDay(it.coerceIn(0, LAST_MINUTE) * 60L) } ?: default
+
+    override fun write(preferences: MutablePreferences, value: LocalTime) {
+        preferences[preferencesKey] = value.hour * 60 + value.minute
+    }
+}
+
+/** 23:59 in minutes since midnight. */
+private const val LAST_MINUTE = 24 * 60 - 1

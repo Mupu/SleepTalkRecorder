@@ -1,6 +1,7 @@
 package me.mupu.sleeptalkrecorder.settings
 
 import java.time.Duration
+import java.time.LocalTime
 
 /**
  * Every setting the app stores in its [SettingsStore]. A new setting is one more declaration here;
@@ -25,6 +26,12 @@ object Settings {
 
     /** How much of the sound after an event cut playback plays. */
     val tail = durationSetting("tail_ms", Duration.ofMillis(500), Duration.ZERO..Duration.ofSeconds(3))
+
+    /** Whether a recording stops on its own at [stopAt], in case nobody stops it in the morning. */
+    val stopAtEnabled = booleanSetting("stop_at_enabled", true)
+
+    /** The clock time at which a recording stops at the latest while [stopAtEnabled] is on. */
+    val stopAt = timeOfDaySetting("stop_at_minute", LocalTime.NOON)
 }
 
 /** The app's appearance. */

@@ -21,16 +21,20 @@ class RecordingSessionTest {
 
     private val store = FakeStore()
     private val now = Instant.parse("2026-11-08T22:41:12Z")
+
+    @Volatile
+    private var wallClock = now
     private val clocks = object : Clocks {
-        override fun now() = now
+        override fun now() = wallClock
         override fun elapsedNanos() = 12_000_000_000L
     }
 
-    private fun session(source: PcmSource) = RecordingSession(
+    private fun session(source: PcmSource, stopAt: () -> Instant? = { null }) = RecordingSession(
         source = source,
         store = store,
         recordingsDirectory = folder.root,
         clocks = clocks,
+        stopAt = stopAt,
         chunkLength = Duration.ofSeconds(1),
         flushInterval = Duration.ofMillis(100),
     )
@@ -63,12 +67,25 @@ class RecordingSessionTest {
     }
 
     @Test
+    fun `a recording that reaches its stop time ends on its own with every sample that was read`() = runBlocking {
+        val source = FakeSource(buffers = 3, bufferFrames = 1_600)
+        val stopAt = now.plusSeconds(60)
+
+        val result = async(Dispatchers.IO) { session(source, stopAt = { stopAt }).record {} }
+        source.allDelivered.await()
+        wallClock = stopAt
+
+        assertEquals(RecordingEnd.STOP_TIME_REACHED, result.await())
+        assertEquals(4_800L, store.recordings.single().finishedFrames)
+    }
+
+    @Test
     fun `a microphone that stops delivering ends the recording with a failure`() = runBlocking {
         val source = FakeSource(buffers = 2, bufferFrames = 1_600, failAfterBuffers = true)
 
         val result = async(Dispatchers.IO) { session(source).record {} }.await()
 
-        assertEquals(RecordingFailure.MICROPHONE_UNAVAILABLE, result)
+        assertEquals(RecordingEnd.MICROPHONE_UNAVAILABLE, result)
         assertEquals(3_200L, store.recordings.single().finishedFrames)
     }
 
@@ -78,7 +95,7 @@ class RecordingSessionTest {
 
         val result = session(source).record {}
 
-        assertEquals(RecordingFailure.MICROPHONE_UNAVAILABLE, result)
+        assertEquals(RecordingEnd.MICROPHONE_UNAVAILABLE, result)
         assertEquals(emptyList<FakeStore.Recording>(), store.recordings)
     }
 

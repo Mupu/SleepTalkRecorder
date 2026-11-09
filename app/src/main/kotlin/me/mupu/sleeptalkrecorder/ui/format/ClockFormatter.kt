@@ -3,6 +3,7 @@ package me.mupu.sleeptalkrecorder.ui.format
 import androidx.compose.runtime.staticCompositionLocalOf
 import me.mupu.sleeptalkrecorder.settings.TimeFormat
 import java.time.Instant
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -25,6 +26,9 @@ class ClockFormatter(format: TimeFormat) {
     /** The clock time of [instant] in [zone], by default the device's current zone. */
     fun format(instant: Instant, zone: ZoneId = ZoneId.systemDefault(), seconds: Boolean = false): String =
         instant.atZone(zone).format(if (seconds) this.seconds else minutes)
+
+    /** A clock time without a day, such as a setting: "07:30" or "7:30 AM". */
+    fun format(time: LocalTime): String = time.format(minutes)
 
     private fun pattern(afterHours: String) =
         DateTimeFormatter.ofPattern(if (is24Hour) "HH:$afterHours" else "h:$afterHours a", Locale.US)

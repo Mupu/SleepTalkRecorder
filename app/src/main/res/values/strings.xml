@@ -71,6 +71,9 @@
     <string name="settings_lead_in_hint">Before each event in cut playback</string>
     <string name="settings_tail">Tail</string>
     <string name="settings_tail_hint">After each event in cut playback</string>
+    <string name="settings_recording">Recording</string>
+    <string name="settings_stop_at">Stop at the latest at</string>
+    <string name="settings_stop_at_hint">A notification tells you when this stopped a recording.</string>
     <!-- A length in seconds with one decimal: "1.5 s". -->
     <string name="seconds_decimal">%1$.1f s</string>
 
@@ -84,4 +87,9 @@
     <string name="notification_channel_recording">Recording</string>
     <string name="notification_channel_recording_description">Shows that a sleep is being recorded, with a Stop button.</string>
     <string name="notification_recording_title">Recording</string>
+    <string name="notification_channel_stopped">Automatic stop</string>
+    <string name="notification_channel_stopped_description">Tells you when a recording stopped at the latest stop time.</string>
+    <!-- %1$s is a clock time, for example "12:00". -->
+    <string name="notification_stopped_title">Recording stopped at %1$s</string>
+    <string name="notification_stopped_text">The latest stop time from the settings was reached.</string>
 </resources>

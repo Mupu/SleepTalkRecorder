@@ -2,10 +2,12 @@ package me.mupu.sleeptalkrecorder.settings
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.preferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
 import java.time.Duration
+import java.time.LocalTime
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -30,6 +32,8 @@ class SettingsStoreTest {
         assertEquals(Duration.ofMillis(1500), store.flow(Settings.leadIn).first())
         assertEquals(Duration.ofMillis(500), store.flow(Settings.tail).first())
         assertEquals(false, store.flow(Settings.languageChosen).first())
+        assertEquals(true, store.flow(Settings.stopAtEnabled).first())
+        assertEquals(LocalTime.NOON, store.flow(Settings.stopAt).first())
     }
 
     @Test
@@ -39,10 +43,12 @@ class SettingsStoreTest {
         store.set(Settings.theme, ThemeMode.DARK)
         store.set(Settings.leadIn, Duration.ofMillis(2300))
         store.set(Settings.languageChosen, true)
+        store.set(Settings.stopAt, LocalTime.of(7, 45))
 
         assertEquals(ThemeMode.DARK, store.flow(Settings.theme).first())
         assertEquals(Duration.ofMillis(2300), store.flow(Settings.leadIn).first())
         assertEquals(true, store.flow(Settings.languageChosen).first())
+        assertEquals(LocalTime.of(7, 45), store.flow(Settings.stopAt).first())
     }
 
     @Test
@@ -51,11 +57,13 @@ class SettingsStoreTest {
             stringPreferencesKey("theme") to "SEPIA",
             longPreferencesKey("lead_in_ms") to 60_000L,
             longPreferencesKey("tail_ms") to -200L,
+            intPreferencesKey("stop_at_minute") to 24 * 60,
         )
         val store = SettingsStore(InMemoryDataStore(stored))
 
         assertEquals(ThemeMode.SYSTEM, store.flow(Settings.theme).first())
         assertEquals(Duration.ofSeconds(3), store.flow(Settings.leadIn).first())
         assertEquals(Duration.ZERO, store.flow(Settings.tail).first())
+        assertEquals(LocalTime.of(23, 59), store.flow(Settings.stopAt).first())
     }
 }

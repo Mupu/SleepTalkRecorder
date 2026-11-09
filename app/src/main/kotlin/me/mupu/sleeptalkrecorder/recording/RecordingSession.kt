@@ -23,7 +23,10 @@ data class RecordingProgress(
 )
 
 /** Why a recording ended on its own. */
-enum class RecordingFailure {
+enum class RecordingEnd {
+    /** The wall clock reached the time the recording was to stop at the latest. */
+    STOP_TIME_REACHED,
+
     /** The microphone could not be opened or stopped delivering audio. */
     MICROPHONE_UNAVAILABLE,
 
@@ -38,13 +41,15 @@ enum class RecordingFailure {
  * written, so a killed process loses at most the audio since the last flush.
  *
  * Cancellation is the normal way to stop. The files and the store are finished before the
- * cancellation completes.
+ * cancellation completes. The recording also stops on its own once the wall clock reaches
+ * [stopAt]; it is asked before every buffer, so a changed stop time applies at once.
  */
 class RecordingSession(
     private val source: PcmSource,
     private val store: RecordingStore,
     private val recordingsDirectory: File,
     private val clocks: Clocks,
+    private val stopAt: () -> Instant? = { null },
     private val chunkLength: Duration = Duration.ofMinutes(15),
     private val flushInterval: Duration = Duration.ofSeconds(10),
 ) {
@@ -53,8 +58,8 @@ class RecordingSession(
      * Records until cancelled, calling [onProgress] after every buffer. Returns only when the
      * recording ended on its own, with the reason.
      */
-    suspend fun record(onProgress: (RecordingProgress) -> Unit): RecordingFailure = source.use { mic ->
-        if (!mic.start()) return RecordingFailure.MICROPHONE_UNAVAILABLE
+    suspend fun record(onProgress: (RecordingProgress) -> Unit): RecordingEnd = source.use { mic ->
+        if (!mic.start()) return RecordingEnd.MICROPHONE_UNAVAILABLE
 
         val provisionalStart = clocks.now()
         val ids = store.startSleep(provisionalStart, mic.sampleRate)
@@ -85,7 +90,7 @@ class RecordingSession(
         writer: ChunkedWavWriter,
         provisionalStart: Instant,
         onProgress: (RecordingProgress) -> Unit,
-    ): RecordingFailure {
+    ): RecordingEnd {
         val buffer = ShortArray(mic.sampleRate / BUFFERS_PER_SECOND)
         var startedAt = provisionalStart
         var anchored = false
@@ -94,9 +99,11 @@ class RecordingSession(
 
         while (true) {
             coroutineContext.ensureActive()
+            val stopTime = stopAt()
+            if (stopTime != null && !clocks.now().isBefore(stopTime)) return RecordingEnd.STOP_TIME_REACHED
 
             val read = mic.read(buffer)
-            if (read < 0) return RecordingFailure.MICROPHONE_UNAVAILABLE
+            if (read < 0) return RecordingEnd.MICROPHONE_UNAVAILABLE
             if (read == 0) continue
 
             try {
@@ -107,7 +114,7 @@ class RecordingSession(
                     nextFlushAt = writer.frames + flushEveryFrames
                 }
             } catch (_: IOException) {
-                return RecordingFailure.STORAGE_FAILED
+                return RecordingEnd.STORAGE_FAILED
             }
 
             // The audio clock reports a timestamp only once capture is under way, usually after

@@ -8,14 +8,24 @@ import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.os.PowerManager
 import me.mupu.sleeptalkrecorder.SleepTalkApplication
+import me.mupu.sleeptalkrecorder.settings.Settings
+import me.mupu.sleeptalkrecorder.time.latestStop
+import me.mupu.sleeptalkrecorder.ui.format.ClockFormatter
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -60,7 +70,8 @@ class RecordingService : Service() {
     private fun start() {
         if (session != null) return
 
-        notifications.createChannel()
+        notifications.createChannels()
+        notifications.cancelStoppedAtLatest()
         try {
             startForeground(
                 RecordingNotifications.NOTIFICATION_ID,
@@ -81,32 +92,52 @@ class RecordingService : Service() {
         session = scope.launch {
             container.interruptedRecordingsFinished.join()
 
-            val failure = withContext(Dispatchers.IO) {
-                var shownStart: Instant? = null
-                RecordingSession(
-                    source = MicrophoneSource(this@RecordingService),
-                    store = container.sleepRepository,
-                    recordingsDirectory = container.sleepRepository.recordingsDirectory,
-                    clocks = SystemClocks,
-                ).record { progress ->
-                    container.recorder.report(RecorderState.Recording(progress))
-                    if (progress.startedAt != shownStart) {
-                        shownStart = progress.startedAt
-                        notifications.update(notifications.recording(progress.startedAt))
+            val (end, stopTime) = coroutineScope {
+                // Follows the setting, so a stop time changed during the recording applies to it.
+                val stopAt = latestStopTimes().stateIn(this)
+                val end = withContext(Dispatchers.IO) {
+                    var shownStart: Instant? = null
+                    RecordingSession(
+                        source = MicrophoneSource(this@RecordingService),
+                        store = container.sleepRepository,
+                        recordingsDirectory = container.sleepRepository.recordingsDirectory,
+                        clocks = SystemClocks,
+                        stopAt = { stopAt.value },
+                    ).record { progress ->
+                        container.recorder.report(RecorderState.Recording(progress))
+                        if (progress.startedAt != shownStart) {
+                            shownStart = progress.startedAt
+                            notifications.update(notifications.recording(progress.startedAt))
+                        }
                     }
                 }
+                coroutineContext.cancelChildren()
+                end to stopAt.value
             }
 
             // Only reached when the recording ended on its own.
-            finish(
-                RecorderState.Failed(
-                    when (failure) {
-                        RecordingFailure.MICROPHONE_UNAVAILABLE -> RecorderProblem.MICROPHONE_UNAVAILABLE
-                        RecordingFailure.STORAGE_FAILED -> RecorderProblem.STORAGE_FAILED
-                    },
-                ),
-            )
+            when (end) {
+                RecordingEnd.STOP_TIME_REACHED -> {
+                    // Before finishing, which ends the service and this coroutine with it.
+                    val clock = ClockFormatter(container.settings.flow(Settings.timeFormat).first())
+                    stopTime?.let { notifications.showStoppedAtLatest(it, clock) }
+                    finish(RecorderState.Idle)
+                }
+                RecordingEnd.MICROPHONE_UNAVAILABLE -> finish(RecorderState.Failed(RecorderProblem.MICROPHONE_UNAVAILABLE))
+                RecordingEnd.STORAGE_FAILED -> finish(RecorderState.Failed(RecorderProblem.STORAGE_FAILED))
+            }
         }
+    }
+
+    /**
+     * When a recording stops at the latest, or null while the setting is off. Each value counts
+     * from the moment it is read: the start of the recording, or a change of the setting.
+     */
+    private fun latestStopTimes(): Flow<Instant?> = combine(
+        container.settings.flow(Settings.stopAtEnabled),
+        container.settings.flow(Settings.stopAt),
+    ) { enabled, time ->
+        if (enabled) latestStop(after = SystemClocks.now(), at = time, zone = ZoneId.systemDefault()) else null
     }
 
     private fun stop() {

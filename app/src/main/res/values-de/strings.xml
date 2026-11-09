@@ -65,6 +65,9 @@
     <string name="settings_lead_in_hint">Vor jedem Ereignis beim geschnittenen Abspielen</string>
     <string name="settings_tail">Nachlauf</string>
     <string name="settings_tail_hint">Nach jedem Ereignis beim geschnittenen Abspielen</string>
+    <string name="settings_recording">Aufnahme</string>
+    <string name="settings_stop_at">Spätestens stoppen um</string>
+    <string name="settings_stop_at_hint">Eine Benachrichtigung sagt dir, wenn deshalb gestoppt wurde.</string>
     <string name="seconds_decimal">%1$.1f s</string>
 
     <!-- First start -->
@@ -77,4 +80,8 @@
     <string name="notification_channel_recording">Aufnahme</string>
     <string name="notification_channel_recording_description">Zeigt, dass ein Schlaf aufgenommen wird, mit einer Stopp-Taste.</string>
     <string name="notification_recording_title">Aufnahme läuft</string>
+    <string name="notification_channel_stopped">Automatischer Stopp</string>
+    <string name="notification_channel_stopped_description">Sagt dir, wenn eine Aufnahme zur spätesten Stoppzeit beendet wurde.</string>
+    <string name="notification_stopped_title">Aufnahme um %1$s gestoppt</string>
+    <string name="notification_stopped_text">Die späteste Stoppzeit aus den Einstellungen war erreicht.</string>
 </resources>

@@ -9,8 +9,8 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 
 | Package | Holds | Android types |
 |---|---|---|
-| `time` | The time model: *night* and *nap* naming, the timeline of a *recording* | none |
-| `recording` | The recording session, WAV chunk writer, microphone, foreground service and its notification | only in `MicrophoneSource`, `Recorder`, `RecordingService`, `RecordingNotifications` |
+| `time` | The time model: *night* and *nap* naming, the timeline of a *recording*, the latest stop time | none |
+| `recording` | The recording session, WAV chunk writer, microphone, foreground service and its notifications | only in `MicrophoneSource`, `Recorder`, `RecordingService`, `RecordingNotifications` |
 | `data` | Room database, entities and the `SleepRepository` | Room |
 | `playback` | The `SleepTimeline` of a sleep's chunk files and the `SleepPlayer` that plays it | only in `SleepPlayer` (Media3) |
 | `settings` | The user's settings and the `SettingsStore` that keeps them; the app language | DataStore; AppCompat only in `AppLanguages` |
@@ -36,7 +36,8 @@ nearest allowed value, and a damaged or unreadable file gives the defaults inste
 before it draws anything, so no screen appears in the wrong theme first. The theme is applied in
 Compose and to the system bars; the time format reaches every screen as the `ClockFormatter` in
 `LocalClockFormatter`, which writes every clock time the app shows, independent of the phone's own
-format and the app language.
+format and the app language. Time settings are picked in Android's own time picker dialog, opened
+with the user's time format and the dialog theme that matches the app's light or dark colors.
 
 The app language is the per-app language Android keeps itself, not a DataStore setting: from
 Android 13 on the system stores it and offers it in the app's system settings (the build generates
@@ -57,6 +58,13 @@ shows the *sleep*'s name, a chronometer and a Stop action. A partial wake lock c
 hands each buffer to `ChunkedWavWriter`. Stopping is coroutine cancellation; the session finishes
 its files and the database rows before the cancellation completes. A microphone that fails or a
 storage error ends the session with a reason the home screen shows, never with a crash.
+
+Unless the user switched it off, a recording also stops on its own at the latest stop time of the
+settings: the first moment after the start at which the device's clock shows that time, or after
+the moment the setting was changed during the recording. The session compares the wall clock with
+it before every buffer, so no alarm is needed while the service runs and holds its wake lock, and a
+clock that is set or corrected stops the recording at the time it then shows. The service then
+leaves a notification on a channel of its own that says why the recording stopped.
 
 ## Storage
 

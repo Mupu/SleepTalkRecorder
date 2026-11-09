@@ -22,7 +22,7 @@ import me.mupu.sleeptalkrecorder.settings.TimeFormat
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
 
-/** The settings screen: appearance (theme, language, time format) and cut playback. */
+/** The settings screen: appearance (theme, language, time format), recording and cut playback. */
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -61,6 +61,17 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 selected = settings.timeFormat,
                 optionLabel = { stringResource(it.label) },
                 onSelect = { viewModel.set(Settings.timeFormat, it) },
+            )
+
+            SettingsSection(stringResource(R.string.settings_recording))
+            SwitchableTimeSetting(
+                icon = R.drawable.ic_alarm_off,
+                label = stringResource(R.string.settings_stop_at),
+                hint = stringResource(R.string.settings_stop_at_hint),
+                enabled = settings.stopAtEnabled,
+                time = settings.stopAt,
+                onEnabledChange = { viewModel.set(Settings.stopAtEnabled, it) },
+                onTimeChange = { viewModel.set(Settings.stopAt, it) },
             )
 
             SettingsSection(stringResource(R.string.settings_playback))
