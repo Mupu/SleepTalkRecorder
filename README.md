@@ -31,7 +31,7 @@ Pixel profile with an API 36 Google APIs x86_64 image:
 ```sh
 emulator -avd SleepTalk_API36
 ./gradlew installDebug
-adb shell am start -n me.mupu.sleeptalkrecorder/.MainActivity
+adb shell am start -n me.mupu.sleeptalkrecorder.debug/me.mupu.sleeptalkrecorder.MainActivity
 ```
 
 ```sh
@@ -51,7 +51,8 @@ pinned in `app/build.gradle.kts`.
 
 It passes when the app builds, lint reports no errors, every unit test passes, and
 `CHANGELOG.md` carries the version the commits since the last tag call for. CI runs it on every
-push to `main` and tags the release ([Git policy](docs/agents/git.md#versions-and-releases)).
+push to `main`, tags the release ([Git policy](docs/agents/git.md#versions-and-releases)) and
+attaches the signed APK ([Installing on a phone](#installing-on-a-phone)).
 
 ### Detector evaluation
 
@@ -102,47 +103,109 @@ detector evaluation keeps in `.local/test-output/detector/tracks/` and extracts 
 
 ## Installing on a phone
 
-The app is not on Google Play; a release build signed with your own key is installed directly.
+The app is not on Google Play. Every GitHub release carries the signed `SleepTalkRecorder.apk`
+and its checksum `SleepTalkRecorder.apk.sha256`; the newest one is always at
+<https://github.com/Mupu/SleepTalkRecorder/releases/latest/download/SleepTalkRecorder.apk>.
+Opened on the phone, Android asks once to allow "Install unknown apps" for the browser.
+
 An update keeps the recordings only when it is signed with the same key as the installed app.
 Android refuses an update signed with another key, and the only way past that is to uninstall,
 which deletes every recording. So the release key is created once, never replaced and backed up
-outside the repository. The debug key is no substitute: it is generated per machine.
+outside the repository. Releases are signed only in CI, with the key from the repository secrets:
+a PC with nothing but a clone can work on the project, because the debug app needs no key.
 
-### Create and back up the release key (once)
+### The debug app
 
-Create the keystore outside the repository, for example in your user folder:
+Debug builds are an app of their own, `me.mupu.sleeptalkrecorder.debug`, named "SleepTalk Debug"
+with an amber icon. It installs beside the release app and keeps its own sleeps, settings and
+models, so testing never touches the real recordings. Each PC signs debug builds with its own
+generated debug key; a debug build from another PC installs only after uninstalling the old one.
 
-```sh
-keytool -genkeypair -v -keystore ~/sleeptalk-release.jks -alias sleeptalk \
-  -keyalg RSA -keysize 4096 -validity 10000
-```
+### Set up release signing (once)
 
-`keytool` comes with the JDK (`$JAVA_HOME/bin`). Choose a strong password; the same one can serve
-as store and key password. Then copy the `.jks` file and its passwords to two offline places,
-such as a password manager and a USB stick. Whoever has the file and the passwords can sign
-updates; without them no update can be installed over the app.
+1. **Create the key** in your user folder, outside the repository, with one password for the
+   store and the key (`keytool` comes with the JDK, in `$JAVA_HOME/bin`):
 
-Point the build to the key with a `keystore.properties` file at the repository root. Git ignores
-it, so the passwords never reach a commit:
+   ```sh
+   keytool -genkeypair -keystore sleeptalk-release.jks -alias sleeptalk -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=SleepTalkRecorder"
+   ```
+
+   It asks for the password twice; `-storepass <password>` skips the prompt but leaves the
+   password in the shell history. The keystore is PKCS12, which has a single password for store
+   and key.
+
+2. **Back it up:** copy `sleeptalk-release.jks` and its password to two offline places, such as
+   a password manager and a USB stick. Whoever has both can sign updates; without them no update
+   can be installed over the app.
+
+3. **Encode it** as one line of Base64. On Windows (PowerShell), into the clipboard:
+
+   ```powershell
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes("$HOME\sleeptalk-release.jks")) | Set-Clipboard
+   ```
+
+   On Linux `base64 -w 0 ~/sleeptalk-release.jks`, on macOS `base64 -i ~/sleeptalk-release.jks | pbcopy`.
+
+4. **Fill in the four repository secrets** under Settings › Secrets and variables › Actions ›
+   New repository secret:
+
+   | Secret | Value |
+   |---|---|
+   | `RELEASE_KEYSTORE_BASE64` | the one-line Base64 from step 3 |
+   | `RELEASE_STORE_PASSWORD` | the password |
+   | `RELEASE_KEY_ALIAS` | `sleeptalk` |
+   | `RELEASE_KEY_PASSWORD` | the password again |
+
+   Or with the GitHub CLI from the clone. The keystore goes straight from the file into its
+   secret, in PowerShell or on Linux (on macOS `base64 -i`):
+
+   ```powershell
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes("$HOME\sleeptalk-release.jks")) | gh secret set RELEASE_KEYSTORE_BASE64
+   ```
+
+   ```sh
+   base64 -w 0 ~/sleeptalk-release.jks | gh secret set RELEASE_KEYSTORE_BASE64
+   ```
+
+   Then the other three; without `--body`, `gh` asks for the value:
+
+   ```sh
+   gh secret set RELEASE_STORE_PASSWORD
+   gh secret set RELEASE_KEY_ALIAS --body sleeptalk
+   gh secret set RELEASE_KEY_PASSWORD
+   ```
+
+When a push to `main` releases a new version, CI decodes the keystore into a temporary file on
+the runner, builds `assembleRelease` with it and attaches the APK and its checksum to the
+release. Without the secrets the release still goes out, only without the APK, and the run shows
+a warning; with only some of them set, the run fails before anything is tagged. The key then
+lives in GitHub, so a compromised GitHub account means a compromised signing key; keep two-factor
+authentication on.
+
+### Signing locally (optional)
+
+A PC holding the key can sign release builds itself. Point the build to the key with a
+`keystore.properties` file at the repository root; Git ignores it, so the password never
+reaches a commit:
 
 ```properties
 storeFile=C:/Users/<you>/sleeptalk-release.jks
-storePassword=<store password>
+storePassword=<password>
 keyAlias=sleeptalk
-keyPassword=<key password>
+keyPassword=<password>
 ```
 
 A relative `storeFile` is resolved against the repository root. Instead of the file, the
 environment variables `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS` and
-`RELEASE_KEY_PASSWORD` work too. Without them the release build still succeeds but is unsigned
-(`app-release-unsigned.apk`, which cannot be installed) and says so at the end of the build;
-debug builds never need the key.
-
-### Build and install
+`RELEASE_KEY_PASSWORD` work too; CI uses those. Without them the release build still succeeds but
+is unsigned (`app-release-unsigned.apk`, which cannot be installed) and says so at the end of the
+build.
 
 ```sh
 ./gradlew assembleRelease   # .local/build/app/outputs/apk/release/app-release.apk
 ```
+
+### Install with adb
 
 On the phone, enable Developer options (tap the build number seven times), then connect it:
 
@@ -155,14 +218,11 @@ On the phone, enable Developer options (tap the build number seven times), then 
 Install, or update over the installed release while keeping its recordings:
 
 ```sh
-adb install -r .local/build/app/outputs/apk/release/app-release.apk
+adb install -r SleepTalkRecorder.apk
 ```
 
-Android Studio's Run does the same once the `release` build variant is selected. An update needs
-the same key and a version at least as high as the installed one, which `CHANGELOG.md` provides.
-
-The same signed APK can also be copied to a phone and opened there; Android then asks to allow
-"Install unknown apps" for the file manager.
+An update needs the same key and a version at least as high as the installed one, which
+`CHANGELOG.md` provides.
 
 ## Repository guide
 

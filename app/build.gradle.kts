@@ -177,7 +177,10 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+        // Debug builds are an app of their own ("SleepTalk Debug", with its own launcher icon from
+        // src/debug/res), so they install beside the release app and never touch its sleeps.
         debug {
+            applicationIdSuffix = ".debug"
             ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         }
     }

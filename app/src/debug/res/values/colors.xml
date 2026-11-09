@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- An amber launcher background instead of the release app's night blue. -->
+    <color name="ic_launcher_background">#FFB45309</color>
+</resources>

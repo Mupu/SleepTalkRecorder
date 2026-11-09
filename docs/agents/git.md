@@ -94,7 +94,8 @@ words, without file paths, class names or ticket numbers.
 GitHub Actions runs [the full check](../../README.md#development) and the release
 check on every push to `main`. When both pass and `CHANGELOG.md` names a version
 above the last tag, CI tags the commit `vX.Y.Z` and publishes a GitHub Release
-whose text is the changelog sections since the last tag. A red `main` is repaired
+whose text is the changelog sections since the last tag, with the release APK signed in CI
+([Installing on a phone](../../README.md#installing-on-a-phone)). A red `main` is repaired
 straight away; the next green push releases everything since the last tag.
 
 ## Prototype branches

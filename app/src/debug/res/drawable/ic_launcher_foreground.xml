@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The release app's crescent moon with a round badge in its hollow, inside the 66dp safe
+     zone of the 108dp adaptive icon canvas. As the monochrome layer too, the badge tells the debug
+     app apart in themed icons. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFF5E9C8"
+        android:pathData="M50.92,32.22 A22,22 0 1,0 74.58,61.78 A19,19 0 0,1 50.92,32.22 Z" />
+    <path
+        android:fillColor="#FFF5E9C8"
+        android:pathData="M65,38 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0 Z" />
+</vector>

@@ -1,5 +1,7 @@
 # The full check on every push to main; a green run with a new CHANGELOG.md version tags it and
-# publishes a GitHub Release with the changelog sections since the last tag (docs/agents/git.md).
+# publishes a GitHub Release with the changelog sections since the last tag (docs/agents/git.md)
+# and the release APK, signed with the key from the repository secrets (README.md, "Installing on
+# a phone").
 name: CI
 
 on:
@@ -32,16 +34,77 @@ jobs:
       - name: Release check
         run: python3 tools/check_release.py
 
+      - name: Release check tests
+        run: python3 -m unittest discover -s tools
+
       - name: Full check
         run: ./gradlew check assembleDebug
 
-      - name: Tag and release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Find the version to release
+        id: release
         run: |
           tag=$(python3 tools/check_release.py --tag)
-          if [ -z "$tag" ]; then echo "No new version to release."; exit 0; fi
+          if [ -z "$tag" ]; then echo "No new version to release."; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # Built before the tag exists, so a failing release build leaves no tag behind and the next
+      # green run releases again. Without the signing secrets the release goes out without an APK.
+      - name: Build the signed release APK
+        id: apk
+        if: steps.release.outputs.tag != ''
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          # None set: release without the APK. Some set: a mistake, so fail before anything is tagged.
+          secrets=(RELEASE_KEYSTORE_BASE64 RELEASE_STORE_PASSWORD RELEASE_KEY_ALIAS RELEASE_KEY_PASSWORD)
+          missing=()
+          for name in "${secrets[@]}"; do
+            if [ -z "${!name}" ]; then missing+=("$name"); fi
+          done
+          if [ ${#missing[@]} -eq ${#secrets[@]} ]; then
+            echo "::warning title=Release without APK::The signing secrets are not set, so this release has no APK."
+            exit 0
+          fi
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error title=Incomplete signing secrets::Not set: ${missing[*]}"
+            exit 1
+          fi
+
+          keystore="$RUNNER_TEMP/release.jks"
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          RELEASE_STORE_FILE="$keystore" ./gradlew assembleRelease
+
+          mkdir -p "$RUNNER_TEMP/apk"
+          cp .local/build/app/outputs/apk/release/app-release.apk "$RUNNER_TEMP/apk/SleepTalkRecorder.apk"
+          (cd "$RUNNER_TEMP/apk" && sha256sum SleepTalkRecorder.apk > SleepTalkRecorder.apk.sha256)
+          echo "dir=$RUNNER_TEMP/apk" >> "$GITHUB_OUTPUT"
+
+      - name: Remove the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
+
+      # A normal release, never a pre-release, so that the latest release is always the newest
+      # version; versions below 1.0.0 say "(Beta)" in their title.
+      - name: Tag and release
+        if: steps.release.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          APK_DIR: ${{ steps.apk.outputs.dir }}
+        run: |
+          version=${TAG#v}
+          title=$version
+          case "$version" in 0.*) title="$version (Beta)" ;; esac
+
           python3 tools/check_release.py --notes > release-notes.md
-          git tag "$tag" "$GITHUB_SHA"
-          git push origin "$tag"
-          gh release create "$tag" --title "${tag#v}" --notes-file release-notes.md
+          assets=()
+          if [ -n "$APK_DIR" ]; then
+            assets=("$APK_DIR/SleepTalkRecorder.apk" "$APK_DIR/SleepTalkRecorder.apk.sha256")
+          fi
+
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "$TAG"
+          gh release create "$TAG" "${assets[@]}" --title "$title" --notes-file release-notes.md
