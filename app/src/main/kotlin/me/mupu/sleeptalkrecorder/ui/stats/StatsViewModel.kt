@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import me.mupu.sleeptalkrecorder.data.SleepRepository
 import me.mupu.sleeptalkrecorder.data.SleepSummary
+import me.mupu.sleeptalkrecorder.settings.Settings
+import me.mupu.sleeptalkrecorder.settings.SettingsStore
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,7 +14,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 /** What the stats screen counts: the sleep it was opened from, or all sleeps. */
@@ -35,15 +36,15 @@ data class StatsUiState(
  * State of the stats screen: the numbers of the sleep [sleepId] (if it was opened from one) and of
  * all nights, computed from the stored events of every finished sleep whenever they change.
  */
-class StatsViewModel(private val sleepId: Long?, repository: SleepRepository) : ViewModel() {
+class StatsViewModel(private val sleepId: Long?, repository: SleepRepository, settings: SettingsStore) : ViewModel() {
 
     private val scope = MutableStateFlow(if (sleepId != null) StatsScope.THIS_SLEEP else StatsScope.ALL_SLEEPS)
 
-    private val computed = repository.storedSleeps().map { stored ->
+    private val computed = combine(repository.storedSleeps(), settings.flow(Settings.sleepWindows)) { stored, windows ->
         val zone = ZoneId.systemDefault()
         val counted = stored.map { CountedSleep.of(it.summary, it.recordings, it.events) }
         val sleep = counted.firstOrNull { it.id == sleepId }
-        sleep?.let { SleepStats.of(it, counted, zone) } to NightStats.of(counted, zone)
+        sleep?.let { SleepStats.of(it, counted, zone) } to NightStats.of(counted, zone, windows)
     }.flowOn(Dispatchers.Default)
 
     /** The sleep the screen was opened from, also while it is running or its events are not found yet. */

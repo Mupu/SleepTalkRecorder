@@ -76,7 +76,7 @@ class RecordingService : Service() {
         try {
             startForeground(
                 NotificationIds.RECORDING,
-                notifications.recording(startedAt = null),
+                notifications.recording(progress = null),
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
             )
         } catch (_: SecurityException) {
@@ -108,7 +108,7 @@ class RecordingService : Service() {
                         container.recorder.report(RecorderState.Recording(progress))
                         if (progress.startedAt != shownStart) {
                             shownStart = progress.startedAt
-                            notifications.update(notifications.recording(progress.startedAt))
+                            notifications.update(notifications.recording(progress))
                         }
                     }
                 }

@@ -250,6 +250,16 @@
     <string name="settings_recording">Recording</string>
     <string name="settings_stop_at">Stop at the latest at</string>
     <string name="settings_stop_at_hint">A notification tells you when this stopped a recording.</string>
+    <string name="settings_sleep_windows">When nights and naps begin</string>
+    <!-- %1$s is the time naps start, %2$s the time nights start; each becomes a link to change it. -->
+    <string name="settings_sleep_windows_times">Naps %1$s&#160;–&#160;%2$s · Nights %2$s&#160;–&#160;%1$s</string>
+    <!-- Naps and nights start at the same time, so every sleep is a night. %1$s and %2$s as above. -->
+    <string name="settings_sleep_windows_no_naps">No naps · Nights %2$s&#160;–&#160;%1$s</string>
+    <string name="settings_sleep_windows_hint">Applies to new sleeps; earlier ones keep their names.</string>
+    <string name="settings_sleep_windows_rejected">Naps cannot start after nights. Move the other time first.</string>
+    <string name="settings_sleep_windows_pick">pick the exact time</string>
+    <string name="settings_naps_start_at">Naps start at %1$s</string>
+    <string name="settings_nights_start_at">Nights start at %1$s</string>
     <string name="settings_auto_delete">Delete sleeps automatically</string>
     <string name="settings_auto_delete_off">Off</string>
     <string name="settings_auto_delete_on">Sleeps are deleted after</string>

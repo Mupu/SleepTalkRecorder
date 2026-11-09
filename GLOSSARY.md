@@ -11,12 +11,16 @@ Everything recorded between going to bed and getting up, possibly from several r
 _Avoid_: Session, recording (for the whole sleep)
 
 **Night**:
-A sleep started between 18:00 and 11:59, named after the evening it belongs to ("night of 8 to 9 November"), even when it was started after midnight.
+A sleep started in the night window, from the time nights start until the time naps start (by default 18:00 to 11:59), named after the evening it belongs to ("night of 8 to 9 November"), even when it was started after midnight.
 _Avoid_: Day
 
 **Nap**:
-A sleep started between 12:00 and 17:59, named after its own day ("nap on 9 November").
+A sleep started in the nap window, from the time naps start until the time nights start (by default 12:00 to 17:59), named after its own day ("nap on 9 November"). When both start at the same time there are no naps.
 _Avoid_: Afternoon night
+
+**Sleep window**:
+The night window or the nap window: the stretches of the clock, set by the user, that decide whether a sleep is a night or a nap. A sleep is named once, when it starts, and keeps its name when the windows change.
+_Avoid_: Time range, schedule
 
 **Recording**:
 One uninterrupted stretch of audio from start to stop; a sleep holds one or more recordings, and the time between them is a gap.

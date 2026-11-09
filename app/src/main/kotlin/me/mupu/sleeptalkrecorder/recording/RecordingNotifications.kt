@@ -10,11 +10,9 @@ import androidx.core.content.ContextCompat
 import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.notifications.NotificationIds
 import me.mupu.sleeptalkrecorder.notifications.openAppIntent
-import me.mupu.sleeptalkrecorder.time.SleepDate
 import me.mupu.sleeptalkrecorder.ui.format.ClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.sleepTitle
 import java.time.Instant
-import java.time.ZoneId
 
 /**
  * The ongoing notification of a running recording, with its Stop action, and the one a recording
@@ -47,8 +45,8 @@ internal class RecordingNotifications(private val context: Context) {
         )
     }
 
-    /** The notification for a recording that started at [startedAt], or is about to start. */
-    fun recording(startedAt: Instant?): Notification {
+    /** The notification for a recording with [progress], or one about to start while it is null. */
+    fun recording(progress: RecordingProgress?): Notification {
         val stop = PendingIntent.getService(
             context,
             0,
@@ -71,10 +69,10 @@ internal class RecordingNotifications(private val context: Context) {
                 ).build(),
             )
 
-        if (startedAt != null) {
+        if (progress != null) {
             builder
-                .setContentText(sleepTitle(texts.resources, SleepDate.of(startedAt, ZoneId.systemDefault())))
-                .setWhen(startedAt.toEpochMilli())
+                .setContentText(sleepTitle(texts.resources, progress.sleepDate))
+                .setWhen(progress.startedAt.toEpochMilli())
                 .setShowWhen(true)
                 .setUsesChronometer(true)
         }

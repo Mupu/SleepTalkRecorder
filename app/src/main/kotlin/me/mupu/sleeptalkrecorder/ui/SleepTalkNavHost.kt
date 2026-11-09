@@ -105,7 +105,7 @@ fun SleepTalkNavHost(container: AppContainer) {
         ) { entry ->
             val sleepId = entry.arguments?.getLong(Routes.SLEEP_ID)?.takeIf { it != Routes.NO_SLEEP }
             StatsScreen(
-                viewModel = viewModel { StatsViewModel(sleepId, container.sleepRepository) },
+                viewModel = viewModel { StatsViewModel(sleepId, container.sleepRepository, container.settings) },
                 onBack = { navController.popBackStack() },
             )
         }

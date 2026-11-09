@@ -1,9 +1,12 @@
 package me.mupu.sleeptalkrecorder.recording
 
 import me.mupu.sleeptalkrecorder.detection.FeatureTrackFile
+import me.mupu.sleeptalkrecorder.time.SleepDate
+import me.mupu.sleeptalkrecorder.time.SleepKind
 import java.io.File
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -113,7 +116,7 @@ class RecordingSessionTest {
     }
 
     @Test
-    fun `progress reports the sleep, its samples and the level of the last buffer`() = runBlocking {
+    fun `progress reports the sleep with its name, its samples and the level of the last buffer`() = runBlocking {
         val source = FakeSource(buffers = 2, bufferFrames = 1_600, sample = Short.MAX_VALUE)
         val reports = mutableListOf<RecordingProgress>()
 
@@ -123,6 +126,7 @@ class RecordingSessionTest {
 
         val last = synchronized(reports) { reports.last() }
         assertEquals(store.recordings.single().sleepId, last.sleepId)
+        assertEquals(SLEEP_DATE, last.sleepDate)
         assertEquals(3_200L, last.frames)
         assertEquals(0.0, last.levelDbfs, 0.01)
     }
@@ -201,7 +205,7 @@ class RecordingSessionTest {
         override suspend fun startRecording(startedAt: Instant, sampleRate: Int): NewRecording {
             val recording = Recording(id = recordings.size + 1L, sleepId = 100L + recordings.size, startedAt = startedAt)
             recordings += recording
-            return NewRecording(sleepId = recording.sleepId, recordingId = recording.id)
+            return NewRecording(sleepId = recording.sleepId, recordingId = recording.id, sleepDate = SLEEP_DATE)
         }
 
         override suspend fun anchor(recordingId: Long, startedAt: Instant) {
@@ -219,5 +223,10 @@ class RecordingSessionTest {
         override suspend fun markMicrophoneUnavailable(recordingId: Long, fromFrame: Long, untilFrame: Long) {
             recordings.single { it.id == recordingId }.unavailable[fromFrame] = untilFrame
         }
+    }
+
+    private companion object {
+        /** The name the fake store gives every sleep. */
+        val SLEEP_DATE = SleepDate(SleepKind.NIGHT, LocalDate.of(2026, 11, 8))
     }
 }

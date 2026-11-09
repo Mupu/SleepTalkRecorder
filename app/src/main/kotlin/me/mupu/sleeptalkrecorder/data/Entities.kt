@@ -7,12 +7,13 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import me.mupu.sleeptalkrecorder.playback.Stretch
+import me.mupu.sleeptalkrecorder.time.SleepDate
 import java.time.Duration
 import java.time.Instant
 
 /**
  * A sleep: everything recorded between going to bed and getting up. All instants are UTC and are
- * shown in the device's zone; whether a sleep is a night or a nap follows from its start.
+ * shown in the device's zone.
  */
 @Entity(tableName = "sleep")
 data class SleepEntity(
@@ -21,6 +22,11 @@ data class SleepEntity(
     @ColumnInfo(name = "started_at") val startedAt: Instant,
     /** The instant after the last sample of its last recording; null while it is recorded. */
     @ColumnInfo(name = "ended_at") val endedAt: Instant?,
+    /**
+     * Whether it is a night or a nap and the day it is named after (columns `kind` and `date`),
+     * given by the sleep windows when it started and kept when the windows change.
+     */
+    @Embedded val date: SleepDate,
 )
 
 /** Whether a recording is still being written. */
@@ -187,6 +193,8 @@ data class SleepSummary(
     val id: Long,
     @ColumnInfo(name = "started_at") val startedAt: Instant,
     @ColumnInfo(name = "ended_at") val endedAt: Instant?,
+    /** Its name, given when it started. */
+    @Embedded val date: SleepDate,
     @ColumnInfo(name = "recording_count") val recordingCount: Int,
     /** How many events were found in it, without those the user hid. */
     @ColumnInfo(name = "event_count") val eventCount: Int,

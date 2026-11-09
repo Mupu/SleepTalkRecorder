@@ -62,11 +62,11 @@ class AppContainer(context: Context) {
     /** Sleeps, their recordings and their events, as the screens read and change them. */
     val sleepRepository = SleepRepository(database, recordingFiles)
 
-    /** Where the recording service stores its recordings. */
-    val sleepRecordings = SleepRecordings(database, recordingFiles)
-
     /** The user's settings. */
     val settings = SettingsStore.open(context)
+
+    /** Where the recording service stores its recordings; new sleeps are named by the current windows. */
+    val sleepRecordings = SleepRecordings(database, recordingFiles) { settings.flow(Settings.sleepWindows).first() }
 
     /** Starts and stops recordings and publishes their state. */
     val recorder = Recorder(context)

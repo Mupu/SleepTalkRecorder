@@ -3,6 +3,7 @@ package me.mupu.sleeptalkrecorder.recording
 import me.mupu.sleeptalkrecorder.detection.FeatureTrackFile
 import me.mupu.sleeptalkrecorder.detection.FeatureTrackRecorder
 import me.mupu.sleeptalkrecorder.time.RecordingClock
+import me.mupu.sleeptalkrecorder.time.SleepDate
 import java.io.File
 import java.io.IOException
 import java.time.Duration
@@ -15,6 +16,8 @@ import kotlinx.coroutines.withContext
 /** What a running recording reports after every buffer. */
 data class RecordingProgress(
     val sleepId: Long,
+    /** The name of the sleep, given when it started. */
+    val sleepDate: SleepDate,
     /** The instant of the first sample; corrected once the audio clock reports it. */
     val startedAt: Instant,
     val sampleRate: Int,
@@ -157,6 +160,7 @@ class RecordingSession(
             onProgress(
                 RecordingProgress(
                     sleepId = ids.sleepId,
+                    sleepDate = ids.sleepDate,
                     startedAt = startedAt,
                     sampleRate = mic.sampleRate,
                     frames = writer.frames,

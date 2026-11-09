@@ -7,7 +7,6 @@ import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.recording.Recorder
 import me.mupu.sleeptalkrecorder.recording.RecorderState
 import me.mupu.sleeptalkrecorder.time.RecordingClock
-import me.mupu.sleeptalkrecorder.time.SleepDate
 import java.time.Duration
 import java.time.LocalDate
 import java.time.ZoneId
@@ -61,7 +60,7 @@ class LibraryViewModel(recorder: Recorder, private val repository: SleepReposito
         }
         val groups = sleeps
             .filterNot { it.isRunning }
-            .groupBy { SleepDate.of(it.startedAt, zone).date }
+            .groupBy { it.date.date }
             .map { (date, group) -> SleepGroup(date, group) }
 
         LibraryUiState(

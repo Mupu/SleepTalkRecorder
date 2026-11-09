@@ -22,6 +22,7 @@ class ClockFormatter(format: TimeFormat) {
     // AM and PM are written the same way in every app language.
     private val minutes = pattern("mm")
     private val seconds = pattern("mm:ss")
+    private val wholeHours = DateTimeFormatter.ofPattern("h a", Locale.US)
 
     /** The clock time of [instant] in [zone], by default the device's current zone. */
     fun format(instant: Instant, zone: ZoneId = ZoneId.systemDefault(), seconds: Boolean = false): String =
@@ -29,6 +30,15 @@ class ClockFormatter(format: TimeFormat) {
 
     /** A clock time without a day, such as a setting: "07:30" or "7:30 AM". */
     fun format(time: LocalTime): String = time.format(minutes)
+
+    /**
+     * A full [hour] from 0 to 24 as a scale label: "06:00" or the shorter "6 AM". Hour 24 is the
+     * midnight at the end of a day, "24:00" or "12 AM".
+     */
+    fun formatHour(hour: Int): String = when {
+        is24Hour -> "%02d:00".format(Locale.US, hour)
+        else -> LocalTime.of(hour % 24, 0).format(wholeHours)
+    }
 
     private fun pattern(afterHours: String) =
         DateTimeFormatter.ofPattern(if (is24Hour) "HH:$afterHours" else "h:$afterHours a", Locale.US)

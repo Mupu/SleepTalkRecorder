@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "dec69ccfe19acce43d4b9537451456dc",
+    "identityHash": "103ef059836a6ae76d35054f29990d87",
     "entities": [
       {
         "tableName": "sleep",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `started_at` INTEGER NOT NULL, `ended_at` INTEGER)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `started_at` INTEGER NOT NULL, `ended_at` INTEGER, `kind` TEXT NOT NULL, `date` TEXT NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -24,6 +24,18 @@
             "fieldPath": "endedAt",
             "columnName": "ended_at",
             "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "date.kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "date.date",
+            "columnName": "date",
+            "affinity": "TEXT",
+            "notNull": true
           }
         ],
         "primaryKey": {
@@ -163,13 +175,13 @@
             "notNull": true
           },
           {
-            "fieldPath": "startMillis",
+            "fieldPath": "start",
             "columnName": "start_ms",
             "affinity": "INTEGER",
             "notNull": true
           },
           {
-            "fieldPath": "endMillis",
+            "fieldPath": "end",
             "columnName": "end_ms",
             "affinity": "INTEGER",
             "notNull": true
@@ -196,12 +208,12 @@
             "notNull": true
           },
           {
-            "fieldPath": "producer",
+            "fieldPath": "producer.id",
             "columnName": "producer",
             "affinity": "TEXT"
           },
           {
-            "fieldPath": "producerVersion",
+            "fieldPath": "producer.version",
             "columnName": "producer_version",
             "affinity": "TEXT"
           }
@@ -261,7 +273,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'dec69ccfe19acce43d4b9537451456dc')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '103ef059836a6ae76d35054f29990d87')"
     ]
   }
 }

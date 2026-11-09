@@ -11,6 +11,7 @@ import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 
 /**
  * The app's database: sleeps, their recordings, and the annotations found in them with the event
@@ -21,7 +22,7 @@ import java.time.Instant
     entities = [SleepEntity::class, RecordingEntity::class, EventKindEntity::class, AnnotationEntity::class],
     version = 1,
 )
-@TypeConverters(InstantConverter::class, DurationConverter::class, KindColorConverter::class)
+@TypeConverters(InstantConverter::class, LocalDateConverter::class, DurationConverter::class, KindColorConverter::class)
 abstract class SleepDatabase : RoomDatabase() {
 
     abstract fun sleepDao(): SleepDao
@@ -58,6 +59,16 @@ class InstantConverter {
 
     @TypeConverter
     fun fromEpochMillis(epochMillis: Long?): Instant? = epochMillis?.let(Instant::ofEpochMilli)
+}
+
+/** Stores calendar days as ISO dates such as `2026-11-08`, which sort in date order. */
+class LocalDateConverter {
+
+    @TypeConverter
+    fun toIso(date: LocalDate?): String? = date?.toString()
+
+    @TypeConverter
+    fun fromIso(iso: String?): LocalDate? = iso?.let(LocalDate::parse)
 }
 
 /** Stores positions in a sleep's audio and other lengths of time in whole milliseconds. */

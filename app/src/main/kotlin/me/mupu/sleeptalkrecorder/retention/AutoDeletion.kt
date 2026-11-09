@@ -73,7 +73,7 @@ class AutoDeleteWorker(context: Context, params: WorkerParameters) : CoroutineWo
 
         val zone = ZoneId.systemDefault()
         val retention = SleepRetention(settings.flow(Settings.autoDeleteAfter).first())
-        for (sleep in retention.expired(repository.sleeps().first(), LocalDate.now(zone), zone)) {
+        for (sleep in retention.expired(repository.sleeps().first(), LocalDate.now(zone))) {
             repository.deleteSleep(sleep.id)
         }
         return Result.success()

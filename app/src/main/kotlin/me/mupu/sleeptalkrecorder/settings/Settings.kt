@@ -1,6 +1,7 @@
 package me.mupu.sleeptalkrecorder.settings
 
 import me.mupu.sleeptalkrecorder.models.TranscriptionModel
+import me.mupu.sleeptalkrecorder.time.SleepWindows
 import java.time.Duration
 import java.time.LocalTime
 
@@ -57,6 +58,9 @@ object Settings {
 
     /** The clock time at which a recording stops at the latest while [stopAtEnabled] is on. */
     val stopAt = timeOfDaySetting("stop_at_minute", LocalTime.NOON)
+
+    /** When nights and naps begin; a change names only sleeps that start afterwards. */
+    val sleepWindows = sleepWindowsSetting("naps_from_minute", "nights_from_minute", SleepWindows.DEFAULT)
 
     /** Whether sleeps older than [autoDeleteAfter] are deleted on their own. */
     val autoDelete = booleanSetting("auto_delete", false)

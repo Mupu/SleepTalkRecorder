@@ -43,7 +43,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.data.SleepSummary
-import me.mupu.sleeptalkrecorder.time.SleepDate
 import me.mupu.sleeptalkrecorder.time.SleepKind
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.AppBarIcon
@@ -105,7 +104,7 @@ fun LibraryScreen(
                     )
                 }
                 items(group.sleeps, key = { it.id }) { sleep ->
-                    val date = SleepDate.of(sleep.startedAt, zone)
+                    val date = sleep.date
                     ListItem(
                         leadingContent = { SleepKindIcon(date.kind) },
                         headlineContent = { Text(sleepTitle(resources, date)) },
@@ -157,7 +156,7 @@ fun LibraryScreen(
 @Composable
 private fun DeleteSleepDialog(request: DeletionRequest, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     val resources = LocalResources.current
-    val name = sleepTitle(resources, SleepDate.of(request.sleep.startedAt, ZoneId.systemDefault()))
+    val name = sleepTitle(resources, request.sleep.date)
     val size = Formatter.formatShortFileSize(LocalContext.current, request.bytes)
 
     AlertDialog(
@@ -201,7 +200,7 @@ private fun RunningSleepItem(running: RunningSleep, onClick: () -> Unit) {
             leadingContent = {
                 CircleIcon(R.drawable.ic_mic, background = colors.error, tint = colors.onError)
             },
-            headlineContent = { Text(sleepTitle(resources, SleepDate.of(running.sleep.startedAt, zone))) },
+            headlineContent = { Text(sleepTitle(resources, running.sleep.date)) },
             supportingContent = { Text(subtitle) },
             trailingContent = {
                 Text(

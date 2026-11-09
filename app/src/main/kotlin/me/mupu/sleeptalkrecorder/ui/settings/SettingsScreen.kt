@@ -7,9 +7,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
@@ -25,6 +29,7 @@ import me.mupu.sleeptalkrecorder.settings.TimeFormat
 import me.mupu.sleeptalkrecorder.settings.TranscriptionMode
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
+import kotlinx.coroutines.launch
 
 /**
  * The settings screen: appearance (theme, language, time format), recording, cut playback and the
@@ -34,8 +39,22 @@ import me.mupu.sleeptalkrecorder.ui.components.BackIcon
 fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val language = AppLanguages.shown(LocalConfiguration.current)
+    val snackbars = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    // A new message replaces the one shown, so moving a thumb several times does not queue them.
+    val tell = { message: String ->
+        scope.launch {
+            snackbars.currentSnackbarData?.dismiss()
+            snackbars.showSnackbar(message)
+        }
+    }
+    val windowsChanged = stringResource(R.string.settings_sleep_windows_hint)
+    val windowsRejected = stringResource(R.string.settings_sleep_windows_rejected)
 
-    Scaffold(topBar = { AppBar(stringResource(R.string.settings), navigationIcon = { BackIcon(onBack) }) }) { padding ->
+    Scaffold(
+        topBar = { AppBar(stringResource(R.string.settings), navigationIcon = { BackIcon(onBack) }) },
+        snackbarHost = { SnackbarHost(snackbars) },
+    ) { padding ->
         val settings = state ?: return@Scaffold
         Column(
             Modifier
@@ -79,6 +98,15 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 time = settings.stopAt,
                 onEnabledChange = { viewModel.set(Settings.stopAtEnabled, it) },
                 onTimeChange = { viewModel.set(Settings.stopAt, it) },
+            )
+            SleepWindowsSetting(
+                icon = R.drawable.ic_bedtime,
+                windows = settings.sleepWindows,
+                onChange = {
+                    viewModel.set(Settings.sleepWindows, it)
+                    tell(windowsChanged)
+                },
+                onRejected = { tell(windowsRejected) },
             )
             SwitchSetting(
                 icon = R.drawable.ic_auto_delete,

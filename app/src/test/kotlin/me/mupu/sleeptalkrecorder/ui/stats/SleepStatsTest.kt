@@ -6,9 +6,14 @@ import me.mupu.sleeptalkrecorder.data.RecordingState
 import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.data.ThemeRole
+import me.mupu.sleeptalkrecorder.time.SleepDate
+import me.mupu.sleeptalkrecorder.time.SleepKind
+import me.mupu.sleeptalkrecorder.time.SleepWindows
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -29,7 +34,8 @@ class SleepStatsTest {
         return SleepEvent(0, Duration.ofMillis(start), Duration.ofMillis(start + (seconds * 1_000).toLong()), kind, null, color, hidden = hidden)
     }
 
-    private fun summary(id: Long, start: Instant, end: Instant) = SleepSummary(id, start, end, 1, 0, 0, eventsFound = true)
+    private fun summary(id: Long, start: Instant, end: Instant) =
+        SleepSummary(id, start, end, SleepWindows.DEFAULT.dateOf(start, zone), 1, 0, 0, eventsFound = true)
 
     @Test
     fun `events are counted at the clock time they happened, also after a gap between recordings, and hidden ones not at all`() {
@@ -50,7 +56,9 @@ class SleepStatsTest {
 
     private fun event(start: String, seconds: Long = 2, speech: Boolean = false) = CountedEvent(at(start), Duration.ofSeconds(seconds), speech)
 
-    private fun sleep(id: Long, start: String, end: String, vararg events: CountedEvent) = CountedSleep(id, at(start), at(end), events.toList())
+    /** A sleep named as the default windows name it, unless it is given its [date]. */
+    private fun sleep(id: Long, start: String, end: String, vararg events: CountedEvent, date: SleepDate? = null) =
+        CountedSleep(id, date ?: SleepWindows.DEFAULT.dateOf(at(start), zone), at(start), at(end), events.toList())
 
     @Test
     fun `a sleep counts its events, its speech events and how long they talked`() {
@@ -106,7 +114,7 @@ class SleepStatsTest {
     fun `ten minutes follow the local clock also where the zone is not a whole hour off UTC`() {
         val kathmandu = ZoneId.of("Asia/Kathmandu")
         val start = LocalDateTime.parse("2026-11-08T22:05").atZone(kathmandu).toInstant()
-        val sleep = CountedSleep(1, start, start.plus(Duration.ofMinutes(20)), emptyList())
+        val sleep = CountedSleep(1, SleepDate(SleepKind.NIGHT, LocalDate.of(2026, 11, 8)), start, start.plus(Duration.ofMinutes(20)), emptyList())
 
         val first = SleepStats.of(sleep, emptyList(), kathmandu).tenMinutes.first().start
 
@@ -142,8 +150,19 @@ class SleepStatsTest {
     )
 
     @Test
+    fun `a sleep counts as the kind it was named when it started`() {
+        // Started at 13:00 while naps began at noon: a nap, also for windows that now say night.
+        val nap = sleep(5, "2026-11-08T13:00", "2026-11-08T14:00", event("2026-11-08T13:30", 60, speech = true), date = SleepDate(SleepKind.NAP, LocalDate.of(2026, 11, 8)))
+        val stats = NightStats.of(listOf(nap) + nights, zone, SleepWindows(LocalTime.of(14, 0), LocalTime.of(14, 0)))
+
+        assertEquals(2, stats.nights)
+        assertEquals(SleepKind.NAP, SleepStats.of(nap, nights, zone).kind)
+        assertEquals(1, SleepStats.of(nap, nights, zone).compared) // the one nap among them
+    }
+
+    @Test
     fun `nights are averaged per night and naps are left out`() {
-        val stats = NightStats.of(nights, zone)
+        val stats = NightStats.of(nights, zone, SleepWindows.DEFAULT)
 
         assertEquals(2, stats.nights)
         assertEquals(java.time.LocalDate.parse("2026-11-07"), stats.since)
@@ -154,14 +173,14 @@ class SleepStatsTest {
 
     @Test
     fun `talk per night lists the latest nights, the oldest first`() {
-        val stats = NightStats.of(nights, zone, lastNights = 1)
+        val stats = NightStats.of(nights, zone, SleepWindows.DEFAULT, lastNights = 1)
 
         assertEquals(listOf(NightTalk(3, java.time.LocalDate.parse("2026-11-08"), Duration.ofSeconds(40))), stats.talkPerNight)
     }
 
     @Test
     fun `events by clock hour run through the night from the earliest to the latest hour recorded`() {
-        val stats = NightStats.of(nights, zone)
+        val stats = NightStats.of(nights, zone, SleepWindows.DEFAULT)
 
         assertEquals(listOf(22, 23, 0, 1, 2, 3, 4, 5, 6), stats.perHour.map { it.hour })
         assertEquals(listOf(0.0, 0.5, 1.5, 0.0, 0.0, 0.0, 0.5, 0.5, 0.0), stats.perHour.map { it.averageEvents })
@@ -169,8 +188,18 @@ class SleepStatsTest {
     }
 
     @Test
+    fun `events by clock hour start with the hour nights start in when they start earlier than by default`() {
+        val windows = SleepWindows(napsFrom = LocalTime.of(10, 0), nightsFrom = LocalTime.of(16, 0))
+        val early = listOf(sleep(1, "2026-11-08T16:30", "2026-11-09T08:00", event("2026-11-08T16:40"), event("2026-11-09T07:10"), date = SleepDate(SleepKind.NIGHT, LocalDate.of(2026, 11, 8))))
+
+        val stats = NightStats.of(early, zone, windows)
+
+        assertEquals((16..23).toList() + (0..7).toList(), stats.perHour.map { it.hour })
+    }
+
+    @Test
     fun `without nights there is nothing to average`() {
-        val stats = NightStats.of(listOf(nights[1]), zone)
+        val stats = NightStats.of(listOf(nights[1]), zone, SleepWindows.DEFAULT)
 
         assertEquals(0, stats.nights)
         assertEquals(null, stats.since)

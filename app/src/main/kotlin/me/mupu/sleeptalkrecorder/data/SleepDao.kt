@@ -270,7 +270,7 @@ data class ModelTranscripts(val producer: String, val events: Int)
  * analysis count as found: the analysis writes its events and its sensitivity in one transaction.
  */
 private const val SUMMARY = """
-    SELECT sleep.id, sleep.started_at, sleep.ended_at,
+    SELECT sleep.id, sleep.started_at, sleep.ended_at, sleep.kind, sleep.date,
         (SELECT COUNT(*) FROM recording WHERE recording.sleep_id = sleep.id) AS recording_count,
         (SELECT COUNT(*) FROM annotation AS event WHERE event.sleep_id = sleep.id AND event.type = 'EVENT'
             AND NOT $IS_HIDDEN) AS event_count,

@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import me.mupu.sleeptalkrecorder.time.SleepWindows
 import java.time.Duration
 import java.time.LocalTime
 
@@ -85,6 +86,28 @@ fun timeOfDaySetting(key: String, default: LocalTime): Setting<LocalTime> = obje
         preferences[preferencesKey] = value.hour * 60 + value.minute
     }
 }
+
+/**
+ * The [SleepWindows], stored as the minutes since midnight at which naps and nights start. Both are
+ * written together, so the stored pair is never half changed; a pair whose naps start after its
+ * nights reads as the default.
+ */
+fun sleepWindowsSetting(napsKey: String, nightsKey: String, default: SleepWindows): Setting<SleepWindows> =
+    object : Setting<SleepWindows>(default) {
+        private val napsFrom = timeOfDaySetting(napsKey, default.napsFrom)
+        private val nightsFrom = timeOfDaySetting(nightsKey, default.nightsFrom)
+
+        override fun read(preferences: Preferences): SleepWindows {
+            val naps = napsFrom.read(preferences)
+            val nights = nightsFrom.read(preferences)
+            return if (naps <= nights) SleepWindows(naps, nights) else default
+        }
+
+        override fun write(preferences: MutablePreferences, value: SleepWindows) {
+            napsFrom.write(preferences, value.napsFrom)
+            nightsFrom.write(preferences, value.nightsFrom)
+        }
+    }
 
 /** 23:59 in minutes since midnight. */
 private const val LAST_MINUTE = 24 * 60 - 1

@@ -4,7 +4,6 @@ import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.time.SleepDate
 import java.time.Duration
 import java.time.LocalDate
-import java.time.ZoneId
 
 /**
  * Which sleeps automatic deletion removes when sleeps are kept for [keep].
@@ -20,11 +19,11 @@ class SleepRetention(keep: Duration) {
     private val keepDays: Long = keep.toDays()
 
     /**
-     * The sleeps among [sleeps] that are past their days on [today] as seen in [zone]. A sleep
-     * still being recorded is never among them.
+     * The sleeps among [sleeps] that are past their days on [today]. A sleep still being recorded
+     * is never among them.
      */
-    fun expired(sleeps: List<SleepSummary>, today: LocalDate, zone: ZoneId): List<SleepSummary> =
+    fun expired(sleeps: List<SleepSummary>, today: LocalDate): List<SleepSummary> =
         sleeps.filter { sleep ->
-            !sleep.isRunning && SleepDate.of(sleep.startedAt, zone).date.plusDays(keepDays) < today
+            !sleep.isRunning && sleep.date.date.plusDays(keepDays) < today
         }
 }

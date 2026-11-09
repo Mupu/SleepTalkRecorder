@@ -32,7 +32,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.mupu.sleeptalkrecorder.R
-import me.mupu.sleeptalkrecorder.time.SleepDate
 import me.mupu.sleeptalkrecorder.time.SleepKind
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
@@ -93,7 +92,7 @@ private fun ColumnScope.ThisSleep(state: StatsUiState) {
     val clock = LocalClockFormatter.current
     val zone = ZoneId.systemDefault()
     val sleep = state.sleep ?: return
-    val date = SleepDate.of(sleep.startedAt, zone)
+    val date = sleep.date
     Caption(sleepTitle(resources, date))
 
     val stats = state.sleepStats

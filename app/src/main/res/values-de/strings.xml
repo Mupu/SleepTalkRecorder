@@ -218,6 +218,14 @@
     <string name="settings_recording">Aufnahme</string>
     <string name="settings_stop_at">Spätestens stoppen um</string>
     <string name="settings_stop_at_hint">Eine Benachrichtigung sagt dir, wenn deshalb gestoppt wurde.</string>
+    <string name="settings_sleep_windows">Wann Nacht und Mittagsschlaf beginnen</string>
+    <string name="settings_sleep_windows_times">Mittagsschlaf %1$s&#160;–&#160;%2$s · Nacht %2$s&#160;–&#160;%1$s</string>
+    <string name="settings_sleep_windows_no_naps">Kein Mittagsschlaf · Nacht %2$s&#160;–&#160;%1$s</string>
+    <string name="settings_sleep_windows_hint">Gilt für neue Schlafzeiten; frühere behalten ihre Namen.</string>
+    <string name="settings_sleep_windows_rejected">Mittagsschlaf kann nicht nach der Nacht beginnen. Verschiebe zuerst die andere Uhrzeit.</string>
+    <string name="settings_sleep_windows_pick">genaue Uhrzeit wählen</string>
+    <string name="settings_naps_start_at">Mittagsschlaf beginnt um %1$s</string>
+    <string name="settings_nights_start_at">Nacht beginnt um %1$s</string>
     <string name="settings_auto_delete">Schlafzeiten automatisch löschen</string>
     <string name="settings_auto_delete_off">Aus</string>
     <string name="settings_auto_delete_on">Schlafzeiten werden gelöscht nach</string>

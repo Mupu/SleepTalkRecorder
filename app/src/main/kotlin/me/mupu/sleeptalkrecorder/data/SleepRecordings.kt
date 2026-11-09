@@ -8,7 +8,7 @@ import me.mupu.sleeptalkrecorder.recording.ChunkedWavWriter
 import me.mupu.sleeptalkrecorder.recording.NewRecording
 import me.mupu.sleeptalkrecorder.recording.RecordingStore
 import me.mupu.sleeptalkrecorder.time.RecordingClock
-import me.mupu.sleeptalkrecorder.time.SleepDate
+import me.mupu.sleeptalkrecorder.time.SleepWindows
 import java.io.IOException
 import java.time.Duration
 import java.time.Instant
@@ -18,41 +18,45 @@ import kotlinx.coroutines.withContext
 
 /**
  * The rows of the recordings being written: where a recording session stores a new recording, its
- * progress and its end, and where recordings a killed process left behind are finished.
+ * progress and its end, and where recordings a killed process left behind are finished. A new
+ * sleep is named by the [windows] the settings hold when its first recording starts.
  */
 class SleepRecordings(
     private val database: SleepDatabase,
     private val files: RecordingFiles,
+    private val windows: suspend () -> SleepWindows,
 ) : RecordingStore {
 
     private val dao = database.sleepDao()
 
-    override suspend fun startRecording(startedAt: Instant, sampleRate: Int): NewRecording =
-        database.withTransaction {
+    override suspend fun startRecording(startedAt: Instant, sampleRate: Int): NewRecording {
+        val windows = windows()
+        val zone = ZoneId.systemDefault()
+        return database.withTransaction {
             val last = dao.latestSleep()
             val lastEnd = last?.endedAt
-            val sleepId = if (last != null && lastEnd != null &&
-                SleepDate.continues(last.startedAt, lastEnd, startedAt, ZoneId.systemDefault())
-            ) {
+            val sleep = if (last != null && lastEnd != null && windows.continues(last.date, lastEnd, startedAt, zone)) {
                 // The events are found again over the longer audio once this recording ends; the
                 // positions of everything else stay, because the new audio follows the old.
                 dao.reopenSleep(last.id)
                 dao.deleteResults(last.id, AnnotationOrigin.DEVICE, DETECTOR.id)
-                last.id
+                last
             } else {
-                dao.insertSleep(SleepEntity(startedAt = startedAt, endedAt = null))
+                val new = SleepEntity(startedAt = startedAt, endedAt = null, date = windows.dateOf(startedAt, zone))
+                new.copy(id = dao.insertSleep(new))
             }
             val recordingId = dao.insertRecording(
                 RecordingEntity(
-                    sleepId = sleepId,
+                    sleepId = sleep.id,
                     startedAt = startedAt,
                     sampleRate = sampleRate,
                     frames = 0,
                     state = RecordingState.RECORDING,
                 ),
             )
-            NewRecording(sleepId = sleepId, recordingId = recordingId)
+            NewRecording(sleepId = sleep.id, recordingId = recordingId, sleepDate = sleep.date)
         }
+    }
 
     override suspend fun anchor(recordingId: Long, startedAt: Instant) {
         database.withTransaction {

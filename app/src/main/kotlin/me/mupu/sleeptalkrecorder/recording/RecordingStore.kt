@@ -1,5 +1,6 @@
 package me.mupu.sleeptalkrecorder.recording
 
+import me.mupu.sleeptalkrecorder.time.SleepDate
 import java.time.Instant
 
 /** Where a running recording keeps its sleep and its progress. */
@@ -7,7 +8,8 @@ interface RecordingStore {
 
     /**
      * Starts a recording at [startedAt] (until [anchor] corrects it): the next recording of the
-     * last sleep when it was started in the same sleep window, otherwise the first of a new sleep.
+     * last sleep when the sleep windows give it the same name, otherwise the first of a new sleep,
+     * named by the sleep windows at this moment.
      */
     suspend fun startRecording(startedAt: Instant, sampleRate: Int): NewRecording
 
@@ -28,5 +30,5 @@ interface RecordingStore {
     suspend fun markMicrophoneUnavailable(recordingId: Long, fromFrame: Long, untilFrame: Long)
 }
 
-/** The ids of a recording started with [RecordingStore.startRecording] and of its sleep. */
-data class NewRecording(val sleepId: Long, val recordingId: Long)
+/** The ids of a recording started with [RecordingStore.startRecording] and of its sleep, with the sleep's name. */
+data class NewRecording(val sleepId: Long, val recordingId: Long, val sleepDate: SleepDate)

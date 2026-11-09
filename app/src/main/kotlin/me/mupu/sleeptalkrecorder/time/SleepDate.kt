@@ -1,47 +1,13 @@
 package me.mupu.sleeptalkrecorder.time
 
-import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalTime
-import java.time.ZoneId
 
 /** Whether a sleep is a night or a nap, decided by the local time it was started. */
 enum class SleepKind { NIGHT, NAP }
 
 /**
- * The calendar day a sleep is named after: for a night the evening it belongs to ("night of 8 to
- * 9 November" has the date 8 November), for a nap its own day.
+ * The name of a sleep: its [kind] and the calendar day it is named after, for a night the evening
+ * it belongs to ("night of 8 to 9 November" has the date 8 November), for a nap its own day.
+ * [SleepWindows.dateOf] gives it when the sleep starts, and the sleep keeps it.
  */
-data class SleepDate(val kind: SleepKind, val date: LocalDate) {
-
-    companion object {
-        private val NAP_FROM: LocalTime = LocalTime.NOON
-        private val NIGHT_FROM: LocalTime = LocalTime.of(18, 0)
-
-        /**
-         * Names a sleep started at [start] as seen in [zone]: started 12:00-17:59 it is a nap of
-         * that day; started 18:00-11:59 it is a night, and one started after midnight belongs to
-         * the evening before.
-         */
-        fun of(start: Instant, zone: ZoneId): SleepDate {
-            val local = start.atZone(zone).toLocalDateTime()
-            val time = local.toLocalTime()
-
-            return when {
-                time < NAP_FROM -> SleepDate(SleepKind.NIGHT, local.toLocalDate().minusDays(1))
-                time < NIGHT_FROM -> SleepDate(SleepKind.NAP, local.toLocalDate())
-                else -> SleepDate(SleepKind.NIGHT, local.toLocalDate())
-            }
-        }
-
-        /**
-         * Whether a recording started at [start] continues the finished sleep from [sleepStart] to
-         * [sleepEnd] rather than starting a new one: it lies in the same window of the clock, the
-         * night from 18:00 to 11:59 or the nap from 12:00 to 17:59 that names the sleep, and after
-         * the sleep's end. A start before the end can only follow a clock that was set back, and
-         * would put the new recording's audio before the old one's on the clock.
-         */
-        fun continues(sleepStart: Instant, sleepEnd: Instant, start: Instant, zone: ZoneId): Boolean =
-            !start.isBefore(sleepEnd) && of(sleepStart, zone) == of(start, zone)
-    }
-}
+data class SleepDate(val kind: SleepKind, val date: LocalDate)

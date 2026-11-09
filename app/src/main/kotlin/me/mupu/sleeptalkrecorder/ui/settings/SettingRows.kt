@@ -203,7 +203,7 @@ internal fun SwitchableTimeSetting(
  * app draws with, and the 12- or 24-hour clock of the user's time format.
  */
 @Composable
-private fun TimePicker(time: LocalTime, onPicked: (LocalTime) -> Unit, onClose: () -> Unit) {
+internal fun TimePicker(time: LocalTime, onPicked: (LocalTime) -> Unit, onClose: () -> Unit) {
     val context = LocalContext.current
     val is24Hour = LocalClockFormatter.current.is24Hour
     val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
@@ -308,7 +308,7 @@ private fun DaysDialog(
 }
 
 @Composable
-private fun SettingLabel(
+internal fun SettingLabel(
     @DrawableRes icon: Int,
     label: String,
     hint: String? = null,

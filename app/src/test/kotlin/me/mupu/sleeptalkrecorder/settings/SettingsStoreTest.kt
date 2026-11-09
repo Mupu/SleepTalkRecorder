@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.preferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
+import me.mupu.sleeptalkrecorder.time.SleepWindows
 import java.time.Duration
 import java.time.LocalTime
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,5 +66,26 @@ class SettingsStoreTest {
         assertEquals(Duration.ofSeconds(3), store.flow(Settings.leadIn).first())
         assertEquals(Duration.ZERO, store.flow(Settings.tail).first())
         assertEquals(LocalTime.of(23, 59), store.flow(Settings.stopAt).first())
+    }
+
+    @Test
+    fun `the sleep windows are stored together and read back`() = runTest {
+        val store = SettingsStore(InMemoryDataStore())
+        assertEquals(SleepWindows(LocalTime.NOON, LocalTime.of(18, 0)), store.flow(Settings.sleepWindows).first())
+
+        store.set(Settings.sleepWindows, SleepWindows(LocalTime.of(13, 15), LocalTime.of(21, 59)))
+
+        assertEquals(SleepWindows(LocalTime.of(13, 15), LocalTime.of(21, 59)), store.flow(Settings.sleepWindows).first())
+    }
+
+    @Test
+    fun `stored sleep windows whose naps start after nights read as the default`() = runTest {
+        val stored = preferencesOf(
+            intPreferencesKey("naps_from_minute") to 20 * 60,
+            intPreferencesKey("nights_from_minute") to 19 * 60,
+        )
+        val store = SettingsStore(InMemoryDataStore(stored))
+
+        assertEquals(SleepWindows.DEFAULT, store.flow(Settings.sleepWindows).first())
     }
 }

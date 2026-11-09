@@ -55,7 +55,6 @@ import me.mupu.sleeptalkrecorder.readiness.Requirement
 import me.mupu.sleeptalkrecorder.recording.RecorderProblem
 import me.mupu.sleeptalkrecorder.recording.RecorderState
 import me.mupu.sleeptalkrecorder.time.RecordingClock
-import me.mupu.sleeptalkrecorder.time.SleepDate
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.AppBarIcon
 import me.mupu.sleeptalkrecorder.ui.components.texts
@@ -144,7 +143,7 @@ private fun RecorderPanel(
             if (progress != null) {
                 LiveTag(stringResource(R.string.live))
                 Text(
-                    sleepTitle(resources, SleepDate.of(progress.startedAt, ZoneId.systemDefault())),
+                    sleepTitle(resources, progress.sleepDate),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -299,7 +298,7 @@ private fun LiveTag(text: String) {
 private fun LastSleepCard(sleep: SleepSummary, onClick: () -> Unit) {
     val resources = LocalResources.current
     val zone = ZoneId.systemDefault()
-    val date = SleepDate.of(sleep.startedAt, zone)
+    val date = sleep.date
 
     Surface(
         onClick = onClick,

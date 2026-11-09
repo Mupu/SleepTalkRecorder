@@ -9,7 +9,7 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 
 | Package | Holds | Android types |
 |---|---|---|
-| `time` | The time model: *night* and *nap* naming, the timeline of a *recording*, the latest stop time | none |
+| `time` | The time model: the *sleep windows* that name *nights* and *naps*, the timeline of a *recording*, the latest stop time | none |
 | `recording` | The recording session, WAV chunk writer, microphone, foreground service and its notifications | only in `MicrophoneSource`, `Recorder`, `RecordingService`, `RecordingNotifications` |
 | `detection` | The feature track (extraction and file format) and the `EventDetector` with its baseline | none |
 | `data` | Room database, entities, the `SleepRepository` through which screens read and change sleeps, `SleepRecordings` (the recording session's `RecordingStore`), `SleepTranscripts` (speech recognition's `TranscriptStore`), the `RecordingFiles` of each recording, and loading feature tracks for a sleep | Room |
@@ -51,6 +51,10 @@ Compose and to the system bars; the time format reaches every screen as the `Clo
 `LocalClockFormatter`, which writes every clock time the app shows, independent of the phone's own
 format and the app language. Time settings are picked in Android's own time picker dialog, opened
 with the user's time format and the dialog theme that matches the app's light or dark colors.
+The *sleep windows* are set on a bar of their own over the 24 hours of a day, drawn on a Compose
+`Canvas`: a sun thumb where naps start and a moon thumb where nights start, which snap to quarter
+hours and cannot pass each other; tapping a thumb or its time opens the same time picker. Both
+times are stored as one setting, so they are never half changed.
 
 The first-start setup is a sequence of `SetupStep`s (the language, the permissions page, then the
 speech recognition model), each
@@ -100,10 +104,10 @@ registers before it starts. The session asks after every buffer and stores each 
 as a `MICROPHONE_UNAVAILABLE` annotation, saved again at every flush while it lasts, so a killed
 process keeps it.
 
-A new recording continues the last sleep when it starts in the same sleep window, the stretch of
-the clock that names the sleep (a night from 18:00 to 11:59, a nap from 12:00 to 17:59), and after
-that sleep's end; otherwise it starts a new sleep. A continued sleep is running again, and its
-events are found anew once the recording ends.
+A new recording continues the last sleep when the current *sleep windows* give it the same name as
+that sleep (the same night or nap) and it starts after that sleep's end; otherwise it starts a new
+sleep, named by the windows at that moment. A continued sleep is running again, and its events are
+found anew once the recording ends.
 
 Unless the user switched it off, a recording also stops on its own at the latest stop time of the
 settings: the first moment after the start at which the device's clock shows that time, or after
@@ -131,7 +135,10 @@ covers the samples the database counts as saved.
 
 Room (`SleepDatabase`) holds four tables:
 
-- `sleep`: start and end instant; the end is null while the sleep is recorded.
+- `sleep`: start and end instant (the end is null while the sleep is recorded) and its name: the
+  kind (night or nap) and the date it is named after, given by the sleep windows when it started.
+  The library, the stats and automatic deletion read the stored name, so a change of the windows
+  renames no earlier sleep.
 - `recording`: its sleep, the UTC instant of its first sample, the sample rate, the sample count
   and whether it is still recorded.
 - `event_kind`: the kinds of *event*, as data rather than a list in code: an id that annotations
@@ -416,6 +423,9 @@ gap plays from the start of the next recording. A recording that starts before t
 ended on the clock, because the clock was set back, follows it there without a gap, so the clock
 axis keeps the order of the audio.
 
-`SleepDate` names a sleep by the local time of its start: 18:00 to 11:59 is a night named after
-the evening it belongs to, 12:00 to 17:59 a nap of that day. Because names follow the device's zone,
-a sleep is named as the user sees its times.
+`SleepWindows` names a sleep (`SleepDate`: its kind and date) by the local time of its start: from
+the time nights start until the time naps start is a night named after the evening it belongs to,
+from the time naps start until nights start a nap of that day. Both times are a setting (by default
+18:00 and 12:00); naps never start after nights, and when both start together every sleep is a
+night. Because names follow the device's zone, a sleep is named as the user sees its times. The
+name is stored with the sleep when it starts and never derived again.

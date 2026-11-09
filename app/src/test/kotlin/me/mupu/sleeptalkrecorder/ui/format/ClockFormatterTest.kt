@@ -47,4 +47,12 @@ class ClockFormatterTest {
 
         assertEquals("07:41", ClockFormatter(TimeFormat.HOURS_24).format(instant, ZoneId.of("Asia/Tokyo")))
     }
+
+    @Test
+    fun `an hour label is a full clock time in 24 hours and the hour alone in 12 hours`() {
+        val hours = listOf(0, 6, 12, 18, 24)
+
+        assertEquals(listOf("00:00", "06:00", "12:00", "18:00", "24:00"), hours.map(ClockFormatter(TimeFormat.HOURS_24)::formatHour))
+        assertEquals(listOf("12 AM", "6 AM", "12 PM", "6 PM", "12 AM"), hours.map(ClockFormatter(TimeFormat.HOURS_12)::formatHour))
+    }
 }

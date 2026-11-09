@@ -14,6 +14,7 @@ import me.mupu.sleeptalkrecorder.settings.ThemeMode
 import me.mupu.sleeptalkrecorder.settings.TimeFormat
 import me.mupu.sleeptalkrecorder.settings.TranscriptLanguage
 import me.mupu.sleeptalkrecorder.settings.TranscriptionMode
+import me.mupu.sleeptalkrecorder.time.SleepWindows
 import java.time.Duration
 import java.time.LocalTime
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +32,7 @@ data class SettingsUiState(
     val tail: Duration,
     val stopAtEnabled: Boolean,
     val stopAt: LocalTime,
+    val sleepWindows: SleepWindows,
     val autoDelete: Boolean,
     val autoDeleteAfter: Duration,
     /** Every transcription model with its state, in catalogue order. */
@@ -51,15 +53,15 @@ class SettingsViewModel(private val store: SettingsStore, private val models: Mo
 
     /** Null until the stored settings are read, so the screen never shows defaults first. */
     val state: StateFlow<SettingsUiState?> = combine(
-        // combine() takes at most five typed flows, so values shown together come in pairs.
+        // combine() takes at most five typed flows, so values shown together come in pairs or triples.
         combine(store.flow(Settings.theme), store.flow(Settings.timeFormat), ::Pair),
         combine(store.flow(Settings.leadIn), store.flow(Settings.tail), ::Pair),
-        combine(store.flow(Settings.stopAtEnabled), store.flow(Settings.stopAt), ::Pair),
+        combine(store.flow(Settings.stopAtEnabled), store.flow(Settings.stopAt), store.flow(Settings.sleepWindows), ::Triple),
         combine(store.flow(Settings.autoDelete), store.flow(Settings.autoDeleteAfter), ::Pair),
         combine(models.models, store.flow(Settings.transcriptLanguage), store.flow(Settings.transcriptionMode), deleting, ::Speech),
-    ) { (theme, timeFormat), (leadIn, tail), (stopAtEnabled, stopAt), (autoDelete, autoDeleteAfter), speech ->
+    ) { (theme, timeFormat), (leadIn, tail), (stopAtEnabled, stopAt, sleepWindows), (autoDelete, autoDeleteAfter), speech ->
         SettingsUiState(
-            theme, timeFormat, leadIn, tail, stopAtEnabled, stopAt, autoDelete, autoDeleteAfter,
+            theme, timeFormat, leadIn, tail, stopAtEnabled, stopAt, sleepWindows, autoDelete, autoDeleteAfter,
             speech.models, speech.language, speech.mode, speech.deleting,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)

@@ -6,6 +6,7 @@ import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.time.RecordingClock
 import me.mupu.sleeptalkrecorder.time.SleepDate
 import me.mupu.sleeptalkrecorder.time.SleepKind
+import me.mupu.sleeptalkrecorder.time.SleepWindows
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -15,8 +16,11 @@ import java.time.temporal.ChronoUnit
 /** An event as stats count it: the instant it started, how long it lasts and whether it is a speech event. */
 data class CountedEvent(val start: Instant, val length: Duration, val speech: Boolean)
 
-/** A finished sleep as stats count it: from its first to its last sample, with its events in order. */
-data class CountedSleep(val id: Long, val start: Instant, val end: Instant, val events: List<CountedEvent>) {
+/**
+ * A finished sleep as stats count it: its name, given when it started, the time from its first to
+ * its last sample, and its events in order.
+ */
+data class CountedSleep(val id: Long, val date: SleepDate, val start: Instant, val end: Instant, val events: List<CountedEvent>) {
 
     /** How long its speech events last together. */
     val talk: Duration get() = events.filter { it.speech }.fold(Duration.ZERO) { sum, event -> sum + event.length }
@@ -47,6 +51,7 @@ data class CountedSleep(val id: Long, val start: Instant, val end: Instant, val 
 
             return CountedSleep(
                 id = summary.id,
+                date = summary.date,
                 start = summary.startedAt,
                 end = summary.endedAt ?: summary.startedAt,
                 events = events.filterNot { it.hidden }.map { CountedEvent(instantAt(it.start), it.end - it.start, it.isSpeech) },
@@ -101,8 +106,8 @@ data class SleepStats(
                 if (event.speech) speech[bin] += 1
             }
 
-            val kind = SleepDate.of(sleep.start, zone).kind
-            val compared = others.filter { it.id != sleep.id && SleepDate.of(it.start, zone).kind == kind }
+            val kind = sleep.date.kind
+            val compared = others.filter { it.id != sleep.id && it.date.kind == kind }
             return SleepStats(
                 kind = kind,
                 events = sleep.events.size,
@@ -146,41 +151,42 @@ data class NightStats(
         /** How many nights the talk per night shows by default: three weeks. */
         const val LAST_NIGHTS = 21
 
-        /** The hour a night's clock starts at, as [SleepDate] names nights. */
-        private const val NIGHT_STARTS = 18
-
-        /** The nights among [sleeps], with the clock of [zone]; the talk per night shows the [lastNights] latest. */
-        fun of(sleeps: List<CountedSleep>, zone: ZoneId, lastNights: Int = LAST_NIGHTS): NightStats {
-            val nights = sleeps
-                .map { it to SleepDate.of(it.start, zone) }
-                .filter { (_, date) -> date.kind == SleepKind.NIGHT }
-                .sortedBy { (sleep, _) -> sleep.start }
-            val events = nights.sumOf { (sleep, _) -> sleep.events.size }
-            val speech = nights.sumOf { (sleep, _) -> sleep.events.count { it.speech } }
-            val talk = nights.fold(Duration.ZERO) { sum, (sleep, _) -> sum + sleep.talk }
+        /**
+         * The nights among [sleeps], with the clock of [zone]; the talk per night shows the
+         * [lastNights] latest. A sleep counts as the kind it was named when it started; the
+         * current [windows] only order the hours of the clock.
+         */
+        fun of(sleeps: List<CountedSleep>, zone: ZoneId, windows: SleepWindows, lastNights: Int = LAST_NIGHTS): NightStats {
+            val nights = sleeps.filter { it.date.kind == SleepKind.NIGHT }.sortedBy { it.start }
+            val events = nights.sumOf { it.events.size }
+            val speech = nights.sumOf { sleep -> sleep.events.count { it.speech } }
+            val talk = nights.fold(Duration.ZERO) { sum, sleep -> sum + sleep.talk }
 
             return NightStats(
                 nights = nights.size,
-                since = nights.firstOrNull()?.second?.date,
+                since = nights.firstOrNull()?.date?.date,
                 averageEvents = if (nights.isEmpty()) 0.0 else events.toDouble() / nights.size,
                 averageTalk = if (nights.isEmpty()) Duration.ZERO else talk.dividedBy(nights.size.toLong()),
                 speechShare = if (events == 0) null else speech.toFloat() / events,
-                talkPerNight = nights.takeLast(lastNights).map { (sleep, date) -> NightTalk(sleep.id, date.date, sleep.talk) },
-                perHour = perHour(nights.map { it.first }, zone),
+                talkPerNight = nights.takeLast(lastNights).map { NightTalk(it.id, it.date.date, it.talk) },
+                perHour = perHour(nights, zone, windows),
             )
         }
 
-        private fun perHour(nights: List<CountedSleep>, zone: ZoneId): List<HourCount> {
+        private fun perHour(nights: List<CountedSleep>, zone: ZoneId, windows: SleepWindows): List<HourCount> {
             if (nights.isEmpty()) return emptyList()
 
-            // Hours are counted in the order of a night, from 18:00 on, so that 23:00 comes before 00:00.
-            fun inNight(instant: Instant) = Math.floorMod(instant.atZone(zone).hour - NIGHT_STARTS, 24)
+            // Hours are counted in the order of a night, so that 23:00 comes before 00:00. The order
+            // starts in the middle of the nap window, the time of day a night is least likely to
+            // reach, which also leaves room for nights named under earlier windows.
+            val orderStart = (windows.napsFrom.toSecondOfDay() + windows.nightsFrom.toSecondOfDay()) / 2 / 3600
+            fun inNight(instant: Instant) = Math.floorMod(instant.atZone(zone).hour - orderStart, 24)
             val first = nights.minOf { inNight(it.start) }
             val last = nights.maxOf { inNight(maxOf(it.start, it.end.minusMillis(1))) }
             val counts = IntArray(24)
             for (event in nights.flatMap { it.events }) counts[inNight(event.start)] += 1
 
-            return (first..maxOf(first, last)).map { HourCount((it + NIGHT_STARTS) % 24, counts[it].toDouble() / nights.size) }
+            return (first..maxOf(first, last)).map { HourCount((it + orderStart) % 24, counts[it].toDouble() / nights.size) }
         }
     }
 }

@@ -1,6 +1,9 @@
 package me.mupu.sleeptalkrecorder.retention
 
 import me.mupu.sleeptalkrecorder.data.SleepSummary
+import me.mupu.sleeptalkrecorder.time.SleepDate
+import me.mupu.sleeptalkrecorder.time.SleepKind
+import me.mupu.sleeptalkrecorder.time.SleepWindows
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -12,10 +15,12 @@ class SleepRetentionTest {
 
     private val berlin = ZoneId.of("Europe/Berlin")
 
-    private fun sleep(id: Long, start: String, end: String?) = SleepSummary(
+    /** A sleep named as the default windows name it, unless it is given its [date]. */
+    private fun sleep(id: Long, start: String, end: String?, date: SleepDate? = null) = SleepSummary(
         id = id,
         startedAt = LocalDateTime.parse(start).atZone(berlin).toInstant(),
         endedAt = end?.let { LocalDateTime.parse(it).atZone(berlin).toInstant() },
+        date = date ?: SleepWindows.DEFAULT.dateOf(LocalDateTime.parse(start).atZone(berlin).toInstant(), berlin),
         recordingCount = 1,
         eventCount = 0,
         eventMillis = 0,
@@ -23,7 +28,7 @@ class SleepRetentionTest {
     )
 
     private fun expiredIds(keep: Duration, today: String, vararg sleeps: SleepSummary) =
-        SleepRetention(keep).expired(sleeps.toList(), LocalDate.parse(today), berlin).map { it.id }
+        SleepRetention(keep).expired(sleeps.toList(), LocalDate.parse(today)).map { it.id }
 
     @Test
     fun `a sleep is kept for the given days after the day it is named after and deleted the day after`() {
@@ -48,6 +53,14 @@ class SleepRetentionTest {
 
         assertEquals(emptyList<Long>(), expiredIds(Duration.ofDays(1), "2026-11-10", nap))
         assertEquals(listOf(1L), expiredIds(Duration.ofDays(1), "2026-11-11", nap))
+    }
+
+    @Test
+    fun `a sleep counts from the date it was named when it started`() {
+        // Started at 13:00 while nights still began at noon, so it is named after the day before.
+        val night = sleep(1, "2026-11-09T13:00", "2026-11-09T15:00", date = SleepDate(SleepKind.NIGHT, LocalDate.of(2026, 11, 8)))
+
+        assertEquals(listOf(1L), expiredIds(Duration.ofDays(1), "2026-11-10", night))
     }
 
     @Test
