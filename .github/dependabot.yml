@@ -1,0 +1,33 @@
+# Monthly patch updates, one grouped commit-style pull request per ecosystem, titled `build(deps): …`
+# so they release nothing. Minor and major upgrades are tickets of their own. Dependabot pull requests
+# are the one exception to working directly on main: the owner merges them.
+version: 2
+
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: build(deps)
+    groups:
+      gradle-patch:
+        patterns: ["*"]
+        update-types: [patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-minor, version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: build(deps)
+    groups:
+      actions-patch:
+        patterns: ["*"]
+        update-types: [patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-minor, version-update:semver-major]

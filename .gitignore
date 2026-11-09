@@ -1,0 +1,30 @@
+# Machine-local inputs and output: test recordings, screenshots, scratch files
+/.local/
+# Android / Gradle
+.gradle/
+build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.keystore
+*.jks
+keystore.properties
+# IDE
+.idea/
+*.iml
+.kotlin/
+# recordings pulled for debugging
+recordings/
+*.wav
+*.m4a
+*.opus
+# editor / OS / tool leftovers
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+.claude/settings.local.json
+.claude/worktrees/

@@ -1,0 +1,47 @@
+# The full check on every push to main; a green run with a new CHANGELOG.md version tags it and
+# publishes a GitHub Release with the changelog sections since the last tag (docs/agents/git.md).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags and history for the release check
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: microsoft
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Release check
+        run: python3 tools/check_release.py
+
+      - name: Full check
+        run: ./gradlew check assembleDebug
+
+      - name: Tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(python3 tools/check_release.py --tag)
+          if [ -z "$tag" ]; then echo "No new version to release."; exit 0; fi
+          python3 tools/check_release.py --notes > release-notes.md
+          git tag "$tag" "$GITHUB_SHA"
+          git push origin "$tag"
+          gh release create "$tag" --title "${tag#v}" --notes-file release-notes.md

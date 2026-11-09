@@ -1,0 +1,18 @@
+#!/bin/sh
+# Runs on every commit. Enable once per clone: git config core.hooksPath .githooks
+# 1. No AI or tool attribution in the message (co-author trailers of assistants, generated-by notes, session links).
+# 2. The release check with the message being written: a feat / fix / perf / breaking commit must come with
+#    the matching CHANGELOG.md section (see docs/agents/git.md#versions-and-releases).
+set -e
+cd "$(git rev-parse --show-toplevel)"
+if grep -v '^#' "$1" | grep -qiE '^co-authored-by:.*(claude|anthropic|copilot|openai|chatgpt|codex|gemini|cursor)|generated (with|by) .*(claude|ai\b|copilot|codex)|claude\.(ai|com)/'; then
+  echo "commit-msg: the message carries AI/tool attribution - remove it." >&2
+  exit 1
+fi
+[ "$(git branch --show-current)" = main ] || exit 0  # work branches are free-form; main gets the squash commit
+PY=
+for candidate in python3 python py; do  # on Windows python3 may be the Microsoft Store stub, so try running it
+  if "$candidate" -c "" >/dev/null 2>&1; then PY=$candidate; break; fi
+done
+[ -n "$PY" ] || { echo "commit-msg: no Python found for tools/check_release.py" >&2; exit 1; }
+"$PY" tools/check_release.py --message "$1"
