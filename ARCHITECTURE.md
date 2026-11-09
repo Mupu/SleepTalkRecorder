@@ -19,7 +19,7 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 | `models` | The transcription models: the catalogue of downloadable models (`TranscriptionModel`), the `ModelInstaller` that downloads and checks their files, the `ModelLibrary` with their states and the active one, and the WorkManager job that downloads them | only in `ModelDownloadWorker` (WorkManager) |
 | `transcription` | Speech recognition of events: the `EventAnalysis` interface, the `SpeechRecognition` with its `TranscriptFilter`, the sherpa-onnx `SherpaTranscriber`, the `TranscriptionRunner` that works through the events, and the WorkManager jobs that run it | only in `TranscriptionWork` (WorkManager, notifications, battery) |
 | `readiness` | Whether the phone lets a whole night be recorded: the `Requirement`s it misses, the `VendorStep`s of its maker, and the `SystemPage`s that fix them | only in `PhoneReadiness` |
-| `ui` | Navigation, one sub-package per screen (`home`, `library`, `sleep`, `settings`, `setup`), shared `components`, `format` and `theme` | Compose |
+| `ui` | Navigation, one sub-package per screen (`home`, `library`, `sleep`, `stats`, `settings`, `setup`), shared `components`, `format` and `theme` | Compose |
 
 The root package holds `MainActivity`, the only activity, and `SleepTalkApplication` with the
 `AppContainer`, which wires the shared objects by hand: the database, the repository, the
@@ -28,7 +28,7 @@ automatic deletion scheduled, starts the search for events of finished sleeps an
 speech recognition. Logic that can be tested without a device
 (`time`, `detection`, the WAV writer, the recording session, level computation, the sleep
 timeline and its audio stream, the cut plan, the timeline view and the event filter of the sleep screen, the
-sensitivity sheet's re-scan, the settings,
+sensitivity sheet's re-scan, the numbers of the stats screen, the settings,
 which sleeps automatic deletion removes, the model downloads and states, the transcript filter and
 the speech recognition run) is plain Kotlin behind small interfaces (`PcmSource`,
 `RecordingStore`, `Clocks`, `ByteSource`, `ModelDownloads`, `TranscriptStore`, `Transcriber`) and
@@ -158,7 +158,8 @@ An event is hidden while a `HIDDEN` mark overlaps it, rather than only one over 
 as transcripts are matched: a search with other settings or a changed detector finds the event
 again with slightly different bounds, and the mark still keeps to it. A mark whose event is no
 longer found hides nothing until the event is found again. Hidden events stay in the sleep and
-in its speech recognition, but are left out of the counts the library and the sleep screen show.
+in its speech recognition, but are left out of the counts the library, the sleep screen and the
+stats show.
 
 The schema is exported to `app/schemas/`. Data derived from a sleep or a recording goes into
 tables of its own that reference it by foreign key, so the `sleep` and `recording` tables stay
@@ -364,6 +365,19 @@ of its lead-in to the end of its tail as cut playback plays them. Auto zoom, on 
 opens, frames that event on the timeline with four times its length (30 s to 2 min) and keeps the
 playhead in view while playing; panning or zooming by hand, also with the overview, switches it
 off, its button on again.
+
+## Stats
+
+The stats screen shows the numbers of one sleep, opened from the sleep screen, or of all nights,
+opened from the library or switched to. `SleepRepository.storedSleeps` reads every finished sleep
+whose events are found, with its recordings and events, again whenever an annotation changes, and
+plain Kotlin computes the numbers from them: `CountedSleep` maps each event that is not hidden to
+the instant it happened through the recordings' start instants and lengths (the database's sample
+counts, without reading the audio files), `SleepStats` counts one sleep in ten-minute steps of the
+local clock and compares its talk, the length of its speech events, with the other sleeps of its
+kind, and `NightStats` averages over the nights. Naps are left out of all sleeps, because the
+numbers are per night and a nap would pull every average down. The charts are drawn on a Compose
+`Canvas`.
 
 ## Time model
 

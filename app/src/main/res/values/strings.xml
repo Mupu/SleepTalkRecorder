@@ -168,6 +168,53 @@
         <item quantity="other">Sleep searched again: %d events</item>
     </plurals>
 
+    <!-- Stats -->
+    <string name="stats">Stats</string>
+    <string name="stats_of_sleep">Stats of this sleep</string>
+    <string name="stats_this_sleep">This sleep</string>
+    <string name="stats_all_sleeps">All sleeps</string>
+    <!-- Labels under the numbers of the tiles. -->
+    <string name="stats_events">events</string>
+    <string name="stats_talked">talked</string>
+    <string name="stats_speech_share">speech share</string>
+    <string name="stats_busiest_ten_minutes">busiest 10 min</string>
+    <string name="stats_busiest_hour">busiest hour</string>
+    <string name="stats_average_events">events per night (avg)</string>
+    <string name="stats_average_talked">talked per night (avg)</string>
+    <string name="stats_per_ten_minutes">Events per 10 minutes</string>
+    <string name="stats_share_title">Share of speech events</string>
+    <!-- The quantity is that of all events. -->
+    <plurals name="stats_share_text">
+        <item quantity="one">%1$d of %2$d event sounds like speech.</item>
+        <item quantity="other">%1$d of %2$d events sound like speech.</item>
+    </plurals>
+    <string name="stats_compare_title">Talk time compared</string>
+    <!-- Labels under the two bars of the comparison. -->
+    <string name="stats_compare_this">this sleep</string>
+    <string name="stats_compare_average_night">avg night</string>
+    <string name="stats_compare_average_nap">avg nap</string>
+    <plurals name="stats_compare_nights">
+        <item quantity="one">The average is that of %d other night.</item>
+        <item quantity="other">The average is that of %d other nights.</item>
+    </plurals>
+    <plurals name="stats_compare_naps">
+        <item quantity="one">The average is that of %d other nap.</item>
+        <item quantity="other">The average is that of %d other naps.</item>
+    </plurals>
+    <string name="stats_compare_no_night">There is no other night to compare with yet.</string>
+    <string name="stats_compare_no_nap">There is no other nap to compare with yet.</string>
+    <string name="stats_talk_per_night">Minutes talked per night</string>
+    <string name="stats_per_hour">Events by clock hour (avg per night)</string>
+    <string name="stats_per_hour_text">When in the night most happens.</string>
+    <!-- %2$s is the date of the first night, for example "3 October". -->
+    <plurals name="stats_nights_since">
+        <item quantity="one">%1$d night since %2$s</item>
+        <item quantity="other">%1$d nights since %2$s</item>
+    </plurals>
+    <string name="stats_naps_left_out">Naps are not counted here.</string>
+    <string name="stats_no_nights">No nights to count yet. They are counted once a night is recorded and its events are found.</string>
+    <string name="stats_sleep_waiting">The stats of this sleep appear once it is finished and its events are found.</string>
+
     <!-- Settings -->
     <string name="settings_appearance">Appearance</string>
     <string name="settings_theme">Theme</string>

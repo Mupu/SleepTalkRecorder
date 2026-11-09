@@ -26,10 +26,12 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -74,6 +76,18 @@ class SleepRepository(
      * ([SleepSummary.eventsFound]), these are none or those of an older detector.
      */
     fun events(sleepId: Long): Flow<List<SleepEvent>> = dao.events(sleepId)
+
+    /**
+     * Every finished sleep whose events are found, the most recently started first, with its
+     * recordings and all its events, hidden ones included. Read anew whenever a sleep, a recording
+     * or an annotation changes.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun storedSleeps(): Flow<List<StoredSleep>> = sleeps().mapLatest { summaries ->
+        summaries.filter { !it.isRunning && it.eventsFound }.map { summary ->
+            StoredSleep(summary, dao.recordingsOf(summary.id), events(summary.id).first())
+        }
+    }
 
     /** How far speech recognition got through a sleep's events. */
     fun transcriptionCount(sleepId: Long): Flow<TranscriptionCount> = dao.transcriptionCount(sleepId)

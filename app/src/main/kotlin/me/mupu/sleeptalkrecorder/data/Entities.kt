@@ -218,3 +218,6 @@ data class SleepEvent(
     /** Where it ends in the sleep's audio. */
     val end: Duration get() = Duration.ofMillis(endMillis)
 }
+
+/** A finished sleep with its recordings in order and all its events, hidden ones included. */
+data class StoredSleep(val summary: SleepSummary, val recordings: List<RecordingEntity>, val events: List<SleepEvent>)

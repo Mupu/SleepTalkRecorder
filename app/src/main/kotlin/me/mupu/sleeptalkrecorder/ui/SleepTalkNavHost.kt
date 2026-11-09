@@ -21,6 +21,8 @@ import me.mupu.sleeptalkrecorder.ui.setup.PermissionsScreen
 import me.mupu.sleeptalkrecorder.ui.setup.PermissionsViewModel
 import me.mupu.sleeptalkrecorder.ui.sleep.SleepScreen
 import me.mupu.sleeptalkrecorder.ui.sleep.SleepViewModel
+import me.mupu.sleeptalkrecorder.ui.stats.StatsScreen
+import me.mupu.sleeptalkrecorder.ui.stats.StatsViewModel
 
 /** The app's screens. Home is the start; the others are opened from it and go back to it. */
 private object Routes {
@@ -30,11 +32,17 @@ private object Routes {
     const val PERMISSIONS = "permissions"
     const val SLEEP_ID = "sleepId"
     const val SLEEP = "sleep/{$SLEEP_ID}"
+    const val STATS = "stats?$SLEEP_ID={$SLEEP_ID}"
+
+    /** No sleep: the stats screen opened from the library counts all sleeps. */
+    const val NO_SLEEP = -1L
 
     fun sleep(id: Long) = "sleep/$id"
+
+    fun stats(sleepId: Long? = null) = if (sleepId == null) "stats" else "stats?$SLEEP_ID=$sleepId"
 }
 
-/** Navigation between home, library, settings, the sleep screen and the permissions page. */
+/** Navigation between home, library, settings, the sleep screen, stats and the permissions page. */
 @Composable
 fun SleepTalkNavHost(container: AppContainer) {
     val navController = rememberNavController()
@@ -63,6 +71,7 @@ fun SleepTalkNavHost(container: AppContainer) {
                 onBack = { navController.popBackStack() },
                 onOpenRunning = { navController.popBackStack(Routes.HOME, inclusive = false) },
                 onOpenSleep = { navController.navigate(Routes.sleep(it)) },
+                onOpenStats = { navController.navigate(Routes.stats()) },
             )
         }
         composable(Routes.SETTINGS) {
@@ -81,6 +90,22 @@ fun SleepTalkNavHost(container: AppContainer) {
                 viewModel = viewModel {
                     SleepViewModel(sleepId, container.sleepRepository, container.settings, SleepPlayer(context), container.transcriptions)
                 },
+                onBack = { navController.popBackStack() },
+                onOpenStats = { navController.navigate(Routes.stats(sleepId)) },
+            )
+        }
+        composable(
+            Routes.STATS,
+            arguments = listOf(
+                navArgument(Routes.SLEEP_ID) {
+                    type = NavType.LongType
+                    defaultValue = Routes.NO_SLEEP
+                },
+            ),
+        ) { entry ->
+            val sleepId = entry.arguments?.getLong(Routes.SLEEP_ID)?.takeIf { it != Routes.NO_SLEEP }
+            StatsScreen(
+                viewModel = viewModel { StatsViewModel(sleepId, container.sleepRepository) },
                 onBack = { navController.popBackStack() },
             )
         }

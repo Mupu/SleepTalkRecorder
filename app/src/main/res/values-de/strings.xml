@@ -145,6 +145,49 @@
         <item quantity="other">Schlaf neu durchsucht: %d Ereignisse</item>
     </plurals>
 
+    <!-- Stats -->
+    <string name="stats">Statistik</string>
+    <string name="stats_of_sleep">Statistik dieses Schlafs</string>
+    <string name="stats_this_sleep">Dieser Schlaf</string>
+    <string name="stats_all_sleeps">Alle Schlafzeiten</string>
+    <string name="stats_events">Ereignisse</string>
+    <string name="stats_talked">gesprochen</string>
+    <string name="stats_speech_share">Anteil Sprache</string>
+    <string name="stats_busiest_ten_minutes">aktivste 10 min</string>
+    <string name="stats_busiest_hour">aktivste Stunde</string>
+    <string name="stats_average_events">Ereignisse pro Nacht (Ø)</string>
+    <string name="stats_average_talked">gesprochen pro Nacht (Ø)</string>
+    <string name="stats_per_ten_minutes">Ereignisse je 10 Minuten</string>
+    <string name="stats_share_title">Anteil Sprachereignisse</string>
+    <plurals name="stats_share_text">
+        <item quantity="one">%1$d von %2$d Ereignis klingt nach Sprache.</item>
+        <item quantity="other">%1$d von %2$d Ereignissen klingen nach Sprache.</item>
+    </plurals>
+    <string name="stats_compare_title">Gesprochen, verglichen</string>
+    <string name="stats_compare_this">dieser Schlaf</string>
+    <string name="stats_compare_average_night">Ø Nacht</string>
+    <string name="stats_compare_average_nap">Ø Mittagsschlaf</string>
+    <plurals name="stats_compare_nights">
+        <item quantity="one">Der Durchschnitt ist der von %d anderen Nacht.</item>
+        <item quantity="other">Der Durchschnitt ist der von %d anderen Nächten.</item>
+    </plurals>
+    <plurals name="stats_compare_naps">
+        <item quantity="one">Der Durchschnitt ist der von %d anderen Mittagsschlaf.</item>
+        <item quantity="other">Der Durchschnitt ist der von %d anderen Mittagsschläfen.</item>
+    </plurals>
+    <string name="stats_compare_no_night">Noch keine andere Nacht zum Vergleichen.</string>
+    <string name="stats_compare_no_nap">Noch kein anderer Mittagsschlaf zum Vergleichen.</string>
+    <string name="stats_talk_per_night">Gesprochene Minuten pro Nacht</string>
+    <string name="stats_per_hour">Ereignisse je Uhrzeit (Ø pro Nacht)</string>
+    <string name="stats_per_hour_text">Wann in der Nacht am meisten passiert.</string>
+    <plurals name="stats_nights_since">
+        <item quantity="one">%1$d Nacht seit %2$s</item>
+        <item quantity="other">%1$d Nächte seit %2$s</item>
+    </plurals>
+    <string name="stats_naps_left_out">Mittagsschlaf zählt hier nicht mit.</string>
+    <string name="stats_no_nights">Noch keine Nächte zum Zählen. Eine Nacht zählt, sobald sie aufgenommen ist und ihre Ereignisse gefunden sind.</string>
+    <string name="stats_sleep_waiting">Die Statistik dieses Schlafs erscheint, sobald er beendet ist und seine Ereignisse gefunden sind.</string>
+
     <!-- Settings -->
     <string name="settings_appearance">Darstellung</string>
     <string name="settings_theme">Design</string>

@@ -46,6 +46,7 @@ import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.time.SleepDate
 import me.mupu.sleeptalkrecorder.time.SleepKind
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
+import me.mupu.sleeptalkrecorder.ui.components.AppBarIcon
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.formatDuration
@@ -65,6 +66,7 @@ fun LibraryScreen(
     onBack: () -> Unit,
     onOpenRunning: () -> Unit,
     onOpenSleep: (Long) -> Unit,
+    onOpenStats: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val resources = LocalResources.current
@@ -80,7 +82,13 @@ fun LibraryScreen(
     }
 
     Scaffold(
-        topBar = { AppBar(stringResource(R.string.library), navigationIcon = { BackIcon(onBack) }) },
+        topBar = {
+            AppBar(
+                stringResource(R.string.library),
+                navigationIcon = { BackIcon(onBack) },
+                actions = { AppBarIcon(R.drawable.ic_bar_chart, stringResource(R.string.stats), onOpenStats) },
+            )
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {

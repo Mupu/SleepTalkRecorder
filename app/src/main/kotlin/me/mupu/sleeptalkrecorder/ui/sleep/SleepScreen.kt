@@ -66,6 +66,7 @@ import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.time.SleepDate
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
+import me.mupu.sleeptalkrecorder.ui.components.AppBarIcon
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.formatEventLength
@@ -87,7 +88,7 @@ import java.time.ZoneId
  * unhides it; the timeline draws hidden events grey like silence.
  */
 @Composable
-fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
+fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val sensitivity by viewModel.sensitivity.collectAsStateWithLifecycle()
     val transcription by viewModel.transcription.collectAsStateWithLifecycle()
@@ -125,6 +126,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
                 navigationIcon = { BackIcon(onBack) },
                 actions = {
                     SpeechRecognitionStatus(transcription, state.events, onRun = viewModel::runSpeechRecognition)
+                    AppBarIcon(R.drawable.ic_bar_chart, stringResource(R.string.stats_of_sleep), onOpenStats)
                     MoreMenu(
                         listOfNotNull(
                             MenuEntry(stringResource(R.string.sensitivity_sleep), R.drawable.ic_tune) { viewModel.openSensitivity(null) }
