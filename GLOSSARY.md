@@ -33,8 +33,12 @@ An event the user marked as not interesting; it stays in the sleep but is skippe
 _Avoid_: Deleted event, false positive
 
 **Speech event**:
-An event in which a later check heard likely speech; the mark is a guess layered on top of the event and never hides or removes it. The user can turn a speech event back into a plain event.
+An event in which transcription found words or wordless murmuring; the mark is a guess layered on top of the event and never hides or removes it. The user can turn a speech event back into a plain event.
 _Avoid_: Voice line, confirmed speech
+
+**Murmur**:
+A speech event in which a voice is heard but no words are recognised.
+_Avoid_: Mumble (in code), noise
 
 **Transcript**:
 Text of what was said in a speech event, written by a transcription model and correctable by the user; may be incomplete or wrong.
