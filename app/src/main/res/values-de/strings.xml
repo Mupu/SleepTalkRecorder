@@ -21,6 +21,7 @@
     <string name="next">Weiter</string>
     <string name="ok">OK</string>
     <string name="cancel">Abbrechen</string>
+    <string name="save">Speichern</string>
 
     <!-- Home -->
     <string name="ready">Bereit für die Nacht</string>
@@ -91,8 +92,17 @@
     <string name="transcript_automatic">automatisch erkannt, kann falsch sein · %1$s</string>
     <string name="transcript_quoted">„%1$s“</string>
     <string name="murmur">Murmeln – keine Wörter erkannt</string>
+    <string name="transcript_corrected">von dir korrigiert</string>
+    <string name="correct_text">Text korrigieren</string>
+    <string name="correct_text_hint">Bleibt erhalten, auch wenn die Sprache neu erkannt wird. Leer lassen für ein Murmeln ohne Wörter.</string>
+    <string name="not_speech">Keine Sprache</string>
+    <string name="not_speech_plain_event">Keine Sprache – normales Ereignis</string>
+    <string name="marked_not_speech">Als normales Ereignis markiert</string>
+    <string name="model_change_hint">Transkripte von %1$s. In den Einstellungen ist jetzt %2$s aktiv.</string>
+    <string name="rerun_with">Mit %1$s neu erkennen</string>
     <string name="more_options">Weitere Optionen</string>
     <string name="run_speech_recognition">Spracherkennung ausführen</string>
+    <string name="run_speech_recognition_again">Spracherkennung erneut ausführen</string>
     <string name="transcription_running">Prüft Ereignis %1$d von %2$d auf Sprache …</string>
     <string name="transcription_done">Alle Ereignisse geprüft. %1$d von %2$d klingen nach Sprache.</string>
     <string name="transcription_model">Modell: %1$s</string>

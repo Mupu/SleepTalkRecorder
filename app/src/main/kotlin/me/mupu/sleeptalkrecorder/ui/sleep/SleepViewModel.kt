@@ -2,7 +2,9 @@ package me.mupu.sleeptalkrecorder.ui.sleep
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import me.mupu.sleeptalkrecorder.data.AnnotationEntity
 import me.mupu.sleeptalkrecorder.data.EventKindEntity
+import me.mupu.sleeptalkrecorder.data.EventKinds
 import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.SleepRepository
 import me.mupu.sleeptalkrecorder.data.SleepSummary
@@ -15,6 +17,7 @@ import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
 import me.mupu.sleeptalkrecorder.settings.Settings
 import me.mupu.sleeptalkrecorder.settings.SettingsStore
+import me.mupu.sleeptalkrecorder.transcription.ModelChange
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionStatus
 import me.mupu.sleeptalkrecorder.transcription.Transcriptions
 import java.time.Duration
@@ -107,6 +110,9 @@ data class SensitivityUiState(
  */
 data class SensitivityApplied(val wholeSleep: Boolean, val events: Int)
 
+/** The user said [event] is not speech; [previous] are the user's transcripts over it before, which undo restores. */
+class NotSpeech(val event: SleepEvent, val previous: List<AnnotationEntity>)
+
 /** State and actions of the sleep screen: the sleep, its events, their playback and speech recognition. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SleepViewModel(
@@ -187,6 +193,16 @@ class SleepViewModel(
         repository.sleep(sleepId),
     ) { status, sleep -> if (sleep?.eventsFound == true) status else TranscriptionStatus.NoEvents }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TranscriptionStatus.NoEvents)
+
+    /**
+     * The active model, when it is another than the one that made the sleep's transcripts, to
+     * offer a re-run with it; null while speech recognition runs on the sleep.
+     */
+    val modelChange: StateFlow<ModelChange?> = combine(
+        transcriptions.modelChange(repository.transcriptModels(sleepId)),
+        transcription,
+    ) { change, status -> change.takeIf { status.canRun } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** The event kinds the event list can be filtered by. */
     val filterKinds: StateFlow<List<EventKindEntity>> =
@@ -337,6 +353,32 @@ class SleepViewModel(
             repository.setHidden(sleepId, event, hidden)
             if (hidden) hiddenChannel.send(event)
         }
+    }
+
+    private val notSpeechChannel = Channel<NotSpeech>(Channel.BUFFERED)
+
+    /** Each event the user said is not speech, once it is stored, so that can be undone. */
+    val notSpeech: Flow<NotSpeech> = notSpeechChannel.receiveAsFlow()
+
+    /**
+     * Replaces the words of speech event [event] with the user's [text]; blank text leaves a
+     * murmur. The correction wins over speech recognition, also when it runs again.
+     */
+    fun correctTranscript(event: SleepEvent, text: String) {
+        viewModelScope.launch { repository.setUserTranscript(sleepId, event, EventKinds.SPEECH, text.trim().ifBlank { null }) }
+    }
+
+    /** Turns speech event [event] into a plain event; reported once through [notSpeech]. */
+    fun markNotSpeech(event: SleepEvent) {
+        viewModelScope.launch {
+            val previous = repository.setUserTranscript(sleepId, event, EventKinds.EVENT, null)
+            notSpeechChannel.send(NotSpeech(event, previous))
+        }
+    }
+
+    /** Makes the event of [change] what it was before the user said it is not speech. */
+    fun undoNotSpeech(change: NotSpeech) {
+        viewModelScope.launch { repository.restoreUserTranscripts(sleepId, change.event, change.previous) }
     }
 
     /** Recognises speech in every event of the sleep again, now, whatever the settings say. */

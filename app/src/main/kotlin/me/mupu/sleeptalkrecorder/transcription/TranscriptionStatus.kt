@@ -2,6 +2,7 @@ package me.mupu.sleeptalkrecorder.transcription
 
 import me.mupu.sleeptalkrecorder.data.TranscriptionCount
 import me.mupu.sleeptalkrecorder.models.ModelLibrary
+import me.mupu.sleeptalkrecorder.models.TranscriptionModel
 import me.mupu.sleeptalkrecorder.settings.Settings
 import me.mupu.sleeptalkrecorder.settings.SettingsStore
 import me.mupu.sleeptalkrecorder.settings.TranscriptionMode
@@ -73,6 +74,26 @@ enum class WaitReason {
     BATTERY,
 }
 
+/**
+ * The active model is another than the one that made transcripts of a sleep, so a re-run with
+ * [active] is offered: [previous] is the id of the model that made most of the others.
+ */
+data class ModelChange(val previous: String, val active: TranscriptionModel) {
+    companion object {
+        /**
+         * The change for a sleep whose phone transcripts were made by the models in
+         * [transcriptsByModel] (their ids with the number of events each made), with [active] the
+         * active model; null when the active model made every transcript, or there is no model.
+         * A re-run cut short leaves transcripts of both, and still offers the rest.
+         */
+        fun of(transcriptsByModel: Map<String, Int>, active: TranscriptionModel?): ModelChange? {
+            if (active == null) return null
+            val previous = transcriptsByModel.filterKeys { it != active.id }.maxByOrNull { it.value }?.key ?: return null
+            return ModelChange(previous, active)
+        }
+    }
+}
+
 /** Speech recognition as the screens see it: the status of a sleep, and starting it by hand. */
 class Transcriptions(
     private val runner: TranscriptionRunner,
@@ -90,6 +111,15 @@ class Transcriptions(
     ) { count, progress, mode, hasModel, batteryPause ->
         TranscriptionStatus.of(sleepId, count, progress, mode, hasModel, batteryPause)
     }
+
+    /**
+     * Whether the active model is another than the one that made the transcripts of a sleep,
+     * whose phone transcripts per model are [transcriptsByModel].
+     */
+    fun modelChange(transcriptsByModel: Flow<Map<String, Int>>): Flow<ModelChange?> = combine(
+        transcriptsByModel,
+        models.models.map { list -> list.firstOrNull { it.active }?.model },
+    ) { byModel, active -> ModelChange.of(byModel, active) }
 
     /** Recognises speech in every event of [sleepId] again, now. */
     fun runNow(sleepId: Long) = scheduler.runNow(sleepId)

@@ -65,6 +65,7 @@ import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.time.SleepDate
+import me.mupu.sleeptalkrecorder.transcription.ModelChange
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.AppBarIcon
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
@@ -85,7 +86,9 @@ import java.time.ZoneId
  *
  * The sensitivity of the sleep is set from the app bar's menu, that around an event from the
  * event's menu, in [SensitivitySheet]. The event's menu also hides it, which a snackbar undoes, or
- * unhides it; the timeline draws hidden events grey like silence.
+ * unhides it; the timeline draws hidden events grey like silence. A speech event's text can be
+ * corrected, or the event marked as not speech, which a snackbar undoes; when the active model is
+ * another than the one that made the sleep's transcripts, a hint offers to recognise them again.
  */
 @Composable
 fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -> Unit) {
@@ -93,6 +96,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
     val sensitivity by viewModel.sensitivity.collectAsStateWithLifecycle()
     val transcription by viewModel.transcription.collectAsStateWithLifecycle()
     val filterKinds by viewModel.filterKinds.collectAsStateWithLifecycle()
+    val modelChange by viewModel.modelChange.collectAsStateWithLifecycle()
     val resources = LocalResources.current
     val zone = ZoneId.systemDefault()
     val snackbars = remember { SnackbarHostState() }
@@ -111,6 +115,16 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
         }
     }
     LaunchedEffect(viewModel) {
+        viewModel.notSpeech.collect { change ->
+            val result = snackbars.showSnackbar(
+                resources.getString(R.string.marked_not_speech),
+                actionLabel = resources.getString(R.string.undo),
+                duration = SnackbarDuration.Long,
+            )
+            if (result == SnackbarResult.ActionPerformed) viewModel.undoNotSpeech(change)
+        }
+    }
+    LaunchedEffect(viewModel) {
         viewModel.sensitivityApplied.collect { applied ->
             val message = if (applied.wholeSleep) R.plurals.sensitivity_applied_sleep else R.plurals.sensitivity_applied_event
             snackbars.showSnackbar(resources.getQuantityString(message, applied.events, applied.events))
@@ -125,14 +139,16 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                 title,
                 navigationIcon = { BackIcon(onBack) },
                 actions = {
-                    SpeechRecognitionStatus(transcription, state.events, onRun = viewModel::runSpeechRecognition)
+                    SpeechRecognitionStatus(transcription, state.events, modelChange, onRun = viewModel::runSpeechRecognition)
                     AppBarIcon(R.drawable.ic_bar_chart, stringResource(R.string.stats_of_sleep), onOpenStats)
                     MoreMenu(
                         listOfNotNull(
                             MenuEntry(stringResource(R.string.sensitivity_sleep), R.drawable.ic_tune) { viewModel.openSensitivity(null) }
                                 .takeIf { state.sensitivityAvailable },
                             MenuEntry(
-                                stringResource(R.string.run_speech_recognition),
+                                stringResource(
+                                    if (transcription.nothingRecognised) R.string.run_speech_recognition else R.string.run_speech_recognition_again,
+                                ),
                                 R.drawable.ic_subtitles,
                                 enabled = transcription.canRun,
                                 onClick = viewModel::runSpeechRecognition,
@@ -153,6 +169,13 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
+            modelChange?.let { change ->
+                ModelChangeHint(
+                    change,
+                    onRerun = viewModel::runSpeechRecognition,
+                    modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 8.dp, end = 12.dp),
+                )
+            }
             Spacer(Modifier.height(8.dp))
 
             val timeline = state.timeline
@@ -160,6 +183,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
             if (timeline != null && player != null) {
                 var window by remember(timeline) { mutableStateOf(TimelineWindow.whole(timeline.clockDuration)) }
                 var autoZoom by remember { mutableStateOf(true) }
+                var correcting by remember { mutableStateOf<SleepEvent?>(null) }
 
                 val current = state.currentEvent
                 LaunchedEffect(autoZoom, current?.id) {
@@ -213,7 +237,18 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     onTogglePlay = viewModel::togglePlayEvent,
                     onHide = viewModel::setHidden,
                     onSensitivity = if (state.sensitivityAvailable) viewModel::openSensitivity else null,
+                    modelChange = modelChange,
+                    onCorrect = { correcting = it },
+                    onNotSpeech = viewModel::markNotSpeech,
+                    onRerun = viewModel::runSpeechRecognition,
                 )
+                correcting?.let { event ->
+                    CorrectTranscriptDialog(
+                        event,
+                        onSave = { text -> viewModel.correctTranscript(event, text) },
+                        onDismiss = { correcting = null },
+                    )
+                }
 
                 sensitivity?.let { sheet ->
                     SensitivitySheet(
@@ -352,8 +387,9 @@ private fun PlaybackMode(cut: Boolean, enabled: Boolean, onCutChange: (Boolean) 
 
 /**
  * The events the [filter] shows, in order; a tap shows one on the timeline, its button plays it
- * alone, and its menu hides or unhides it and opens the sensitivity around it while
- * [onSensitivity] is given. The event at the playhead is highlighted and scrolled into view.
+ * alone, and its menu hides or unhides it, opens the sensitivity around it while [onSensitivity]
+ * is given, and for a speech event corrects its text or marks it as not speech. The event at the
+ * playhead is highlighted and scrolled into view.
  */
 @Composable
 private fun EventList(
@@ -367,6 +403,10 @@ private fun EventList(
     onTogglePlay: (SleepEvent) -> Unit,
     onHide: (SleepEvent, Boolean) -> Unit,
     onSensitivity: ((SleepEvent) -> Unit)?,
+    modelChange: ModelChange?,
+    onCorrect: (SleepEvent) -> Unit,
+    onNotSpeech: (SleepEvent) -> Unit,
+    onRerun: () -> Unit,
 ) {
     val listState = rememberLazyListState()
     LaunchedEffect(currentEventId) {
@@ -397,6 +437,10 @@ private fun EventList(
                 onTogglePlay = onTogglePlay,
                 onHide = onHide,
                 onSensitivity = onSensitivity,
+                modelChange = modelChange,
+                onCorrect = onCorrect,
+                onNotSpeech = onNotSpeech,
+                onRerun = onRerun,
             )
         }
         if (sleep != null && events.isEmpty()) {
@@ -431,6 +475,10 @@ private fun EventRow(
     onTogglePlay: (SleepEvent) -> Unit,
     onHide: (SleepEvent, Boolean) -> Unit,
     onSensitivity: ((SleepEvent) -> Unit)?,
+    modelChange: ModelChange?,
+    onCorrect: (SleepEvent) -> Unit,
+    onNotSpeech: (SleepEvent) -> Unit,
+    onRerun: () -> Unit,
 ) {
     val clock = LocalClockFormatter.current
     val resources = LocalResources.current
@@ -471,7 +519,15 @@ private fun EventRow(
                 style = MaterialTheme.typography.bodySmall.merge(numbers),
                 color = colors.onSurfaceVariant,
             )
-            TranscriptLine(event, transcriptExpanded, onToggleTranscript)
+            TranscriptLine(
+                event,
+                transcriptExpanded,
+                onToggleTranscript,
+                modelChange,
+                onCorrect = { onCorrect(event) },
+                onNotSpeech = { onNotSpeech(event) },
+                onRerun = onRerun,
+            )
         }
         IconButton(onClick = { onTogglePlay(event) }) {
             Icon(
@@ -487,6 +543,9 @@ private fun EventRow(
                     MenuEntry(stringResource(R.string.hide_event), R.drawable.ic_visibility_off) { onHide(event, true) }
                 },
                 onSensitivity?.let { MenuEntry(stringResource(R.string.sensitivity_here), R.drawable.ic_tune) { it(event) } },
+                MenuEntry(stringResource(R.string.correct_text), R.drawable.ic_edit) { onCorrect(event) }.takeIf { event.isSpeech },
+                MenuEntry(stringResource(R.string.not_speech_plain_event), R.drawable.ic_voice_over_off) { onNotSpeech(event) }
+                    .takeIf { event.isSpeech },
             ),
         )
     }

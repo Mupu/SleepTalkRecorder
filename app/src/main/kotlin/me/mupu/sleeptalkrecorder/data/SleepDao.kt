@@ -121,29 +121,46 @@ interface SleepDao {
     suspend fun deleteResults(sleepId: Long, origin: AnnotationOrigin, producer: String)
 
     /**
-     * The events of a sleep in order, each with the kind and transcript of its winning transcript
-     * annotation: the one over the same stretch from the user, else from a server, else from the
-     * phone, the latest first; without one, the detector's kind. An event is hidden while one of
-     * the user's hidden marks overlaps it.
+     * The events of a sleep in order, with the detector's kind and without their transcripts,
+     * which [withTranscripts] adds. An event is hidden while one of the user's hidden marks
+     * overlaps it.
      */
     @Query(
         """
         SELECT event.id, event.start_ms, event.end_ms, kind.id AS kind_id, kind.name AS kind_name,
-            kind.color AS kind_color, transcript.text AS transcript, transcript.origin AS transcript_origin,
-            transcript.producer AS transcript_producer, $IS_HIDDEN AS hidden
+            kind.color AS kind_color, NULL AS transcript, NULL AS transcript_origin,
+            NULL AS transcript_producer, $IS_HIDDEN AS hidden
         FROM annotation AS event
-        LEFT JOIN annotation AS transcript ON transcript.id = (
-            SELECT id FROM annotation WHERE sleep_id = event.sleep_id AND type = 'TRANSCRIPT'
-                AND start_ms = event.start_ms AND end_ms = event.end_ms
-            ORDER BY CASE origin WHEN 'USER' THEN 0 WHEN 'SERVER' THEN 1 ELSE 2 END, id DESC
-            LIMIT 1
-        )
-        JOIN event_kind AS kind ON kind.id = COALESCE(transcript.kind_id, event.kind_id)
+        JOIN event_kind AS kind ON kind.id = event.kind_id
         WHERE event.sleep_id = :sleepId AND event.type = 'EVENT'
         ORDER BY event.start_ms, event.id
         """,
     )
     fun events(sleepId: Long): Flow<List<SleepEvent>>
+
+    /** Every event kind. */
+    @Query("SELECT * FROM event_kind")
+    fun kinds(): Flow<List<EventKindEntity>>
+
+    /** The user's transcripts that overlap a stretch: their corrections and downgrades of the events in it. */
+    @Query(
+        """
+        SELECT * FROM annotation WHERE sleep_id = :sleepId AND type = 'TRANSCRIPT' AND origin = 'USER'
+            AND start_ms < :endMillis AND end_ms > :startMillis
+        ORDER BY id
+        """,
+    )
+    suspend fun userTranscripts(sleepId: Long, startMillis: Long, endMillis: Long): List<AnnotationEntity>
+
+    /** How many of a sleep's events each model gave a transcript of the phone, by the model's id. */
+    @Query(
+        """
+        SELECT producer, COUNT(*) AS events FROM annotation
+        WHERE sleep_id = :sleepId AND type = 'TRANSCRIPT' AND origin = 'DEVICE' AND producer IS NOT NULL
+        GROUP BY producer
+        """,
+    )
+    fun transcriptModels(sleepId: Long): Flow<List<ModelTranscripts>>
 
     /** Removes the hidden marks that overlap a stretch, which shows the events in it again. */
     @Query("DELETE FROM annotation WHERE sleep_id = :sleepId AND type = 'HIDDEN' AND start_ms < :endMillis AND end_ms > :startMillis")
@@ -229,6 +246,9 @@ private const val IS_HIDDEN = """
     EXISTS (SELECT 1 FROM annotation AS mark WHERE mark.sleep_id = event.sleep_id AND mark.type = 'HIDDEN'
         AND mark.start_ms < event.end_ms AND mark.end_ms > event.start_ms)
 """
+
+/** How many events of a sleep the model [producer] gave a transcript. */
+data class ModelTranscripts(val producer: String, val events: Int)
 
 /** The stretch of an event in milliseconds of the sleep's audio. */
 data class EventStretch(

@@ -1,25 +1,35 @@
 package me.mupu.sleeptalkrecorder.ui.sleep
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,14 +37,15 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.mupu.sleeptalkrecorder.R
-import me.mupu.sleeptalkrecorder.data.AnnotationOrigin
 import me.mupu.sleeptalkrecorder.data.EventKindEntity
 import me.mupu.sleeptalkrecorder.data.EventKinds
 import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.models.TranscriptionModel
+import me.mupu.sleeptalkrecorder.transcription.ModelChange
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionStatus
 import me.mupu.sleeptalkrecorder.transcription.WaitReason
 
@@ -42,12 +53,16 @@ import me.mupu.sleeptalkrecorder.transcription.WaitReason
 internal val TranscriptionStatus.canRun: Boolean
     get() = this != TranscriptionStatus.NoEvents && this !is TranscriptionStatus.Running
 
+/** Whether speech recognition has not yet recognised any event of the sleep. */
+internal val TranscriptionStatus.nothingRecognised: Boolean
+    get() = this is TranscriptionStatus.Waiting && pending == events
+
 /**
  * The top bar's speech recognition status: a spinner while it runs on the sleep, an hourglass
  * while events wait and a check mark once all are done, which each open what is running.
  */
 @Composable
-internal fun SpeechRecognitionStatus(status: TranscriptionStatus, events: List<SleepEvent>, onRun: () -> Unit) {
+internal fun SpeechRecognitionStatus(status: TranscriptionStatus, events: List<SleepEvent>, modelChange: ModelChange?, onRun: () -> Unit) {
     var showing by remember { mutableStateOf(false) }
     val label = stringResource(R.string.settings_transcription)
 
@@ -70,21 +85,25 @@ internal fun SpeechRecognitionStatus(status: TranscriptionStatus, events: List<S
         }
     }
     if (showing) {
-        SpeechRecognitionDialog(status, events, onRun = onRun, onDismiss = { showing = false })
+        SpeechRecognitionDialog(status, events, modelChange, onRun = onRun, onDismiss = { showing = false })
     }
 }
 
-/** What speech recognition does with the sleep: running, done, or waiting and why. */
+/**
+ * What speech recognition does with the sleep: running, done, or waiting and why; after a
+ * [modelChange] it offers the re-run with the active model.
+ */
 @Composable
 private fun SpeechRecognitionDialog(
     status: TranscriptionStatus,
     events: List<SleepEvent>,
+    modelChange: ModelChange?,
     onRun: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val model = events.mapNotNull { it.transcriptProducer }
         .groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
-        ?.let { producer -> TranscriptionModel.entries.find { it.id == producer }?.displayName ?: producer }
+        ?.let(::modelName)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -115,7 +134,13 @@ private fun SpeechRecognitionDialog(
                         onRun()
                     },
                 ) {
-                    Text(stringResource(if (status == TranscriptionStatus.Done) R.string.transcription_run_again else R.string.transcription_run_now))
+                    Text(
+                        when {
+                            modelChange != null -> stringResource(R.string.rerun_with, modelChange.active.displayName)
+                            status == TranscriptionStatus.Done -> stringResource(R.string.transcription_run_again)
+                            else -> stringResource(R.string.transcription_run_now)
+                        },
+                    )
                 }
             }
         },
@@ -165,10 +190,20 @@ internal fun EventFilterChips(
 
 /**
  * What speech recognition found in a speech event: for a murmur that no words were recognised;
- * else its transcript, one line until tapped, then whole and marked as automatic.
+ * else its transcript, one line until tapped, then whole, marked as automatic or as corrected by
+ * the user, with buttons to correct it or to say it is not speech. After a [modelChange] an
+ * automatic transcript also offers the re-run with the active model.
  */
 @Composable
-internal fun TranscriptLine(event: SleepEvent, expanded: Boolean, onToggle: () -> Unit) {
+internal fun TranscriptLine(
+    event: SleepEvent,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    modelChange: ModelChange?,
+    onCorrect: () -> Unit,
+    onNotSpeech: () -> Unit,
+    onRerun: () -> Unit,
+) {
     if (!event.isSpeech) return
     val colors = MaterialTheme.colorScheme
     val transcript = event.transcript
@@ -190,9 +225,16 @@ internal fun TranscriptLine(event: SleepEvent, expanded: Boolean, onToggle: () -
                 maxLines = if (expanded) Int.MAX_VALUE else 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (expanded && event.transcriptOrigin != AnnotationOrigin.USER) {
-                val model = TranscriptionModel.entries.find { it.id == event.transcriptProducer }?.displayName ?: event.transcriptProducer.orEmpty()
-                Text(stringResource(R.string.transcript_automatic, model), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+            if (expanded) {
+                Text(
+                    if (event.corrected) {
+                        stringResource(R.string.transcript_corrected)
+                    } else {
+                        stringResource(R.string.transcript_automatic, event.transcriptProducer?.let(::modelName).orEmpty())
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.onSurfaceVariant,
+                )
             }
         }
         Icon(
@@ -202,7 +244,98 @@ internal fun TranscriptLine(event: SleepEvent, expanded: Boolean, onToggle: () -
             modifier = Modifier.size(20.dp),
         )
     }
+    if (expanded) {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            SmallTextButton(R.drawable.ic_edit, stringResource(R.string.correct_text), onCorrect)
+            SmallTextButton(R.drawable.ic_voice_over_off, stringResource(R.string.not_speech), onNotSpeech)
+        }
+        if (modelChange != null && !event.corrected) {
+            FilledTonalButton(onClick = onRerun, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
+                Icon(painterResource(R.drawable.ic_subtitles), contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                Text(stringResource(R.string.rerun_with, modelChange.active.displayName))
+            }
+        }
+    }
 }
+
+/** A text button with an icon, as the actions of an open transcript use them. */
+@Composable
+private fun SmallTextButton(@DrawableRes icon: Int, label: String, onClick: () -> Unit) {
+    TextButton(onClick = onClick, contentPadding = ButtonDefaults.TextButtonWithIconContentPadding) {
+        Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+        Text(label)
+    }
+}
+
+/**
+ * Asks for the words said in speech event [event], filled with its transcript; [onSave] gets the
+ * text as written, blank for a murmur without words.
+ */
+@Composable
+internal fun CorrectTranscriptDialog(event: SleepEvent, onSave: (String) -> Unit, onDismiss: () -> Unit) {
+    var text by rememberSaveable(event.id) { mutableStateOf(event.transcript.orEmpty()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.correct_text)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    minLines = 2,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(stringResource(R.string.correct_text_hint), style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onDismiss()
+                    onSave(text)
+                },
+            ) { Text(stringResource(R.string.save)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
+}
+
+/**
+ * The hint that the sleep's transcripts were made by another model than the active one, with the
+ * button that recognises its speech again with the active one.
+ */
+@Composable
+internal fun ModelChangeHint(change: ModelChange, onRerun: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        color = colors.primaryContainer,
+        contentColor = colors.onPrimaryContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = modifier,
+    ) {
+        Column(Modifier.padding(start = 12.dp, top = 10.dp, end = 4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(painterResource(R.drawable.ic_subtitles), contentDescription = null)
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    stringResource(R.string.model_change_hint, modelName(change.previous), change.active.displayName),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f).padding(end = 8.dp),
+                )
+            }
+            TextButton(onClick = onRerun, modifier = Modifier.align(Alignment.End)) {
+                Text(stringResource(R.string.rerun_with, change.active.displayName))
+            }
+        }
+    }
+}
+
+/** The name of the model with the id [producer], or the id of a model the app no longer knows. */
+internal fun modelName(producer: String): String =
+    TranscriptionModel.entries.find { it.id == producer }?.displayName ?: producer
 
 /** The name of an event kind: the user's [name], or the app's for the kinds it ships. */
 @Composable

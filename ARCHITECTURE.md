@@ -29,8 +29,8 @@ speech recognition. Logic that can be tested without a device
 (`time`, `detection`, the WAV writer, the recording session, level computation, the sleep
 timeline and its audio stream, the cut plan, the timeline view and the event filter of the sleep screen, the
 sensitivity sheet's re-scan, the numbers of the stats screen, the settings,
-which sleeps automatic deletion removes, the model downloads and states, the transcript filter and
-the speech recognition run) is plain Kotlin behind small interfaces (`PcmSource`,
+which sleeps automatic deletion removes, the model downloads and states, the transcript filter,
+the speech recognition run and which transcript each event shows) is plain Kotlin behind small interfaces (`PcmSource`,
 `RecordingStore`, `Clocks`, `ByteSource`, `ModelDownloads`, `TranscriptStore`, `Transcriber`) and
 is unit-tested on the JVM.
 
@@ -144,8 +144,8 @@ Room (`SleepDatabase`) holds four tables:
   not depend on the detector's hop size. The `type` says what the annotation states (`EVENT` with
   a kind, `SENSITIVITY` with a start threshold in `value`: the one the detector chose for the
   sleep, or one the user set for the stretch,
-  `MICROPHONE_UNAVAILABLE` from the recorder, `TRANSCRIPT` with the kind speech recognition gives
-  an event and its words in `text`, `HIDDEN` from the user over an event they hid), and `origin` (`DEVICE`, `SERVER` or `USER`),
+  `MICROPHONE_UNAVAILABLE` from the recorder, `TRANSCRIPT` with the kind speech recognition or
+  the user gives an event and its words in `text`, `HIDDEN` from the user over an event they hid), and `origin` (`DEVICE`, `SERVER` or `USER`),
   `producer` and `producer_version` say who stated it. Gaps between recordings take no time on
   this axis and need no annotation: they follow from the recordings' start instants and lengths.
 
@@ -274,9 +274,21 @@ told the transcript language: it first detects the language itself and is asked 
 user's language when it detected neither that nor English.
 
 Transcripts follow their events by stretch: the sleep screen shows an event with the kind and
-text of the transcript over the same stretch, the user's before a server's before the phone's. An
-event found again unchanged keeps its transcript, and the phone's transcripts of stretches that
-are no longer an event are removed with the new events.
+text of the transcript over the same stretch, a server's before the phone's. An event found again
+unchanged keeps its transcript, and the phone's transcripts of stretches that are no longer an
+event are removed with the new events.
+
+The user corrects a speech event's text in a dialog, or says it is not speech, which a snackbar
+undoes. Either is a `TRANSCRIPT` annotation of the user over the event (the speech kind with the
+user's words, none for a *murmur*, or the plain event kind) in place of the user's earlier ones
+there. It wins over every analysis and, like a hidden mark, counts for every event it overlaps,
+so it keeps to its event when a search with other settings finds it with other bounds, and no
+run of speech recognition, with whichever model, touches it. `withTranscripts` combines the
+events with their transcripts in plain Kotlin, so this rule is unit-tested.
+
+A sleep's phone transcripts name the model that made them. When the active model is another than
+the one that made some of them, the sleep screen shows a hint with "Re-run with" the active model,
+and so does an open transcript the user did not correct; both start the sleep's run.
 
 `TranscriptionRunner` works through events one at a time and stores each result at once, so a run
 that is stopped continues where it stopped; runs never overlap, so only one model is in memory
@@ -289,8 +301,9 @@ When it runs is a setting:
   the charger.
 - **Only while charging**: only the job that requires charging; WorkManager stops it when the
   charger is unplugged and runs it again on the next one.
-- **Only manually**: no job of its own. The sleep's menu ("Run speech recognition") starts a job
-  for that sleep in every mode, which recognises all its events again.
+- **Only manually**: no job of its own. The sleep's menu ("Run speech recognition", "... again"
+  once events were recognised) starts a job for that sleep in every mode, which recognises all its
+  events again.
 
 A job runs as a foreground service with a progress notification when Android allows one (from
 the background only for an app exempt from battery optimisation), else as normal work, which

@@ -1,0 +1,49 @@
+package me.mupu.sleeptalkrecorder.data
+
+/**
+ * The [events] with the kind and words of their winning transcript among [transcripts], with the
+ * name and colour of that kind from [kinds]; an event without a transcript keeps the detector's
+ * kind.
+ *
+ * The user's transcript wins over a server's, which wins over the phone's; of the same origin the
+ * latest counts. An analysis' transcript belongs to the event over exactly its stretch, because it
+ * describes that event's clip, and a new search for events removes the phone's transcripts of
+ * stretches that are no longer an event. The user's corrections and downgrades instead count for
+ * every event they overlap, like hidden marks: a search with other settings finds the event again
+ * with slightly different bounds, and the correction still keeps to it, also after the events were
+ * recognised again with another model.
+ */
+fun withTranscripts(
+    events: List<SleepEvent>,
+    transcripts: List<AnnotationEntity>,
+    kinds: Map<String, EventKindEntity>,
+): List<SleepEvent> {
+    val (user, analyses) = transcripts.partition { it.origin == AnnotationOrigin.USER }
+    val byStretch = analyses
+        .groupBy { it.startMillis to it.endMillis }
+        .mapValues { (_, over) -> over.minWith(compareBy<AnnotationEntity> { it.origin.rank }.thenByDescending { it.id }) }
+
+    return events.map { event ->
+        // The user's annotations are few, one per event they changed, so they are searched in full.
+        val winner = user.filter { it.startMillis < event.endMillis && it.endMillis > event.startMillis }.maxByOrNull { it.id }
+            ?: byStretch[event.startMillis to event.endMillis]
+            ?: return@map event
+        val kind = winner.kindId?.let(kinds::get)
+        event.copy(
+            kindId = kind?.id ?: event.kindId,
+            kindName = if (kind != null) kind.name else event.kindName,
+            kindColor = kind?.color ?: event.kindColor,
+            transcript = winner.text,
+            transcriptOrigin = winner.origin,
+            transcriptProducer = winner.producer,
+        )
+    }
+}
+
+/** The order in which the transcripts of analyses win: a server's before the phone's. */
+private val AnnotationOrigin.rank: Int
+    get() = when (this) {
+        AnnotationOrigin.USER -> 0
+        AnnotationOrigin.SERVER -> 1
+        AnnotationOrigin.DEVICE -> 2
+    }

@@ -90,8 +90,9 @@ enum class AnnotationType {
     /**
      * What speech recognition made of the event over the same stretch: the kind it gives the event
      * ([AnnotationEntity.kindId], the speech kind or the plain event) and the words it recognised
-     * ([AnnotationEntity.text], null for a murmur or a plain event). Over one event, the transcript
-     * of the user wins over those of analyses.
+     * ([AnnotationEntity.text], null for a murmur or a plain event). The user's transcript is their
+     * correction of the words or their verdict that the event is not speech; it wins over those of
+     * analyses and, like a hidden mark, counts for every event that overlaps it.
      */
     TRANSCRIPT,
 
@@ -119,7 +120,7 @@ enum class AnnotationOrigin {
 /**
  * One result about a stretch of a sleep, with its origin. Everything found in or said about a
  * sleep is an annotation: the events the detector found and the sensitivity it chose, the
- * transcripts of speech recognition, the events the user hid, and later the user's corrections.
+ * transcripts of speech recognition, the events the user hid and the user's corrections.
  * Each layer is added beside the others, so an analysis that runs again replaces only its own
  * annotations and never the user's.
  *
@@ -209,6 +210,9 @@ data class SleepEvent(
     /** Whether the user hid the event: a [AnnotationType.HIDDEN] annotation overlaps its stretch. */
     val hidden: Boolean = false,
 ) {
+    /** Whether the user corrected the transcript or said the event is not speech. */
+    val corrected: Boolean get() = transcriptOrigin == AnnotationOrigin.USER
+
     /** Whether this is a speech event: one with words, or a murmur without them. */
     val isSpeech: Boolean get() = kindId == EventKinds.SPEECH
 

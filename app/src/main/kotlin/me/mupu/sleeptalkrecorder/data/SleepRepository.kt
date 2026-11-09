@@ -29,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
@@ -72,10 +73,19 @@ class SleepRepository(
     fun sleep(id: Long): Flow<SleepSummary?> = dao.sleep(id, DETECTOR, DETECTOR_VERSION)
 
     /**
-     * The events of a sleep in order. Until they are found after the stop
-     * ([SleepSummary.eventsFound]), these are none or those of an older detector.
+     * The events of a sleep in order, each with the kind and words of its winning transcript
+     * ([withTranscripts]). Until they are found after the stop ([SleepSummary.eventsFound]),
+     * these are none or those of an older detector.
      */
-    fun events(sleepId: Long): Flow<List<SleepEvent>> = dao.events(sleepId)
+    fun events(sleepId: Long): Flow<List<SleepEvent>> = combine(
+        dao.events(sleepId),
+        dao.annotations(sleepId, AnnotationType.TRANSCRIPT),
+        dao.kinds(),
+    ) { events, transcripts, kinds -> withTranscripts(events, transcripts, kinds.associateBy { it.id }) }
+
+    /** How many of a sleep's events each model gave a transcript of the phone, by the model's id. */
+    fun transcriptModels(sleepId: Long): Flow<Map<String, Int>> =
+        dao.transcriptModels(sleepId).map { models -> models.associate { it.producer to it.events } }
 
     /**
      * Every finished sleep whose events are found, the most recently started first, with its
@@ -246,6 +256,42 @@ class SleepRepository(
                     ),
                 )
             }
+        }
+    }
+
+    /**
+     * Sets what [event] is, as the user's transcript over its stretch in place of the user's
+     * earlier ones that overlap it: a speech event with the [text] they wrote, or with null a
+     * murmur; or, with [kindId] the plain event, not speech at all. User transcripts win over
+     * every analysis and neither speech recognition nor a new search for events removes them.
+     *
+     * Returns the user's transcripts it replaced, which [restoreUserTranscripts] puts back.
+     */
+    suspend fun setUserTranscript(sleepId: Long, event: SleepEvent, kindId: String, text: String?): List<AnnotationEntity> =
+        database.withTransaction {
+            val replaced = dao.userTranscripts(sleepId, event.startMillis, event.endMillis)
+            dao.deleteAnnotations(replaced.map { it.id })
+            dao.insertAnnotations(
+                listOf(
+                    AnnotationEntity(
+                        sleepId = sleepId,
+                        type = AnnotationType.TRANSCRIPT,
+                        startMillis = event.startMillis,
+                        endMillis = event.endMillis,
+                        kindId = kindId,
+                        text = text,
+                        origin = AnnotationOrigin.USER,
+                    ),
+                ),
+            )
+            replaced
+        }
+
+    /** Undoes [setUserTranscript] on [event]: its user transcripts become the [previous] ones again. */
+    suspend fun restoreUserTranscripts(sleepId: Long, event: SleepEvent, previous: List<AnnotationEntity>) {
+        database.withTransaction {
+            dao.deleteAnnotations(dao.userTranscripts(sleepId, event.startMillis, event.endMillis).map { it.id })
+            dao.insertAnnotations(previous.map { it.copy(id = 0) })
         }
     }
 

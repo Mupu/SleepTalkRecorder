@@ -26,6 +26,7 @@
     <string name="next">Next</string>
     <string name="ok">OK</string>
     <string name="cancel">Cancel</string>
+    <string name="save">Save</string>
 
     <!-- Home -->
     <string name="ready">Ready for the night</string>
@@ -108,8 +109,21 @@
     <!-- A transcript in quotation marks. -->
     <string name="transcript_quoted">“%1$s”</string>
     <string name="murmur">murmur – no words recognised</string>
+    <!-- Below a transcript the user corrected. -->
+    <string name="transcript_corrected">corrected by you</string>
+    <string name="correct_text">Correct text</string>
+    <string name="correct_text_hint">Kept even when speech recognition runs again. Leave it empty for a murmur without words.</string>
+    <string name="not_speech">Not speech</string>
+    <!-- The event menu entry that turns a speech event into a plain event. -->
+    <string name="not_speech_plain_event">Not speech – plain event</string>
+    <string name="marked_not_speech">Marked as a plain event</string>
+    <!-- %1$s is the name of the model that made the transcripts, %2$s that of the active model. -->
+    <string name="model_change_hint">Transcripts by %1$s. %2$s is now active in the settings.</string>
+    <!-- %1$s is the name of the active model. -->
+    <string name="rerun_with">Re-run with %1$s</string>
     <string name="more_options">More options</string>
     <string name="run_speech_recognition">Run speech recognition</string>
+    <string name="run_speech_recognition_again">Run speech recognition again</string>
     <!-- The speech recognition of a sleep: what runs, what is done, what waits and why. -->
     <string name="transcription_running">Checking event %1$d of %2$d for speech…</string>
     <string name="transcription_done">All events checked. %1$d of %2$d sound like speech.</string>
