@@ -44,13 +44,67 @@ push to `main` and tags the release ([Git policy](docs/agents/git.md#versions-an
 
 ## Installing on a phone
 
-The app is not on Google Play; it is installed directly:
+The app is not on Google Play; a release build signed with your own key is installed directly.
+An update keeps the recordings only when it is signed with the same key as the installed app.
+Android refuses an update signed with another key, and the only way past that is to uninstall,
+which deletes every recording. So the release key is created once, never replaced and backed up
+outside the repository. The debug key is no substitute: it is generated per machine.
 
-- Over USB or wireless debugging with Android Studio's Run, or `adb install -r <apk>`.
-- As a signed APK copied to the phone (allow "Install unknown apps" for the file manager).
+### Create and back up the release key (once)
 
-An update keeps the recordings only when it is signed with the same key as the installed app, so
-the release key is created once and backed up outside the repository.
+Create the keystore outside the repository, for example in your user folder:
+
+```sh
+keytool -genkeypair -v -keystore ~/sleeptalk-release.jks -alias sleeptalk \
+  -keyalg RSA -keysize 4096 -validity 10000
+```
+
+`keytool` comes with the JDK (`$JAVA_HOME/bin`). Choose a strong password; the same one can serve
+as store and key password. Then copy the `.jks` file and its passwords to two offline places,
+such as a password manager and a USB stick. Whoever has the file and the passwords can sign
+updates; without them no update can be installed over the app.
+
+Point the build to the key with a `keystore.properties` file at the repository root. Git ignores
+it, so the passwords never reach a commit:
+
+```properties
+storeFile=C:/Users/<you>/sleeptalk-release.jks
+storePassword=<store password>
+keyAlias=sleeptalk
+keyPassword=<key password>
+```
+
+A relative `storeFile` is resolved against the repository root. Instead of the file, the
+environment variables `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS` and
+`RELEASE_KEY_PASSWORD` work too. Without them the release build still succeeds but is unsigned
+(`app-release-unsigned.apk`, which cannot be installed) and says so at the end of the build;
+debug builds never need the key.
+
+### Build and install
+
+```sh
+./gradlew assembleRelease   # .local/build/app/outputs/apk/release/app-release.apk
+```
+
+On the phone, enable Developer options (tap the build number seven times), then connect it:
+
+- **USB:** enable USB debugging and plug in the cable; `adb devices` lists the phone.
+- **Wireless debugging (Android 11+, same network as the PC):** enable Wireless debugging, tap
+  "Pair device with pairing code", run `adb pair <ip>:<pairing port>` with the code shown, then
+  `adb connect <ip>:<port>` with the address on the Wireless debugging screen. Android Studio's
+  "Pair devices using Wi-Fi" does the same with a QR code.
+
+Install, or update over the installed release while keeping its recordings:
+
+```sh
+adb install -r .local/build/app/outputs/apk/release/app-release.apk
+```
+
+Android Studio's Run does the same once the `release` build variant is selected. An update needs
+the same key and a version at least as high as the installed one, which `CHANGELOG.md` provides.
+
+The same signed APK can also be copied to a phone and opened there; Android then asks to allow
+"Install unknown apps" for the file manager.
 
 ## Repository guide
 
