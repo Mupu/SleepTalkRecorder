@@ -21,4 +21,5 @@ Die erste Beta: Die App nimmt deine Nächte auf und lässt dich nur das hören, 
 - Eine Einrichtung beim ersten Start fragt nach der Sprache und führt dich durch die Berechtigungen, die eine ganze Nacht braucht, auch durch die zusätzlichen Schritte mancher Handyhersteller; der Startbildschirm warnt, wenn eine fehlt.
 - Eine Aufnahme, die ein Absturz oder ein leerer Akku abgebrochen hat, wird repariert und bleibt erhalten; Lücken und Abschnitte, in denen eine andere App das Mikrofon hatte, werden markiert.
 - Wähle das Design, die Sprache (Deutsch oder Englisch), das Uhrzeitformat sowie Vorlauf und Nachlauf der Ereignisse.
+- Nach einem Update zeigt die App einmal, was neu ist; die Einstellungen listen unter „Neuigkeiten“ jedes Update auf.
 - Alles bleibt auf dem Handy: Es gibt kein Konto, und das Internet wird nur zum Herunterladen der Spracherkennungsmodelle genutzt.

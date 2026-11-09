@@ -21,4 +21,5 @@ The first beta: the app records your nights and lets you hear only what was said
 - A first-start setup asks for the language and walks you through the permissions a whole night needs, including the extra steps of some phone makers; home warns when one is missing.
 - A recording cut off by a crash or an empty battery is repaired and kept; gaps and stretches in which another app had the microphone are marked.
 - Choose the theme, the language (English or German), the time format and the lead-in and tail of the events.
+- After an update the app shows once what is new; the settings list every update under "What's new".
 - Everything stays on the phone: there is no account, and the internet is only used to download the speech recognition models.

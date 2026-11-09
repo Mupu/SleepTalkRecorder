@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import me.mupu.sleeptalkrecorder.time.SleepWindows
+import me.mupu.sleeptalkrecorder.whatsnew.Version
 import java.time.Duration
 import java.time.LocalTime
 
@@ -50,6 +51,17 @@ fun <E : Enum<E>> enumSetting(key: String, default: E, values: List<E>): Setting
 
     override fun write(preferences: MutablePreferences, value: E) {
         preferences[preferencesKey] = value.name
+    }
+}
+
+/** An app version, stored as "major.minor.patch"; null until one is stored or when it cannot be read. */
+fun versionSetting(key: String): Setting<Version?> = object : Setting<Version?>(null) {
+    private val preferencesKey = stringPreferencesKey(key)
+
+    override fun read(preferences: Preferences) = preferences[preferencesKey]?.let(Version::parse)
+
+    override fun write(preferences: MutablePreferences, value: Version?) {
+        if (value == null) preferences.remove(preferencesKey) else preferences[preferencesKey] = value.toString()
     }
 }
 

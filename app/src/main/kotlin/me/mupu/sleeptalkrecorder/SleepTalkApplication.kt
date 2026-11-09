@@ -25,6 +25,9 @@ import me.mupu.sleeptalkrecorder.transcription.TranscriptionRunner
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionScheduler
 import me.mupu.sleeptalkrecorder.transcription.Transcriptions
 import me.mupu.sleeptalkrecorder.transcription.batteryState
+import me.mupu.sleeptalkrecorder.whatsnew.BundledChangelogs
+import me.mupu.sleeptalkrecorder.whatsnew.Version
+import me.mupu.sleeptalkrecorder.whatsnew.WhatsNew
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -64,6 +67,15 @@ class AppContainer(context: Context) {
 
     /** The user's settings. */
     val settings = SettingsStore.open(context)
+
+    /** The version of the installed app; the build takes it from the newest release of the changelog. */
+    val installedVersion: Version = checkNotNull(Version.parse(BuildConfig.VERSION_NAME))
+
+    /** The changelogs bundled into the app, one per app language. */
+    val changelogs = BundledChangelogs.fromAssets(context)
+
+    /** Whether an update brought news the user has not seen. */
+    val whatsNew = WhatsNew(settings, installedVersion)
 
     /** Where the recording service stores its recordings; new sleeps are named by the current windows. */
     val sleepRecordings = SleepRecordings(database, recordingFiles) { settings.flow(Settings.sleepWindows).first() }

@@ -2,6 +2,7 @@ package me.mupu.sleeptalkrecorder.ui.settings
 
 import android.app.TimePickerDialog
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -165,6 +166,16 @@ internal fun SwitchSetting(
             }
         }
         content()
+    }
+}
+
+/** A row that opens another screen, with a chevron at its end. */
+@Composable
+internal fun LinkSetting(@DrawableRes icon: Int, label: String, hint: String, onClick: () -> Unit) {
+    Box(Modifier.clickable(role = Role.Button, onClick = onClick)) {
+        SettingLabel(icon, label, hint) {
+            Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null)
+        }
     }
 }
 

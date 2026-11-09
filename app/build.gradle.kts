@@ -129,6 +129,33 @@ abstract class UnpackNativeLibraries : DefaultTask() {
     }
 }
 
+/**
+ * Copies [changelogs] into the `changelogs` folder of [outputDirectory], which the build adds to the
+ * app's assets, so the app shows the same changelogs that the repository keeps and releases from.
+ */
+abstract class BundleChangelogs : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val changelogs: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction
+    fun bundle() {
+        val folder = outputDirectory.get().asFile.resolve("changelogs")
+        folder.deleteRecursively()
+        folder.mkdirs()
+        changelogs.forEach { it.copyTo(folder.resolve(it.name)) }
+    }
+}
+
+// The changelog of every app language (CHANGELOG.md and CHANGELOG.<lang>.md at the repository
+// root) is bundled as it is; the app picks the one of its language and parses it itself.
+val bundleChangelogs = tasks.register<BundleChangelogs>("bundleChangelogs") {
+    changelogs.from(rootProject.layout.projectDirectory.asFileTree.matching { include("CHANGELOG*.md") })
+}
+
 // sherpa-onnx, the speech recognition runtime, is published only as an AAR on its GitHub releases
 // (no Maven artifact). The build downloads the pinned release once into the Gradle user home,
 // which CI caches too, and checks it against the checksum below, so the AAR never enters Git.
@@ -199,6 +226,12 @@ android {
 
 kotlin {
     jvmToolchain(21)
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(bundleChangelogs, BundleChangelogs::outputDirectory)
+    }
 }
 
 // Exported schemas are tracked so that every schema change since the first beta release gets a

@@ -20,7 +20,8 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 | `transcription` | Speech recognition of events: the `EventAnalysis` interface, the `SpeechRecognition` with its `TranscriptFilter`, the sherpa-onnx `SherpaTranscriber`, the `TranscriptionRunner` that works through the events, and the WorkManager jobs that run it | only in `TranscriptionWork` (WorkManager, notifications, battery) |
 | `notifications` | The ids of all notifications and the progress notification that model downloads and speech recognition share | Android notifications, WorkManager's `ForegroundInfo` |
 | `readiness` | Whether the phone lets a whole night be recorded: the `Requirement`s it misses, the `VendorStep`s of its maker, and the `SystemPage`s that fix them | only in `PhoneReadiness` |
-| `ui` | Navigation, one sub-package per screen (`home`, `library`, `sleep`, `stats`, `settings`, `setup`), shared `components`, `format` and `theme` | Compose |
+| `whatsnew` | The changelogs bundled into the app: their `Changelog` parser, the `BundledChangelogs` of each app language and `WhatsNew`, which decides whether an update brought news the user has not seen | only in `BundledChangelogs.fromAssets` (assets) |
+| `ui` | Navigation, one sub-package per screen (`home`, `library`, `sleep`, `stats`, `settings`, `setup`, `whatsnew`), shared `components`, `format` and `theme` | Compose |
 
 The root package holds `MainActivity`, the only activity, and `SleepTalkApplication` with the
 `AppContainer`, which wires the shared objects by hand: the database with the repository and stores, the
@@ -31,7 +32,7 @@ speech recognition. Logic that can be tested without a device
 timeline and its audio stream, the cut plan, the timeline view and the event filter of the sleep screen, the
 sensitivity sheet's re-scan, the numbers of the stats screen, the settings,
 which sleeps automatic deletion removes, the model downloads and states, the transcript filter,
-the speech recognition run and which transcript each event shows) is plain Kotlin behind small interfaces (`PcmSource`,
+the speech recognition run, which transcript each event shows, and reading the changelogs) is plain Kotlin behind small interfaces (`PcmSource`,
 `RecordingStore`, `Clocks`, `ByteSource`, `ModelDownloads`, `TranscriptStore`, `Transcriber`) and
 is unit-tested on the JVM.
 
@@ -66,6 +67,22 @@ Android 13 on the system stores it and offers it in the app's system settings (t
 the list of languages from the translated `values-*` folders), and on Android 12 AppCompat stores
 it and applies it to `MainActivity`, which is therefore an `AppCompatActivity`. The first start
 asks for it with the phone's language selected.
+
+## What's new
+
+The build copies the changelog of every app language (`CHANGELOG.md` and each `CHANGELOG.<lang>.md`
+at the repository root) into the app's assets, so the app shows the same text the releases are made
+from and nothing is copied by hand. The app reads the changelog of the language it shows and falls
+back to the English one when that is missing or has no release. `Changelog` reads the Markdown
+subset the changelogs are written in (release and section headings, paragraphs, lists, emphasis,
+strong emphasis and inline code) and leaves anything else as plain text, so no Markdown library is
+needed.
+
+`WhatsNew` keeps the version whose news the user has seen as a setting. When the installed version
+is higher, a pop-up over the open screen shows the releases since, once: any way of closing it
+counts as seen, and one of its buttons opens the list of all releases, which the settings open too.
+A fresh install has nothing to announce and only stores its version; a downgrade stores the lower
+one, so the next update shows everything after it.
 
 ## Readiness
 

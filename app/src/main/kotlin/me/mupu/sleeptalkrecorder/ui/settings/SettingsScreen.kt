@@ -20,6 +20,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.mupu.sleeptalkrecorder.BuildConfig
 import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.settings.AppLanguage
 import me.mupu.sleeptalkrecorder.settings.AppLanguages
@@ -32,11 +33,11 @@ import me.mupu.sleeptalkrecorder.ui.components.BackIcon
 import kotlinx.coroutines.launch
 
 /**
- * The settings screen: appearance (theme, language, time format), recording, cut playback and the
- * speech recognition models.
+ * The settings screen: appearance (theme, language, time format), recording, cut playback, the
+ * speech recognition models and the updates with the way to what changed in each.
  */
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
+fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenWhatsNew: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val language = AppLanguages.shown(LocalConfiguration.current)
     val snackbars = remember { SnackbarHostState() }
@@ -175,6 +176,14 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                     onActivate = { viewModel.activate(status.model) },
                 )
             }
+
+            SettingsSection(stringResource(R.string.settings_updates))
+            LinkSetting(
+                icon = R.drawable.ic_new_releases,
+                label = stringResource(R.string.whats_new),
+                hint = stringResource(R.string.settings_whats_new_hint, BuildConfig.VERSION_NAME),
+                onClick = onOpenWhatsNew,
+            )
         }
 
         settings.deleting?.let { model ->

@@ -375,4 +375,19 @@
         <item quantity="one">%1$d of %2$d event</item>
         <item quantity="other">%1$d of %2$d events</item>
     </plurals>
+
+    <!-- What's new: the changelog of the app's language, after an update and from the settings -->
+    <string name="whats_new">What\'s new</string>
+    <!-- The title of the pop-up after an update; %1$s is the installed version, "0.2.0". -->
+    <string name="whats_new_title">What\'s new in %1$s</string>
+    <string name="whats_new_all">All updates</string>
+    <string name="whats_new_seen">Got it</string>
+    <!-- %1$s is a version such as "0.2.0". -->
+    <string name="whats_new_version">Version %1$s</string>
+    <!-- The day of a release: "9 November 2026". -->
+    <string name="date_pattern_release">d MMMM yyyy</string>
+    <string name="whats_new_empty">No updates are listed.</string>
+    <string name="settings_updates">Updates</string>
+    <!-- %1$s is the installed version, "0.2.0". -->
+    <string name="settings_whats_new_hint">What changed in each update. You have version %1$s.</string>
 </resources>

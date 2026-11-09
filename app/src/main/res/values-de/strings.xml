@@ -333,4 +333,15 @@
         <item quantity="one">%1$d von %2$d Ereignis</item>
         <item quantity="other">%1$d von %2$d Ereignissen</item>
     </plurals>
+
+    <!-- What's new -->
+    <string name="whats_new">Neuigkeiten</string>
+    <string name="whats_new_title">Neu in Version %1$s</string>
+    <string name="whats_new_all">Alle Neuigkeiten</string>
+    <string name="whats_new_seen">Verstanden</string>
+    <string name="whats_new_version">Version %1$s</string>
+    <string name="date_pattern_release">d. MMMM yyyy</string>
+    <string name="whats_new_empty">Es sind keine Updates aufgeführt.</string>
+    <string name="settings_updates">Updates</string>
+    <string name="settings_whats_new_hint">Was sich mit jedem Update geändert hat. Du hast Version %1$s.</string>
 </resources>

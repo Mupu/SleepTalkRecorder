@@ -62,6 +62,12 @@ object Settings {
     /** When nights and naps begin; a change names only sleeps that start afterwards. */
     val sleepWindows = sleepWindowsSetting("naps_from_minute", "nights_from_minute", SleepWindows.DEFAULT)
 
+    /**
+     * The version whose news the user has seen: after an update to a higher one the app shows what
+     * is new since. Null until the app is first opened, which only stores the installed version.
+     */
+    val whatsNewSeen = versionSetting("whats_new_seen_version")
+
     /** Whether sleeps older than [autoDeleteAfter] are deleted on their own. */
     val autoDelete = booleanSetting("auto_delete", false)
 
