@@ -51,6 +51,7 @@ import kotlin.math.roundToLong
 // on/off switch sits at the right end of its row. Controls below a label start where the label
 // text starts, right of the icon column.
 private val ControlPadding = Modifier.padding(start = 56.dp, end = 16.dp, bottom = 8.dp)
+private val HintedControlPadding = Modifier.padding(start = 56.dp, end = 16.dp, bottom = 4.dp)
 
 /** The heading of a group of settings. */
 @Composable
@@ -73,10 +74,11 @@ internal fun <T> ChoiceSetting(
     selected: T,
     optionLabel: @Composable (T) -> String,
     onSelect: (T) -> Unit,
+    hint: String? = null,
 ) {
     Column {
         SettingLabel(icon, label)
-        SingleChoiceSegmentedButtonRow(ControlPadding.fillMaxWidth()) {
+        SingleChoiceSegmentedButtonRow((if (hint == null) ControlPadding else HintedControlPadding).fillMaxWidth()) {
             options.forEachIndexed { index, option ->
                 SegmentedButton(
                     selected = option == selected,
@@ -86,6 +88,14 @@ internal fun <T> ChoiceSetting(
                     Text(optionLabel(option), maxLines = 1)
                 }
             }
+        }
+        if (hint != null) {
+            Text(
+                hint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = ControlPadding,
+            )
         }
     }
 }

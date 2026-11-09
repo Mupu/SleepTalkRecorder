@@ -22,6 +22,7 @@ import me.mupu.sleeptalkrecorder.settings.AppLanguages
 import me.mupu.sleeptalkrecorder.settings.Settings
 import me.mupu.sleeptalkrecorder.settings.ThemeMode
 import me.mupu.sleeptalkrecorder.settings.TimeFormat
+import me.mupu.sleeptalkrecorder.settings.TranscriptionMode
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
 
@@ -125,6 +126,15 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 56.dp, end = 16.dp, bottom = 8.dp),
             )
+            ChoiceSetting(
+                icon = R.drawable.ic_record_voice,
+                label = stringResource(R.string.settings_transcription_mode),
+                options = TranscriptionMode.entries,
+                selected = settings.transcriptionMode,
+                optionLabel = { stringResource(it.label) },
+                onSelect = { viewModel.set(Settings.transcriptionMode, it) },
+                hint = stringResource(settings.transcriptionMode.hint),
+            )
             if (settings.needsLanguage) {
                 TranscriptLanguageSetting(settings.transcriptLanguage) { viewModel.set(Settings.transcriptLanguage, it) }
             }
@@ -150,6 +160,20 @@ private val ThemeMode.label: Int
         ThemeMode.SYSTEM -> R.string.theme_system
         ThemeMode.LIGHT -> R.string.theme_light
         ThemeMode.DARK -> R.string.theme_dark
+    }
+
+private val TranscriptionMode.label: Int
+    get() = when (this) {
+        TranscriptionMode.AFTER_STOP -> R.string.transcription_mode_after_stop
+        TranscriptionMode.WHILE_CHARGING -> R.string.transcription_mode_while_charging
+        TranscriptionMode.MANUAL -> R.string.transcription_mode_manual
+    }
+
+private val TranscriptionMode.hint: Int
+    get() = when (this) {
+        TranscriptionMode.AFTER_STOP -> R.string.transcription_mode_after_stop_hint
+        TranscriptionMode.WHILE_CHARGING -> R.string.transcription_mode_while_charging_hint
+        TranscriptionMode.MANUAL -> R.string.transcription_mode_manual_hint
     }
 
 private val TimeFormat.label: Int

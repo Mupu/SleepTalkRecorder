@@ -122,6 +122,7 @@ class ModelDownloadWorker(context: Context, params: WorkerParameters) : Coroutin
         }
 
         container.modelLibrary.installed(model)
+        container.scheduleTranscription()
         return Result.success()
     }
 

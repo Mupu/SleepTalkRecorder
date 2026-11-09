@@ -8,6 +8,7 @@ import me.mupu.sleeptalkrecorder.detection.FeatureTrackFile
 import me.mupu.sleeptalkrecorder.detection.SensitivityOverride
 import me.mupu.sleeptalkrecorder.detection.SleepTrack
 import me.mupu.sleeptalkrecorder.detection.replacedBy
+import me.mupu.sleeptalkrecorder.playback.SleepAudio
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
 import me.mupu.sleeptalkrecorder.playback.TimelineRecording
@@ -16,6 +17,9 @@ import me.mupu.sleeptalkrecorder.recording.NewRecording
 import me.mupu.sleeptalkrecorder.recording.RecordingStore
 import me.mupu.sleeptalkrecorder.time.RecordingClock
 import me.mupu.sleeptalkrecorder.time.SleepDate
+import me.mupu.sleeptalkrecorder.transcription.EventClip
+import me.mupu.sleeptalkrecorder.transcription.SpeechRecognition
+import me.mupu.sleeptalkrecorder.transcription.TranscriptStore
 import java.io.File
 import java.io.IOException
 import java.time.Duration
@@ -24,6 +28,7 @@ import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -44,9 +49,13 @@ class SleepRepository(
     private val database: SleepDatabase,
     /** The parent directory of every recording's chunk files; excluded from backups. */
     val recordingsDirectory: File,
-) : RecordingStore {
+) : RecordingStore, TranscriptStore {
 
     private val dao = database.sleepDao()
+
+    /** The timeline clips were last read from, with the recordings it was read for. */
+    @Volatile
+    private var clipTimeline: Pair<List<RecordingEntity>, SleepTimeline>? = null
 
     /** Serialises reading feature tracks, so a track being rebuilt is never rebuilt twice at once. */
     private val trackLock = Mutex()
@@ -65,6 +74,12 @@ class SleepRepository(
      * ([SleepSummary.eventsFound]), these are none or those of an older detector.
      */
     fun events(sleepId: Long): Flow<List<SleepEvent>> = dao.events(sleepId)
+
+    /** How far speech recognition got through a sleep's events. */
+    fun transcriptionCount(sleepId: Long): Flow<TranscriptionCount> = dao.transcriptionCount(sleepId)
+
+    /** The event kinds the sleep screen offers a filter for. */
+    fun filterKinds(): Flow<List<EventKindEntity>> = dao.filterKinds()
 
     /** The stretches of a sleep's audio in which the microphone was unavailable, in order. */
     fun microphoneUnavailable(sleepId: Long): Flow<List<Stretch>> =
@@ -167,6 +182,8 @@ class SleepRepository(
             if (dao.findSleep(sleepId)?.endedAt != end) return@withTransaction false
             dao.deleteResults(sleepId, AnnotationOrigin.DEVICE, DETECTOR)
             dao.insertAnnotations(events + sensitivity)
+            // Transcripts follow their events by stretch: events found again unchanged keep theirs.
+            dao.deleteOrphanedTranscripts(sleepId)
             true
         }
         if (!stored) return null
@@ -193,6 +210,47 @@ class SleepRepository(
             }
         }
     }
+
+    override suspend fun sleepsToTranscribe(): List<Long> = dao.sleepsToTranscribe(DETECTOR, DETECTOR_VERSION)
+
+    override suspend fun eventsOf(sleepId: Long, onlyPending: Boolean): List<Stretch> =
+        dao.eventStretches(sleepId, onlyPending).map { Stretch(Duration.ofMillis(it.startMillis), Duration.ofMillis(it.endMillis)) }
+
+    /**
+     * The audio around [event], [SpeechRecognition.PADDING] before and after it, cut back at the
+     * start of a recording and where the microphone was unavailable, like the lead-in and tail.
+     */
+    override suspend fun clip(sleepId: Long, event: Stretch): EventClip {
+        val recordings = dao.recordingsOf(sleepId)
+        val timeline = clipTimeline?.takeIf { it.first == recordings }?.second
+            ?: timelineOf(recordings).also { clipTimeline = recordings to it }
+        val unavailable = microphoneUnavailable(sleepId).first()
+        val padding = SpeechRecognition.PADDING
+        val stretch = timeline.uninterrupted((event.start - padding).coerceAtLeast(Duration.ZERO), event.end + padding, event, unavailable)
+        val samples = withContext(Dispatchers.IO) {
+            try {
+                SleepAudio(timeline).use { it.clip(stretch) }
+            } catch (error: IOException) {
+                // Without its audio the event cannot be recognised and stays a plain event.
+                Log.w(TAG, "Cannot read the audio of an event of sleep $sleepId at ${event.start}", error)
+                FloatArray(0)
+            }
+        }
+        return EventClip(sleepId, event, samples, SleepAudio.sampleRateOf(timeline))
+    }
+
+    override suspend fun store(sleepId: Long, event: Stretch, annotations: List<AnnotationEntity>) {
+        database.withTransaction {
+            // Events found anew meanwhile no longer hold this stretch; the result has no event left.
+            if (!dao.hasEvent(sleepId, event.start.toMillis(), event.end.toMillis())) return@withTransaction
+            for (origin in annotations.map { it.origin }.distinct()) {
+                dao.deleteTranscripts(sleepId, event.start.toMillis(), event.end.toMillis(), origin)
+            }
+            dao.insertAnnotations(annotations)
+        }
+    }
+
+    override suspend fun isRecording(): Boolean = dao.isRecording()
 
     private fun result(sleepId: Long, type: AnnotationType, startMillis: Long, endMillis: Long) = AnnotationEntity(
         sleepId = sleepId,

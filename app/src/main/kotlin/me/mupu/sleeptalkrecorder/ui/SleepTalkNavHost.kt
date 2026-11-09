@@ -79,7 +79,7 @@ fun SleepTalkNavHost(container: AppContainer) {
             val context = LocalContext.current.applicationContext
             SleepScreen(
                 viewModel = viewModel {
-                    SleepViewModel(sleepId, container.sleepRepository, container.settings, SleepPlayer(context))
+                    SleepViewModel(sleepId, container.sleepRepository, container.settings, SleepPlayer(context), container.transcriptions)
                 },
                 onBack = { navController.popBackStack() },
             )

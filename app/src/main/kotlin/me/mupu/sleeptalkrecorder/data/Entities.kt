@@ -86,6 +86,14 @@ enum class AnnotationType {
      * stretch holds the silence Android delivered instead of the room.
      */
     MICROPHONE_UNAVAILABLE,
+
+    /**
+     * What speech recognition made of the event over the same stretch: the kind it gives the event
+     * ([AnnotationEntity.kindId], the speech kind or the plain event) and the words it recognised
+     * ([AnnotationEntity.text], null for a murmur or a plain event). Over one event, the transcript
+     * of the user wins over those of analyses.
+     */
+    TRANSCRIPT,
 }
 
 /** Where an annotation comes from. */
@@ -102,8 +110,8 @@ enum class AnnotationOrigin {
 
 /**
  * One result about a stretch of a sleep, with its origin. Everything found in or said about a
- * sleep is an annotation: the events the detector found and the sensitivity it chose, and later
- * hidden events, transcripts and the user's corrections. Each layer is added beside the others,
+ * sleep is an annotation: the events the detector found and the sensitivity it chose, the
+ * transcripts of speech recognition, and later hidden events and the user's corrections. Each layer is added beside the others,
  * so an analysis that runs again replaces only its own annotations and never the user's.
  *
  * The stretch is given as positions in the sleep's audio (the axis the player plays, on which the
@@ -134,12 +142,25 @@ data class AnnotationEntity(
     @ColumnInfo(name = "kind_id") val kindId: String? = null,
     /** A number whose meaning depends on [type]. */
     val value: Double? = null,
+    /** A text whose meaning depends on [type]. */
+    val text: String? = null,
     val origin: AnnotationOrigin,
     /** The analysis or model that made it, such as `loudness`; null for the user. */
     val producer: String? = null,
     /** The version of [producer] that made it. */
     @ColumnInfo(name = "producer_version") val producerVersion: String? = null,
 )
+
+/** How far speech recognition got through a sleep's events. */
+data class TranscriptionCount(
+    /** The sleep's events. */
+    val events: Int,
+    /** Those the phone's speech recognition has a result for. */
+    val transcribed: Int,
+) {
+    /** The events still waiting for speech recognition. */
+    val pending: Int get() = events - transcribed
+}
 
 /** A sleep as the library lists it. */
 data class SleepSummary(
@@ -158,7 +179,10 @@ data class SleepSummary(
     val isRunning: Boolean get() = endedAt == null
 }
 
-/** An event of a sleep with its kind, as the sleep screen shows it. */
+/**
+ * An event of a sleep with its kind, as the sleep screen shows it. The kind and the transcript are
+ * those of the event's winning transcript annotation, if it has one, else the detector's kind.
+ */
 data class SleepEvent(
     val id: Long,
     @ColumnInfo(name = "start_ms") val startMillis: Long,
@@ -167,7 +191,16 @@ data class SleepEvent(
     @ColumnInfo(name = "kind_id") val kindId: String,
     @ColumnInfo(name = "kind_name") val kindName: String?,
     @ColumnInfo(name = "kind_color") val kindColor: String,
+    /** The words recognised in the event; null if none were or it was not transcribed yet. */
+    val transcript: String? = null,
+    /** Who wrote [transcript]: the user or an analysis; null without a transcript annotation. */
+    @ColumnInfo(name = "transcript_origin") val transcriptOrigin: AnnotationOrigin? = null,
+    /** The model that wrote it, such as `parakeet-ultra`; null for the user. */
+    @ColumnInfo(name = "transcript_producer") val transcriptProducer: String? = null,
 ) {
+    /** Whether this is a speech event: one with words, or a murmur without them. */
+    val isSpeech: Boolean get() = kindId == EventKinds.SPEECH
+
     /** Where the event starts in the sleep's audio. */
     val start: Duration get() = Duration.ofMillis(startMillis)
 

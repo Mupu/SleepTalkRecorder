@@ -18,6 +18,12 @@ object AppLanguages {
     fun phoneLanguage(context: Context): AppLanguage =
         AppLanguage.matching(LocaleManagerCompat.getSystemLocales(context).toList())
 
+    /** The language the app is set to, or else the phone's, outside of an activity. */
+    fun current(context: Context): AppLanguage {
+        val chosen = AppCompatDelegate.getApplicationLocales()
+        return if (chosen.isEmpty) phoneLanguage(context) else AppLanguage.matching(chosen.toList())
+    }
+
     /** The language the app shows in [configuration], which is the activity's. */
     fun shown(configuration: Configuration): AppLanguage =
         AppLanguage.matching(LocaleListCompat.wrap(configuration.locales).toList())

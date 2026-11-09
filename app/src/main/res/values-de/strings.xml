@@ -76,9 +76,32 @@
     <string name="event_heading">%1$s · %2$s</string>
     <string name="event_details">%1$s · Pos %2$s</string>
     <string name="kind_event">Ereignis</string>
+    <string name="kind_speech">Sprache</string>
+    <string name="filter_all">Alle</string>
+    <string name="filter_kind_only">Nur %1$s</string>
+    <string name="no_events_filter">Keine Ereignisse für diesen Filter.</string>
+    <string name="transcript">Transkript</string>
+    <string name="transcript_automatic">automatisch erkannt, kann falsch sein · %1$s</string>
+    <string name="transcript_quoted">„%1$s“</string>
+    <string name="murmur">Murmeln – keine Wörter erkannt</string>
+    <string name="more_options">Weitere Optionen</string>
+    <string name="run_speech_recognition">Spracherkennung ausführen</string>
+    <string name="transcription_running">Prüft Ereignis %1$d von %2$d auf Sprache …</string>
+    <string name="transcription_done">Alle Ereignisse geprüft. %1$d von %2$d klingen nach Sprache.</string>
+    <string name="transcription_model">Modell: %1$s</string>
+    <plurals name="transcription_pending">
+        <item quantity="one">%1$d von %2$d Ereignis wartet noch auf die Spracherkennung.</item>
+        <item quantity="other">%1$d von %2$d Ereignissen warten noch auf die Spracherkennung.</item>
+    </plurals>
+    <string name="transcription_waits_queue">Sie beginnt gleich.</string>
+    <string name="transcription_waits_model">Sie beginnt, sobald in den Einstellungen ein Spracherkennungsmodell installiert ist.</string>
+    <string name="transcription_waits_manual">Sie läuft nur, wenn du sie startest.</string>
+    <string name="transcription_waits_charger">Sie läuft, während das Handy lädt.</string>
+    <string name="transcription_waits_battery">Pausiert, weil der Akku unter 30 Prozent ist. Sie geht weiter, sobald das Handy lädt.</string>
+    <string name="transcription_run_now">Jetzt ausführen</string>
+    <string name="transcription_run_again">Erneut ausführen</string>
     <string name="play_event">Dieses Ereignis abspielen</string>
     <string name="pause_event">Dieses Ereignis anhalten</string>
-    <string name="more_options">Weitere Optionen</string>
 
     <!-- Sensitivity sheet -->
     <string name="sensitivity_here">Empfindlichkeit hier</string>
@@ -147,6 +170,13 @@
 
     <!-- Settings: speech recognition -->
     <string name="settings_transcription">Spracherkennung</string>
+    <string name="settings_transcription_mode">Wann sie läuft</string>
+    <string name="transcription_mode_after_stop">Nach Stopp</string>
+    <string name="transcription_mode_while_charging">Beim Laden</string>
+    <string name="transcription_mode_manual">Manuell</string>
+    <string name="transcription_mode_after_stop_hint">Gleich nach der Aufnahme. Pausiert unter 30 Prozent Akku, bis das Handy lädt.</string>
+    <string name="transcription_mode_while_charging_hint">Nur während das Handy lädt.</string>
+    <string name="transcription_mode_manual_hint">Nur wenn du sie im Menü eines Schlafs startest.</string>
     <string name="settings_models_hint">Die App erkennt Sprache auf dem Telefon. Das Internet nutzt sie nur, um Modelle zu laden; Aufnahmen verlassen nie das Telefon.</string>
     <string name="settings_transcript_language">Sprache des Transkripts</string>
     <string name="settings_transcript_language_hint">Deine Sprache. Englisch wird immer mit erkannt.</string>
@@ -224,4 +254,11 @@
     <string name="notification_channel_model">Modell-Download</string>
     <string name="notification_channel_model_description">Zeigt den Fortschritt, während ein Spracherkennungsmodell geladen wird.</string>
     <string name="notification_model_title">Spracherkennungsmodell wird geladen</string>
+    <string name="notification_channel_transcription">Spracherkennung</string>
+    <string name="notification_channel_transcription_description">Zeigt den Fortschritt, während in einem Schlaf Sprache erkannt wird.</string>
+    <string name="notification_transcription_title">Sprache wird erkannt</string>
+    <plurals name="notification_transcription_progress">
+        <item quantity="one">%1$d von %2$d Ereignis</item>
+        <item quantity="other">%1$d von %2$d Ereignissen</item>
+    </plurals>
 </resources>

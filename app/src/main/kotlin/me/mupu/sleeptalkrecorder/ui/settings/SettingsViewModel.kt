@@ -13,6 +13,7 @@ import me.mupu.sleeptalkrecorder.settings.SettingsStore
 import me.mupu.sleeptalkrecorder.settings.ThemeMode
 import me.mupu.sleeptalkrecorder.settings.TimeFormat
 import me.mupu.sleeptalkrecorder.settings.TranscriptLanguage
+import me.mupu.sleeptalkrecorder.settings.TranscriptionMode
 import java.time.Duration
 import java.time.LocalTime
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +36,7 @@ data class SettingsUiState(
     /** Every transcription model with its state, in catalogue order. */
     val models: List<ModelStatus>,
     val transcriptLanguage: TranscriptLanguage,
+    val transcriptionMode: TranscriptionMode,
     /** The model the user asked to delete, until they confirm or cancel. */
     val deleting: TranscriptionModel?,
 ) {
@@ -54,12 +56,21 @@ class SettingsViewModel(private val store: SettingsStore, private val models: Mo
         combine(store.flow(Settings.leadIn), store.flow(Settings.tail), ::Pair),
         combine(store.flow(Settings.stopAtEnabled), store.flow(Settings.stopAt), ::Pair),
         combine(store.flow(Settings.autoDelete), store.flow(Settings.autoDeleteAfter), ::Pair),
-        combine(models.models, store.flow(Settings.transcriptLanguage), deleting, ::Triple),
-    ) { (theme, timeFormat), (leadIn, tail), (stopAtEnabled, stopAt), (autoDelete, autoDeleteAfter), (models, language, deleting) ->
+        combine(models.models, store.flow(Settings.transcriptLanguage), store.flow(Settings.transcriptionMode), deleting, ::Speech),
+    ) { (theme, timeFormat), (leadIn, tail), (stopAtEnabled, stopAt), (autoDelete, autoDeleteAfter), speech ->
         SettingsUiState(
-            theme, timeFormat, leadIn, tail, stopAtEnabled, stopAt, autoDelete, autoDeleteAfter, models, language, deleting,
+            theme, timeFormat, leadIn, tail, stopAtEnabled, stopAt, autoDelete, autoDeleteAfter,
+            speech.models, speech.language, speech.mode, speech.deleting,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** The speech recognition settings, combined into one value like the pairs above. */
+    private data class Speech(
+        val models: List<ModelStatus>,
+        val language: TranscriptLanguage,
+        val mode: TranscriptionMode,
+        val deleting: TranscriptionModel?,
+    )
 
     /** Stores [value] for [setting]; the state follows once it is written. */
     fun <T> set(setting: Setting<T>, value: T) {

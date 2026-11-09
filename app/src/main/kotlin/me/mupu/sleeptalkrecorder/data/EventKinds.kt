@@ -6,8 +6,15 @@ object EventKinds {
     /** A plain event: louder than the baseline, with nothing known about what made the sound. */
     const val EVENT = "event"
 
+    /**
+     * A speech event: speech recognition heard words or a wordless murmur in it. It has the
+     * tertiary colour, as in the prototype, and its own filter on the sleep screen.
+     */
+    const val SPEECH = "speech"
+
     /** The kinds the app ships, unnamed so the app names them in its language. */
     val builtIn: List<EventKindEntity> = listOf(
         EventKindEntity(id = EVENT, name = null, color = "primary", hasFilter = false),
+        EventKindEntity(id = SPEECH, name = null, color = "tertiary", hasFilter = true),
     )
 }

@@ -88,9 +88,37 @@
     <!-- Its kind and its position in the sleep's audio: "Event · Pos 4:02:11". -->
     <string name="event_details">%1$s · Pos %2$s</string>
     <string name="kind_event">Event</string>
+    <string name="kind_speech">Speech</string>
+    <string name="filter_all">All</string>
+    <!-- The filter chip of an event kind: "Speech only". -->
+    <string name="filter_kind_only">%1$s only</string>
+    <string name="no_events_filter">No events for this filter.</string>
+    <string name="transcript">Transcript</string>
+    <!-- Below a transcript; %1$s is the model's name. -->
+    <string name="transcript_automatic">automatic, may be wrong · %1$s</string>
+    <!-- A transcript in quotation marks. -->
+    <string name="transcript_quoted">“%1$s”</string>
+    <string name="murmur">murmur – no words recognised</string>
+    <string name="more_options">More options</string>
+    <string name="run_speech_recognition">Run speech recognition</string>
+    <!-- The speech recognition of a sleep: what runs, what is done, what waits and why. -->
+    <string name="transcription_running">Checking event %1$d of %2$d for speech…</string>
+    <string name="transcription_done">All events checked. %1$d of %2$d sound like speech.</string>
+    <string name="transcription_model">Model: %1$s</string>
+    <!-- How many of all events wait; the quantity is that of all events. -->
+    <plurals name="transcription_pending">
+        <item quantity="one">%1$d of %2$d event still waits for speech recognition.</item>
+        <item quantity="other">%1$d of %2$d events still wait for speech recognition.</item>
+    </plurals>
+    <string name="transcription_waits_queue">It starts shortly.</string>
+    <string name="transcription_waits_model">It starts once a speech recognition model is installed in the settings.</string>
+    <string name="transcription_waits_manual">It runs only when you start it.</string>
+    <string name="transcription_waits_charger">It runs while the phone is charging.</string>
+    <string name="transcription_waits_battery">Paused because the battery is below 30 percent. It goes on once the phone charges.</string>
+    <string name="transcription_run_now">Run now</string>
+    <string name="transcription_run_again">Run again</string>
     <string name="play_event">Play this event</string>
     <string name="pause_event">Pause this event</string>
-    <string name="more_options">More options</string>
 
     <!-- Sensitivity sheet -->
     <string name="sensitivity_here">Sensitivity here</string>
@@ -166,6 +194,13 @@
 
     <!-- Settings: speech recognition -->
     <string name="settings_transcription">Speech recognition</string>
+    <string name="settings_transcription_mode">When it runs</string>
+    <string name="transcription_mode_after_stop">After stop</string>
+    <string name="transcription_mode_while_charging">Charging</string>
+    <string name="transcription_mode_manual">Manually</string>
+    <string name="transcription_mode_after_stop_hint">Right after the recording. Pauses below 30 percent battery until the phone charges.</string>
+    <string name="transcription_mode_while_charging_hint">Only while the phone is charging.</string>
+    <string name="transcription_mode_manual_hint">Only when you start it from the menu of a sleep.</string>
     <string name="settings_models_hint">The app recognises speech on the phone. It uses the internet only to download models; recordings never leave the phone.</string>
     <string name="settings_transcript_language">Transcript language</string>
     <string name="settings_transcript_language_hint">Your language. English is always recognised as well.</string>
@@ -247,4 +282,12 @@
     <string name="notification_channel_model">Model download</string>
     <string name="notification_channel_model_description">Shows the progress while a speech recognition model is downloaded.</string>
     <string name="notification_model_title">Downloading speech recognition model</string>
+    <string name="notification_channel_transcription">Speech recognition</string>
+    <string name="notification_channel_transcription_description">Shows the progress while speech is recognised in a sleep.</string>
+    <string name="notification_transcription_title">Recognising speech</string>
+    <!-- How far speech recognition is: "12 of 48 events". -->
+    <plurals name="notification_transcription_progress">
+        <item quantity="one">%1$d of %2$d event</item>
+        <item quantity="other">%1$d of %2$d events</item>
+    </plurals>
 </resources>

@@ -2,6 +2,7 @@ package me.mupu.sleeptalkrecorder.ui.sleep
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import me.mupu.sleeptalkrecorder.data.EventKindEntity
 import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.SleepRepository
 import me.mupu.sleeptalkrecorder.data.SleepSummary
@@ -14,6 +15,8 @@ import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
 import me.mupu.sleeptalkrecorder.settings.Settings
 import me.mupu.sleeptalkrecorder.settings.SettingsStore
+import me.mupu.sleeptalkrecorder.transcription.TranscriptionStatus
+import me.mupu.sleeptalkrecorder.transcription.Transcriptions
 import java.time.Duration
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
@@ -64,6 +67,10 @@ data class SleepUiState(
     val loudness: SleepLoudness? = null,
     /** The events of the sleep; empty until they are found ([SleepSummary.eventsFound]). */
     val events: List<SleepEvent> = emptyList(),
+    /** The kind the list is filtered to, such as speech; null for all events. */
+    val filter: String? = null,
+    /** The events the list shows and cut playback plays: those of the [filter]'s kind, or all. */
+    val listedEvents: List<SleepEvent> = emptyList(),
     /** The stretches of the sleep's audio in which the microphone was unavailable. */
     val unavailable: List<Stretch> = emptyList(),
     /** The event being played on its own, if any. */
@@ -98,13 +105,14 @@ data class SensitivityUiState(
  */
 data class SensitivityApplied(val wholeSleep: Boolean, val events: Int)
 
-/** State and actions of the sleep screen: the sleep, its events, and their playback. */
+/** State and actions of the sleep screen: the sleep, its events, their playback and speech recognition. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SleepViewModel(
     private val sleepId: Long,
     private val repository: SleepRepository,
     settings: SettingsStore,
     private val player: SleepPlayer,
+    private val transcriptions: Transcriptions,
 ) : ViewModel() {
 
     private val timeline = MutableStateFlow<SleepTimeline?>(null)
@@ -112,6 +120,9 @@ class SleepViewModel(
 
     /** The sleep's feature track and its curves, which the sensitivity sheet re-scans; null while being read. */
     private val analysis = MutableStateFlow<Pair<SleepTrack, Detection>?>(null)
+
+    /** The kind the list is filtered to; null for all events. */
+    private val filter = MutableStateFlow<String?>(null)
 
     /** Where the user is dragging the timeline to; null when not dragging. */
     private val scrubPosition = MutableStateFlow<Duration?>(null)
@@ -148,14 +159,16 @@ class SleepViewModel(
      * without a gap or a taken microphone; equal lists are not published again, so the player
      * only hears of real changes.
      */
-    private val listed = combine(sleepAndEvents, timeline, leadIn, tail) { (_, events, unavailable), timeline, leadIn, tail ->
+    private val listed = combine(sleepAndEvents, timeline, leadIn, tail, filter) { (_, all, unavailable), timeline, leadIn, tail, filter ->
+        val events = if (filter == null) all else all.filter { it.kindId == filter }
         ListedEvents(
+            filter,
             events,
             events.map { event ->
                 if (timeline == null) Stretch(event.start, event.end) else eventWithLeadInAndTail(event, timeline, leadIn, tail, unavailable)
             },
         )
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, ListedEvents(emptyList(), emptyList()))
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, ListedEvents(null, emptyList(), emptyList()))
 
     /** What cut playback plays; null while full playback is chosen or the audio is still being read. */
     private val cutPlan = combine(listed, timeline, cut) { listed, timeline, cut ->
@@ -165,6 +178,17 @@ class SleepViewModel(
     init {
         viewModelScope.launch { cutPlan.collect(player::setCutPlan) }
     }
+
+    /** Where speech recognition stands for the sleep; it starts once the events are found. */
+    val transcription: StateFlow<TranscriptionStatus> = combine(
+        transcriptions.status(sleepId, repository.transcriptionCount(sleepId)),
+        repository.sleep(sleepId),
+    ) { status, sleep -> if (sleep?.eventsFound == true) status else TranscriptionStatus.NoEvents }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TranscriptionStatus.NoEvents)
+
+    /** The event kinds the event list can be filtered by. */
+    val filterKinds: StateFlow<List<EventKindEntity>> =
+        repository.filterKinds().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val state: StateFlow<SleepUiState> = combine(
         sleepAndEvents,
@@ -192,6 +216,8 @@ class SleepViewModel(
             player = player,
             loudness = loudness,
             events = events,
+            filter = listed.filter,
+            listedEvents = listed.events,
             unavailable = unavailable,
             playingEventId = played.takeIf { playback.playing && playback.until != null },
             currentEvent = currentEvent(listed.events, listed.played, position),
@@ -288,6 +314,14 @@ class SleepViewModel(
         val timeline = timeline.value ?: return Stretch(event.start, event.end)
         return eventWithLeadInAndTail(event, timeline, leadIn.value, tail.value, unavailable.value)
     }
+
+    /** Lists and plays only the events of the kind [kindId], or all of them for null. */
+    fun setFilter(kindId: String?) {
+        filter.value = kindId
+    }
+
+    /** Recognises speech in every event of the sleep again, now, whatever the settings say. */
+    fun runSpeechRecognition() = transcriptions.runNow(sleepId)
 
     /** Switches to the next speed, after the fastest back to the slowest. */
     fun nextSpeed() {
@@ -395,4 +429,4 @@ private fun eventWithLeadInAndTail(
 }
 
 /** The events the list shows, and the stretch around each that cut playback plays, in the same order. */
-private data class ListedEvents(val events: List<SleepEvent>, val played: List<Stretch>)
+private data class ListedEvents(val filter: String?, val events: List<SleepEvent>, val played: List<Stretch>)

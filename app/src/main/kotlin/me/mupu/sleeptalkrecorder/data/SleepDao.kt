@@ -1,5 +1,6 @@
 package me.mupu.sleeptalkrecorder.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -119,17 +120,107 @@ interface SleepDao {
     @Query("DELETE FROM annotation WHERE sleep_id = :sleepId AND origin = :origin AND producer = :producer")
     suspend fun deleteResults(sleepId: Long, origin: AnnotationOrigin, producer: String)
 
-    /** The events of a sleep in order, with their kinds. */
+    /**
+     * The events of a sleep in order, each with the kind and transcript of its winning transcript
+     * annotation: the one over the same stretch from the user, else from a server, else from the
+     * phone, the latest first; without one, the detector's kind.
+     */
     @Query(
         """
-        SELECT annotation.id, start_ms, end_ms, kind_id, event_kind.name AS kind_name, event_kind.color AS kind_color
-        FROM annotation JOIN event_kind ON event_kind.id = annotation.kind_id
-        WHERE sleep_id = :sleepId AND type = 'EVENT'
-        ORDER BY start_ms, annotation.id
+        SELECT event.id, event.start_ms, event.end_ms, kind.id AS kind_id, kind.name AS kind_name,
+            kind.color AS kind_color, transcript.text AS transcript, transcript.origin AS transcript_origin,
+            transcript.producer AS transcript_producer
+        FROM annotation AS event
+        LEFT JOIN annotation AS transcript ON transcript.id = (
+            SELECT id FROM annotation WHERE sleep_id = event.sleep_id AND type = 'TRANSCRIPT'
+                AND start_ms = event.start_ms AND end_ms = event.end_ms
+            ORDER BY CASE origin WHEN 'USER' THEN 0 WHEN 'SERVER' THEN 1 ELSE 2 END, id DESC
+            LIMIT 1
+        )
+        JOIN event_kind AS kind ON kind.id = COALESCE(transcript.kind_id, event.kind_id)
+        WHERE event.sleep_id = :sleepId AND event.type = 'EVENT'
+        ORDER BY event.start_ms, event.id
         """,
     )
     fun events(sleepId: Long): Flow<List<SleepEvent>>
+
+    /** The kinds the sleep screen offers a filter for. */
+    @Query("SELECT * FROM event_kind WHERE has_filter ORDER BY id")
+    fun filterKinds(): Flow<List<EventKindEntity>>
+
+    /** The stretches of a sleep's events, in order; with [onlyPending] those without a transcript of the phone. */
+    @Query(
+        """
+        SELECT start_ms, end_ms FROM annotation AS event WHERE sleep_id = :sleepId AND type = 'EVENT'
+            AND (NOT :onlyPending OR NOT $HAS_DEVICE_TRANSCRIPT)
+        ORDER BY start_ms, id
+        """,
+    )
+    suspend fun eventStretches(sleepId: Long, onlyPending: Boolean): List<EventStretch>
+
+    /**
+     * Finished sleeps whose events [producer] [version] found and that have events without a
+     * transcript of the phone, latest first.
+     */
+    @Query(
+        """
+        SELECT id FROM sleep WHERE ended_at IS NOT NULL
+            AND EXISTS (SELECT 1 FROM annotation WHERE annotation.sleep_id = sleep.id AND type = 'SENSITIVITY'
+                AND producer = :producer AND producer_version = :version)
+            AND EXISTS (SELECT 1 FROM annotation AS event WHERE event.sleep_id = sleep.id AND event.type = 'EVENT'
+                AND NOT $HAS_DEVICE_TRANSCRIPT)
+        ORDER BY started_at DESC
+        """,
+    )
+    suspend fun sleepsToTranscribe(producer: String, version: String): List<Long>
+
+    /** How many of a sleep's events there are and how many have a transcript of the phone. */
+    @Query(
+        """
+        SELECT COUNT(*) AS events, COALESCE(SUM($HAS_DEVICE_TRANSCRIPT), 0) AS transcribed
+        FROM annotation AS event WHERE sleep_id = :sleepId AND type = 'EVENT'
+        """,
+    )
+    fun transcriptionCount(sleepId: Long): Flow<TranscriptionCount>
+
+    @Query("SELECT EXISTS (SELECT 1 FROM annotation WHERE sleep_id = :sleepId AND type = 'EVENT' AND start_ms = :startMillis AND end_ms = :endMillis)")
+    suspend fun hasEvent(sleepId: Long, startMillis: Long, endMillis: Long): Boolean
+
+    /** Removes the transcripts of [origin] over one stretch, before the new one is stored. */
+    @Query(
+        """
+        DELETE FROM annotation WHERE sleep_id = :sleepId AND type = 'TRANSCRIPT' AND origin = :origin
+            AND start_ms = :startMillis AND end_ms = :endMillis
+        """,
+    )
+    suspend fun deleteTranscripts(sleepId: Long, startMillis: Long, endMillis: Long, origin: AnnotationOrigin)
+
+    /** Removes the phone's transcripts of stretches that are no longer an event, after the events were found anew. */
+    @Query(
+        """
+        DELETE FROM annotation WHERE sleep_id = :sleepId AND type = 'TRANSCRIPT' AND origin = 'DEVICE'
+            AND NOT EXISTS (SELECT 1 FROM annotation AS event WHERE event.sleep_id = annotation.sleep_id
+                AND event.type = 'EVENT' AND event.start_ms = annotation.start_ms AND event.end_ms = annotation.end_ms)
+        """,
+    )
+    suspend fun deleteOrphanedTranscripts(sleepId: Long)
+
+    @Query("SELECT EXISTS (SELECT 1 FROM recording WHERE state = 'RECORDING')")
+    suspend fun isRecording(): Boolean
 }
+
+/** Whether the event `event` has a transcript of the phone over its stretch. */
+private const val HAS_DEVICE_TRANSCRIPT = """
+    EXISTS (SELECT 1 FROM annotation AS transcript WHERE transcript.sleep_id = event.sleep_id
+        AND transcript.type = 'TRANSCRIPT' AND transcript.origin = 'DEVICE'
+        AND transcript.start_ms = event.start_ms AND transcript.end_ms = event.end_ms)
+"""
+
+/** The stretch of an event in milliseconds of the sleep's audio. */
+data class EventStretch(
+    @ColumnInfo(name = "start_ms") val startMillis: Long,
+    @ColumnInfo(name = "end_ms") val endMillis: Long,
+)
 
 /**
  * A sleep with its recordings and events. Only the events of a finished analysis count as found:

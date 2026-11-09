@@ -77,6 +77,29 @@ sounds the labels do not cover, such as the distant speech in the DEMAND room to
 changes of the looped fan recording. The first run extracts the feature tracks of all nights
 (one to two minutes) and keeps them in `.local/test-output/detector/tracks/`; later runs take seconds.
 
+### Transcription evaluation
+
+`TranscriptionEvaluationTest` runs the app's speech recognition (detected events, their clips, the
+Parakeet model and the transcript filter) over a sample of the events of the test nights and
+reports how often words are found where nothing was said. It is opt-in like the detector
+evaluation: it runs only when the Gradle property `transcriptionEvaluation` names the test data
+directory and `transcriptionModel` the directory holding Parakeet's `encoder.int8.onnx`,
+`decoder.int8.onnx`, `joiner.int8.onnx` and `tokens.txt`. On the computer the model runs with
+sherpa-onnx's desktop library of the same release, which the build downloads into the Gradle user
+home and checks against a pinned SHA-256.
+
+```sh
+./gradlew :app:testDebugUnitTest --tests '*TranscriptionEvaluationTest' \
+  -PtranscriptionEvaluation=.local/testdata -PtranscriptionModel=<model directory>
+```
+
+Each night gives at most 8 events that overlap speech, 4 that overlap a vocal sound
+(`sleep_vocal`, `night_terror`) and 20 others, spread evenly over the night, and the run stops
+sampling after three minutes. It prints per night how many of each group got words, a murmur or
+nothing, lists the words found on non-speech and on speech, and writes every result to
+`.local/test-output/transcription/transcription-evaluation.csv`. It reuses the feature tracks the
+detector evaluation keeps in `.local/test-output/detector/tracks/` and extracts missing ones.
+
 ## Installing on a phone
 
 The app is not on Google Play; a release build signed with your own key is installed directly.

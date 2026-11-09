@@ -1,15 +1,18 @@
 package me.mupu.sleeptalkrecorder.ui.sleep
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -55,7 +58,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.mupu.sleeptalkrecorder.R
-import me.mupu.sleeptalkrecorder.data.EventKinds
 import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
@@ -84,6 +86,8 @@ import java.time.ZoneId
 fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val sensitivity by viewModel.sensitivity.collectAsStateWithLifecycle()
+    val transcription by viewModel.transcription.collectAsStateWithLifecycle()
+    val filterKinds by viewModel.filterKinds.collectAsStateWithLifecycle()
     val resources = LocalResources.current
     val zone = ZoneId.systemDefault()
     val snackbars = remember { SnackbarHostState() }
@@ -106,9 +110,19 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
                 title,
                 navigationIcon = { BackIcon(onBack) },
                 actions = {
-                    if (state.sensitivityAvailable) {
-                        MoreMenu(stringResource(R.string.sensitivity_sleep), onClick = { viewModel.openSensitivity(null) })
-                    }
+                    SpeechRecognitionStatus(transcription, state.events, onRun = viewModel::runSpeechRecognition)
+                    MoreMenu(
+                        listOfNotNull(
+                            MenuEntry(stringResource(R.string.sensitivity_sleep), R.drawable.ic_tune) { viewModel.openSensitivity(null) }
+                                .takeIf { state.sensitivityAvailable },
+                            MenuEntry(
+                                stringResource(R.string.run_speech_recognition),
+                                R.drawable.ic_subtitles,
+                                enabled = transcription.canRun,
+                                onClick = viewModel::runSpeechRecognition,
+                            ),
+                        ),
+                    )
                 },
             )
         },
@@ -166,9 +180,13 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
                     )
                 }
                 HorizontalDivider()
+                if (state.events.isNotEmpty() && filterKinds.isNotEmpty()) {
+                    EventFilterChips(filterKinds, state.events, state.filter, onSelect = viewModel::setFilter)
+                }
                 EventList(
                     sleep = sleep,
-                    events = state.events,
+                    events = state.listedEvents,
+                    filtered = state.filter != null,
                     timeline = timeline,
                     currentEventId = current?.id,
                     playingEventId = state.playingEventId,
@@ -197,23 +215,30 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit) {
     }
 }
 
-/** A "more options" button whose menu holds the one entry [label], with the sensitivity icon. */
+/** An entry of a [MoreMenu]. */
+private class MenuEntry(val label: String, @DrawableRes val icon: Int, val enabled: Boolean = true, val onClick: () -> Unit)
+
+/** A "more options" button with the menu [entries]; nothing without entries. */
 @Composable
-private fun MoreMenu(label: String, onClick: () -> Unit) {
+private fun MoreMenu(entries: List<MenuEntry>) {
+    if (entries.isEmpty()) return
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) {
             Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.more_options))
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(
-                text = { Text(label) },
-                leadingIcon = { Icon(painterResource(R.drawable.ic_tune), contentDescription = null) },
-                onClick = {
-                    open = false
-                    onClick()
-                },
-            )
+            for (entry in entries) {
+                DropdownMenuItem(
+                    text = { Text(entry.label) },
+                    leadingIcon = { Icon(painterResource(entry.icon), contentDescription = null) },
+                    enabled = entry.enabled,
+                    onClick = {
+                        open = false
+                        entry.onClick()
+                    },
+                )
+            }
         }
     }
 }
@@ -317,6 +342,7 @@ private fun PlaybackMode(cut: Boolean, enabled: Boolean, onCutChange: (Boolean) 
 private fun EventList(
     sleep: SleepSummary?,
     events: List<SleepEvent>,
+    filtered: Boolean,
     timeline: SleepTimeline,
     currentEventId: Long?,
     playingEventId: Long?,
@@ -339,6 +365,7 @@ private fun EventList(
         }
     }
 
+    var expanded by remember { mutableStateOf(emptySet<Long>()) }
     LazyColumn(Modifier.fillMaxSize(), state = listState) {
         items(events, key = { it.id }) { event ->
             EventRow(
@@ -346,6 +373,8 @@ private fun EventList(
                 timeline,
                 current = event.id == currentEventId,
                 playing = event.id == playingEventId,
+                transcriptExpanded = event.id in expanded,
+                onToggleTranscript = { expanded = if (event.id in expanded) expanded - event.id else expanded + event.id },
                 onSelect = onSelect,
                 onTogglePlay = onTogglePlay,
                 onSensitivity = onSensitivity,
@@ -353,8 +382,13 @@ private fun EventList(
         }
         if (sleep != null && events.isEmpty()) {
             item(key = "empty") {
+                val empty = when {
+                    !sleep.eventsFound -> R.string.finding_events
+                    filtered -> R.string.no_events_filter
+                    else -> R.string.no_events
+                }
                 Text(
-                    stringResource(if (sleep.eventsFound) R.string.no_events else R.string.finding_events),
+                    stringResource(empty),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -371,6 +405,8 @@ private fun EventRow(
     timeline: SleepTimeline,
     current: Boolean,
     playing: Boolean,
+    transcriptExpanded: Boolean,
+    onToggleTranscript: () -> Unit,
     onSelect: (SleepEvent) -> Unit,
     onTogglePlay: (SleepEvent) -> Unit,
     onSensitivity: ((SleepEvent) -> Unit)?,
@@ -385,7 +421,8 @@ private fun EventRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp)
+            .height(IntrinsicSize.Min)
+            .heightIn(min = 64.dp)
             .clickable { onSelect(event) }
             .background(if (current || playing) colors.primary.copy(alpha = 0.1f) else colors.surface)
             .padding(start = 16.dp, end = 4.dp),
@@ -399,16 +436,17 @@ private fun EventRow(
                 .background(kindColor(event.kindColor, colors)),
         )
         Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
             Text(
                 stringResource(R.string.event_heading, time, formatEventLength(resources, event.end - event.start)),
                 style = MaterialTheme.typography.titleSmall.merge(numbers),
             )
             Text(
-                stringResource(R.string.event_details, kindName(event), formatPosition(event.start)),
+                stringResource(R.string.event_details, kindName(event.kindId, event.kindName), formatPosition(event.start)),
                 style = MaterialTheme.typography.bodySmall.merge(numbers),
                 color = colors.onSurfaceVariant,
             )
+            TranscriptLine(event, transcriptExpanded, onToggleTranscript)
         }
         IconButton(onClick = { onTogglePlay(event) }) {
             Icon(
@@ -416,15 +454,10 @@ private fun EventRow(
                 contentDescription = stringResource(if (playing) R.string.pause_event else R.string.play_event),
             )
         }
-        if (onSensitivity != null) MoreMenu(stringResource(R.string.sensitivity_here), onClick = { onSensitivity(event) })
+        if (onSensitivity != null) {
+            MoreMenu(listOf(MenuEntry(stringResource(R.string.sensitivity_here), R.drawable.ic_tune) { onSensitivity(event) }))
+        }
     }
-}
-
-/** The name of an event's kind: the user's name, or the app's for the kinds it ships. */
-@Composable
-private fun kindName(event: SleepEvent): String = event.kindName ?: when (event.kindId) {
-    EventKinds.EVENT -> stringResource(R.string.kind_event)
-    else -> event.kindId
 }
 
 /** Shows the speed and switches to the next one on every tap. */

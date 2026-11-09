@@ -17,19 +17,22 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 | `retention` | Automatic deletion: which sleeps are old enough (`SleepRetention`) and the WorkManager job that deletes them | only in `AutoDeletion` (WorkManager) |
 | `settings` | The user's settings and the `SettingsStore` that keeps them; the app language | DataStore; AppCompat only in `AppLanguages` |
 | `models` | The transcription models: the catalogue of downloadable models (`TranscriptionModel`), the `ModelInstaller` that downloads and checks their files, the `ModelLibrary` with their states and the active one, and the WorkManager job that downloads them | only in `ModelDownloadWorker` (WorkManager) |
+| `transcription` | Speech recognition of events: the `EventAnalysis` interface, the `SpeechRecognition` with its `TranscriptFilter`, the sherpa-onnx `SherpaTranscriber`, the `TranscriptionRunner` that works through the events, and the WorkManager jobs that run it | only in `TranscriptionWork` (WorkManager, notifications, battery) |
 | `readiness` | Whether the phone lets a whole night be recorded: the `Requirement`s it misses, the `VendorStep`s of its maker, and the `SystemPage`s that fix them | only in `PhoneReadiness` |
 | `ui` | Navigation, one sub-package per screen (`home`, `library`, `sleep`, `settings`, `setup`), shared `components`, `format` and `theme` | Compose |
 
 The root package holds `MainActivity`, the only activity, and `SleepTalkApplication` with the
 `AppContainer`, which wires the shared objects by hand: the database, the repository, the
-`SettingsStore`, the `Recorder` and the `ModelLibrary`; it also keeps automatic deletion scheduled
-and starts the search for events of finished sleeps. Logic that can be tested without a device
+`SettingsStore`, the `Recorder`, the `ModelLibrary` and the speech recognition; it also keeps
+automatic deletion scheduled, starts the search for events of finished sleeps and schedules their
+speech recognition. Logic that can be tested without a device
 (`time`, `detection`, the WAV writer, the recording session, level computation, the sleep
 timeline and its audio stream, the cut plan, the timeline view of the sleep screen, the
 sensitivity sheet's re-scan, the settings,
-which sleeps automatic deletion removes, the model downloads and states) is plain Kotlin behind
-small interfaces (`PcmSource`, `RecordingStore`, `Clocks`, `ByteSource`, `ModelDownloads`) and is
-unit-tested on the JVM.
+which sleeps automatic deletion removes, the model downloads and states, the transcript filter and
+the speech recognition run) is plain Kotlin behind small interfaces (`PcmSource`,
+`RecordingStore`, `Clocks`, `ByteSource`, `ModelDownloads`, `TranscriptStore`, `Transcriber`) and
+is unit-tested on the JVM.
 
 Screens follow unidirectional data flow: a `ViewModel` combines repository and recorder flows into
 one immutable UI state, and the screen sends user actions back as calls.
@@ -135,13 +138,14 @@ Room (`SleepDatabase`) holds four tables:
   language), a colour (a theme colour role such as `primary`, so it follows light and dark mode,
   or a fixed `#RRGGBB`), and whether the sleep screen offers a filter for the kind. The database
   adds the app's kinds that are missing each time it opens, so a new app version can ship new
-  kinds; v1 ships only the plain event.
+  kinds; v1 ships the plain event and the speech event (tertiary colour, with a filter).
 - `annotation`: every result about a stretch of a sleep, with its origin. The stretch is given in
   milliseconds of the sleep's audio (the playing axis, see [Time model](#time-model)), so it does
   not depend on the detector's hop size. The `type` says what the annotation states (`EVENT` with
   a kind, `SENSITIVITY` with a start threshold in `value`: the one the detector chose for the
   sleep, or one the user set for the stretch,
-  `MICROPHONE_UNAVAILABLE` from the recorder), and `origin` (`DEVICE`, `SERVER` or `USER`),
+  `MICROPHONE_UNAVAILABLE` from the recorder, `TRANSCRIPT` with the kind speech recognition gives
+  an event and its words in `text`), and `origin` (`DEVICE`, `SERVER` or `USER`),
   `producer` and `producer_version` say who stated it. Gaps between recordings take no time on
   this axis and need no annotation: they follow from the recordings' start instants and lengths.
 
@@ -242,6 +246,50 @@ depend on the threshold, so moving the slider runs only the detector's state mac
 night, cancelled by the next move. Applying stores the override and searches the whole sleep
 again, so the stored events are exactly those a later search finds.
 
+## Speech recognition
+
+After the events of a sleep are found, every event goes through speech recognition on the phone,
+as the measurements on the test nights found best: no voice activity gate and no noise suppression
+in front, because both lost whispers and removed almost no invented text. The interface is
+`EventAnalysis`: a clip of an event goes in (the event with 0.5 s before and after it, cut back at
+a recording's start and where the microphone was unavailable, like the lead-in), annotations with
+their origin, producer and version come out. `SpeechRecognition` is the phone's analysis; an
+analysis on a server would be another beside it.
+
+`SpeechRecognition` hands the clip to the active model through `SherpaTranscriber` (sherpa-onnx's
+offline recognizer, four threads), in pieces of at most 30 s; clips under 0.3 s are not sent,
+because sherpa-onnx fails on input without frames. `TranscriptFilter` then decides from the text:
+tags are removed, short outputs with phrases models write on silence and repetition loops are
+dropped, and output of fillers only ("mhm", "uh") makes a *murmur*. The result is one `TRANSCRIPT`
+annotation over the event's stretch: the speech kind with the words, the speech kind without words
+for a murmur, or the plain event kind, so that every event analysed counts as done. Whisper is
+told the transcript language: it first detects the language itself and is asked again with the
+user's language when it detected neither that nor English.
+
+Transcripts follow their events by stretch: the sleep screen shows an event with the kind and
+text of the transcript over the same stretch, the user's before a server's before the phone's. An
+event found again unchanged keeps its transcript, and the phone's transcripts of stretches that
+are no longer an event are removed with the new events.
+
+`TranscriptionRunner` works through events one at a time and stores each result at once, so a run
+that is stopped continues where it stopped; runs never overlap, so only one model is in memory
+(about 1 GB for Parakeet). It loads the model only when an event waits, and closes it at the end.
+When it runs is a setting:
+
+- **After the stop** (default): `AppContainer` enqueues a WorkManager job after the events of a
+  finished sleep are found and at process start. The job pauses while a recording runs and when
+  the battery falls below 30 % without a charger; it then hands the rest to a job that waits for
+  the charger.
+- **Only while charging**: only the job that requires charging; WorkManager stops it when the
+  charger is unplugged and runs it again on the next one.
+- **Only manually**: no job of its own. The sleep's menu ("Run speech recognition") starts a job
+  for that sleep in every mode, which recognises all its events again.
+
+A job runs as a foreground service with a progress notification when Android allows one (from
+the background only for an app exempt from battery optimisation), else as normal work, which
+Android may stop after ten minutes; the next job continues. The sleep screen shows a spinner while
+its sleep is recognised and says on a tap what runs, what is done, or why events wait.
+
 ## Transcription models
 
 Speech is recognised on the phone with sherpa-onnx, whose native libraries are the only part of
@@ -290,7 +338,9 @@ start of a recording and at a stretch in which the microphone was unavailable
 (`SleepTimeline.uninterrupted`), so neither the audio before a gap nor the silence of a taken
 microphone is played around an event.
 
-*Cut playback*, the default, plays the events the list shows in this way, one after the other.
+*Cut playback*, the default, plays the events the list shows in this way, one after the other;
+with the "Speech only" filter (one per event kind that has a filter) the list, and so cut
+playback, holds only speech events.
 `CutPlan` joins the stretches of events that overlap, so close events play without a jump, and
 keeps stretches apart that only touch where a recording starts. While playing, the player jumps
 from the end of a stretch to 200 ms before the next (ExoPlayer starts a seeked WAV stream at its

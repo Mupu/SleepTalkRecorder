@@ -43,6 +43,9 @@ object Settings {
     /** The user's own language, for models that need it; English is always recognised as well. */
     val transcriptLanguage = enumSetting("transcript_language", TranscriptLanguage.APP)
 
+    /** When speech recognition runs over the events of finished sleeps. */
+    val transcriptionMode = enumSetting("transcription_mode", TranscriptionMode.AFTER_STOP)
+
     /** How much of the sound before an event cut playback plays. */
     val leadIn = durationSetting("lead_in_ms", Duration.ofMillis(1500), Duration.ZERO..Duration.ofSeconds(3))
 
@@ -81,6 +84,18 @@ enum class TimeFormat {
 
     /** 12:00 AM to 11:59 PM. */
     HOURS_12,
+}
+
+/** When speech recognition runs over the events of a finished sleep. */
+enum class TranscriptionMode {
+    /** Right after the stop; it pauses below 30 % battery until the phone charges. */
+    AFTER_STOP,
+
+    /** Only while the phone is charging. */
+    WHILE_CHARGING,
+
+    /** Only when the user starts it from a sleep's menu. */
+    MANUAL,
 }
 
 /**

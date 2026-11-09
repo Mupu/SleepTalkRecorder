@@ -5,6 +5,7 @@ import java.io.Closeable
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.time.Duration
 
 /**
  * The audio of a [SleepTimeline] as one WAV stream: a header, then the samples of every chunk file
@@ -70,6 +71,26 @@ class SleepAudio(timeline: SleepTimeline) : Closeable {
         return count
     }
 
+    /**
+     * The samples of [stretch] of the sleep's audio, from -1 to 1, as far as the sleep has audio
+     * there.
+     *
+     * @throws java.io.IOException when a chunk file cannot be read.
+     */
+    fun clip(stretch: Stretch): FloatArray {
+        fun byteAt(position: Duration): Long {
+            val frame = position.toNanos().coerceAtLeast(0) * sampleRate / NANOS_PER_SECOND
+            return (HEADER_BYTES + frame * ChunkedWavWriter.BYTES_PER_FRAME).coerceAtMost(length)
+        }
+        val from = byteAt(stretch.start)
+        val bytes = ByteArray((byteAt(stretch.end) - from).coerceAtLeast(0).toInt())
+        var done = 0
+        while (done < bytes.size) done += read(from + done, bytes, done, bytes.size - done)
+
+        val pcm = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+        return FloatArray(bytes.size / ChunkedWavWriter.BYTES_PER_FRAME) { pcm.get(it) / PCM_SCALE }
+    }
+
     override fun close() {
         openFile?.close()
         openFile = null
@@ -118,6 +139,11 @@ class SleepAudio(timeline: SleepTimeline) : Closeable {
     companion object {
         /** The samples per second of the stream of [timeline]. */
         fun sampleRateOf(timeline: SleepTimeline): Int = timeline.recordings.firstOrNull()?.clock?.sampleRate ?: DEFAULT_SAMPLE_RATE
+
+        private const val NANOS_PER_SECOND = 1_000_000_000L
+
+        /** Turns 16-bit samples into the range -1 to 1. */
+        private const val PCM_SCALE = 32_768f
 
         /** RIFF preamble (12), ds64 chunk (8 + 28), fmt chunk (8 + 16), data chunk header (8). */
         private const val HEADER_BYTES = 80

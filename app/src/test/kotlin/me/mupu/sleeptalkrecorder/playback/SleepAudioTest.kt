@@ -5,6 +5,7 @@ import me.mupu.sleeptalkrecorder.time.RecordingClock
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.time.Duration
 import java.time.Instant
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -57,5 +58,15 @@ class SleepAudioTest {
         assertEquals(listOf("RF64", "WAVE", "ds64", "fmt ", "data"), listOf(0, 8, 12, 48, 72).map(tag))
         assertEquals(3_000L, fields.getLong(28))
         assertEquals(16_000, fields.getInt(60))
+    }
+
+    @Test
+    fun `a stretch of the sleep is read as samples from -1 to 1, as far as there is audio`() {
+        val audio = SleepAudio(SleepTimeline(listOf(recording("a", 0, 2_100))))
+
+        // 990 to 1,010 samples are 61.875 to 63.125 ms, across the first two chunk files.
+        val clip = audio.clip(Stretch(Duration.ofNanos(61_875_000), Duration.ofNanos(63_125_000)))
+        assertEquals((990 until 1_010).map { it / 32_768f }, clip.toList())
+        assertEquals(100, audio.clip(Stretch(Duration.ofMillis(125), Duration.ofSeconds(5))).size)
     }
 }

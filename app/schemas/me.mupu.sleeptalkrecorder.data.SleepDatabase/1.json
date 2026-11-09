@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "9105809fa3509970f986a04f93baeb4c",
+    "identityHash": "dec69ccfe19acce43d4b9537451456dc",
     "entities": [
       {
         "tableName": "sleep",
@@ -142,7 +142,7 @@
       },
       {
         "tableName": "annotation",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sleep_id` INTEGER NOT NULL, `type` TEXT NOT NULL, `start_ms` INTEGER NOT NULL, `end_ms` INTEGER NOT NULL, `kind_id` TEXT, `value` REAL, `origin` TEXT NOT NULL, `producer` TEXT, `producer_version` TEXT, FOREIGN KEY(`sleep_id`) REFERENCES `sleep`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`kind_id`) REFERENCES `event_kind`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sleep_id` INTEGER NOT NULL, `type` TEXT NOT NULL, `start_ms` INTEGER NOT NULL, `end_ms` INTEGER NOT NULL, `kind_id` TEXT, `value` REAL, `text` TEXT, `origin` TEXT NOT NULL, `producer` TEXT, `producer_version` TEXT, FOREIGN KEY(`sleep_id`) REFERENCES `sleep`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`kind_id`) REFERENCES `event_kind`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
         "fields": [
           {
             "fieldPath": "id",
@@ -183,6 +183,11 @@
             "fieldPath": "value",
             "columnName": "value",
             "affinity": "REAL"
+          },
+          {
+            "fieldPath": "text",
+            "columnName": "text",
+            "affinity": "TEXT"
           },
           {
             "fieldPath": "origin",
@@ -256,7 +261,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '9105809fa3509970f986a04f93baeb4c')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'dec69ccfe19acce43d4b9537451456dc')"
     ]
   }
 }
