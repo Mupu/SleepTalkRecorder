@@ -1,9 +1,12 @@
 package me.mupu.sleeptalkrecorder.ui.sleep
 
+import androidx.compose.animation.core.AnimationState
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateDecay
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.rememberSplineBasedDecay
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,8 +22,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,8 +60,12 @@ import me.mupu.sleeptalkrecorder.playback.Stretch
 import me.mupu.sleeptalkrecorder.ui.format.ClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.formatDuration
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.ZoneId
+import kotlin.math.pow
 
 /**
  * The loudness of a sleep over the clock, as in the sleep screen's timeline: the [window] of the
@@ -66,10 +75,13 @@ import java.time.ZoneId
  * as an overview strip with the window marked, and buttons to zoom. [position] gives the position
  * in the sleep's audio, as the player plays it.
  *
- * Dragging the large timeline pans it, pinching zooms it, and a tap moves the playhead there.
- * Tapping or dragging the overview moves the window and the playhead along. Every such change of
- * the window by hand is reported through [onWindowChange]; the auto zoom button shows [autoZoom]
- * and switches it.
+ * The large timeline moves like a map: one finger drags it, two fingers pinch it around the point
+ * between them and pan it at the same time, a fling keeps it moving and slows down, a double tap
+ * zooms in around the tapped point and a tap moves the playhead there. Vertical drags are left to
+ * what scrolls around it. Tapping or dragging the overview moves the window and the playhead
+ * along. Every such change of the window by hand is reported through [onWindowChange] as a change
+ * to apply to the latest window, since several can follow each other before the next
+ * recomposition; the auto zoom button shows [autoZoom] and switches it.
  *
  * The bars are computed once for each window and size and then only drawn again; the playhead
  * and the overview's window mark are layers of their own, so a moving playhead redraws nothing
@@ -83,7 +95,7 @@ fun LoudnessTimeline(
     unavailable: List<Stretch>,
     position: () -> Duration,
     window: TimelineWindow,
-    onWindowChange: (TimelineWindow) -> Unit,
+    onWindowChange: (change: (TimelineWindow) -> TimelineWindow) -> Unit,
     autoZoom: Boolean,
     onAutoZoomChange: (Boolean) -> Unit,
     onSeek: (Duration) -> Unit,
@@ -99,6 +111,12 @@ fun LoudnessTimeline(
     // The gesture handlers live as long as the timeline; they read the latest state and callbacks.
     val currentWindow by rememberUpdatedState(window)
     val changeWindow by rememberUpdatedState(onWindowChange)
+    // A fling or a double tap's zoom moves the window on its own until the next touch stops it.
+    val scope = rememberCoroutineScope()
+    val motion = remember(scope) { WindowMotion(scope) }
+    val decay = rememberSplineBasedDecay<Float>()
+    // Auto zoom moves the window itself from now on.
+    LaunchedEffect(autoZoom) { if (autoZoom) motion.stop() }
     val seek by rememberUpdatedState(onSeek)
     val scrub by rememberUpdatedState(onScrub)
     val finishScrub by rememberUpdatedState(onScrubFinished)
@@ -156,16 +174,36 @@ fun LoudnessTimeline(
                 .clip(RoundedCornerShape(12.dp))
                 .semantics { contentDescription = description }
                 .pointerInput(Unit) {
-                    detectTapGestures { offset ->
-                        seek(timeline.positionAtClock(currentWindow.positionAt(offset.x / size.width.toDouble())))
-                    }
-                }
-                .pointerInput(Unit) {
-                    detectTransformGestures { centroid, pan, zoom, _ ->
-                        val width = size.width.toDouble()
-                        val panned = currentWindow.pan(Duration.ofMillis((-pan.x / width * currentWindow.span.toMillis()).toLong()))
-                        changeWindow(panned.zoom(1.0 / zoom, (centroid.x / width).coerceIn(0.0, 1.0)))
-                    }
+                    fun share(x: Float) = x / size.width.toDouble()
+                    detectTimelineGestures(
+                        onDown = motion::stop,
+                        onMove = { from, to, zoom -> changeWindow { it.moved(share(from), share(to), zoom.toDouble()) } },
+                        onFling = { velocity ->
+                            motion.start {
+                                var flown = 0f
+                                AnimationState(initialValue = 0f, initialVelocity = velocity).animateDecay(decay) {
+                                    val by = value - flown
+                                    flown = value
+                                    var stopped = false
+                                    changeWindow { window -> window.moved(from = 0.0, to = share(by)).also { stopped = it == window } }
+                                    // At either end of the sleep there is nothing left to fling to.
+                                    if (stopped) cancelAnimation()
+                                }
+                            }
+                        },
+                        onTap = { x -> seek(timeline.positionAtClock(currentWindow.positionAt(share(x).coerceIn(0.0, 1.0)))) },
+                        onDoubleTap = { x ->
+                            motion.start {
+                                // Zoomed step by step, so every frame keeps the tapped moment under the finger.
+                                var reached = 1.0
+                                animate(0f, 1f, animationSpec = tween(DOUBLE_TAP_ZOOM_MILLIS)) { progress, _ ->
+                                    val factor = DOUBLE_TAP_ZOOM.pow(progress.toDouble())
+                                    changeWindow { it.zoom(factor / reached, share(x).coerceIn(0.0, 1.0)) }
+                                    reached = factor
+                                }
+                            }
+                        },
+                    )
                 },
         ) {
             Spacer(Modifier.matchParentSize().then(bars))
@@ -192,10 +230,12 @@ fun LoudnessTimeline(
                         val whole = TimelineWindow.whole(currentWindow.total)
                         fun moveTo(x: Float) {
                             val target = whole.positionAt((x / size.width.toDouble()).coerceIn(0.0, 1.0))
-                            changeWindow(currentWindow.centredOn(target))
+                            changeWindow { it.centredOn(target) }
                             scrub(timeline.positionAtClock(target))
                         }
-                        moveTo(awaitFirstDown().position.x)
+                        val down = awaitFirstDown()
+                        motion.stop()
+                        moveTo(down.position.x)
                         do {
                             val event = awaitPointerEvent()
                             event.changes.forEach { change ->
@@ -232,14 +272,14 @@ fun LoudnessTimeline(
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             // Zooming keeps the playhead in place; the position is read only when a button is tapped.
-            fun playhead() = window.shareOf(timeline.clockOf(position())).coerceIn(0.0, 1.0)
-            IconButton(onClick = { onWindowChange(window.zoom(2.0, playhead())) }) {
+            fun TimelineWindow.playhead() = shareOf(timeline.clockOf(position())).coerceIn(0.0, 1.0)
+            IconButton(onClick = { motion.stop(); onWindowChange { it.zoom(2.0, it.playhead()) } }) {
                 Icon(painterResource(R.drawable.ic_zoom_out), contentDescription = stringResource(R.string.zoom_out))
             }
-            IconButton(onClick = { onWindowChange(window.zoom(0.5, playhead())) }) {
+            IconButton(onClick = { motion.stop(); onWindowChange { it.zoom(0.5, it.playhead()) } }) {
                 Icon(painterResource(R.drawable.ic_zoom_in), contentDescription = stringResource(R.string.zoom_in))
             }
-            IconButton(onClick = { onWindowChange(TimelineWindow.whole(window.total)) }) {
+            IconButton(onClick = { motion.stop(); onWindowChange { TimelineWindow.whole(it.total) } }) {
                 Icon(painterResource(R.drawable.ic_fit_screen), contentDescription = stringResource(R.string.zoom_fit))
             }
             FilledIconToggleButton(checked = autoZoom, onCheckedChange = onAutoZoomChange) {
@@ -350,6 +390,25 @@ private fun DrawScope.drawPlayhead(window: TimelineWindow, clock: Duration, top:
     val x = (share * size.width).toFloat()
     drawRect(color, topLeft = Offset(x - 1.dp.toPx(), top), size = Size(2.dp.toPx(), height))
 }
+
+/** A fling or animated zoom of the window; starting one or touching the timeline stops the one before. */
+private class WindowMotion(private val scope: CoroutineScope) {
+    private var job: Job? = null
+
+    fun start(block: suspend CoroutineScope.() -> Unit) {
+        stop()
+        job = scope.launch(block = block)
+    }
+
+    fun stop() {
+        job?.cancel()
+        job = null
+    }
+}
+
+/** How much a double tap zooms in (the share of the span it keeps) and how long that takes. */
+private const val DOUBLE_TAP_ZOOM = 0.5
+private const val DOUBLE_TAP_ZOOM_MILLIS = 250
 
 /** The colour [color] has in the theme's [colors]. */
 internal fun kindColor(color: KindColor, colors: ColorScheme): Color = when (color) {

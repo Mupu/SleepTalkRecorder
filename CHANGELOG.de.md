@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.2.0] - 2026-11-10
+
+### Geändert
+
+- Die Zeitleiste eines Schlafs bewegt sich wie eine Karte: Zieh zwei Finger auseinander oder zusammen, um um den Punkt zwischen ihnen zu zoomen, und verschiebe sie dabei zugleich; wische und lass los, damit sie weitergleitet; tippe doppelt, um an dieser Stelle hineinzuzoomen.
+
 ## [0.1.1] - 2026-11-10
 
 ### Behoben

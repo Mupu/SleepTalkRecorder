@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.2.0] - 2026-11-10
+
+### Changed
+
+- The timeline of a sleep moves like a map: pinch with two fingers to zoom around the point between them and move them to pan at the same time, swipe and let go to let it glide on, and double-tap to zoom in where you tap.
+
 ## [0.1.1] - 2026-11-10
 
 ### Fixed

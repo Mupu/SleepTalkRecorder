@@ -20,8 +20,29 @@ class TimelineWindowTest {
     fun `the window never leaves the sleep nor grows beyond it`() {
         val window = TimelineWindow(minutes(50), minutes(60), hour)
 
-        assertEquals(TimelineWindow(minutes(50), minutes(60), hour), window.pan(minutes(30)))
+        assertEquals(TimelineWindow(minutes(50), minutes(60), hour), window.moved(from = 0.0, to = -3.0))
         assertEquals(TimelineWindow.whole(hour), window.zoom(factor = 20.0, anchor = 0.5))
+    }
+
+    @Test
+    fun `dragging carries the moment under the finger along`() {
+        val moved = TimelineWindow(minutes(10), minutes(20), hour).moved(from = 0.5, to = 0.25)
+
+        assertEquals(TimelineWindow(Duration.ofSeconds(750), Duration.ofSeconds(1_350), hour), moved)
+    }
+
+    @Test
+    fun `pinching zooms around the fingers and pans with them at once`() {
+        val pinched = TimelineWindow.whole(hour).moved(from = 0.5, to = 0.25, zoom = 2.0)
+
+        assertEquals(TimelineWindow(Duration.ofSeconds(1_350), Duration.ofSeconds(3_150), hour), pinched)
+    }
+
+    @Test
+    fun `zooming in past the limit keeps the moment under the fingers in place`() {
+        val zoomed = TimelineWindow(minutes(10), minutes(11), hour).zoom(factor = 0.0001, anchor = 0.5)
+
+        assertEquals(TimelineWindow(Duration.ofSeconds(620), Duration.ofSeconds(640), hour), zoomed)
     }
 
     @Test

@@ -19,14 +19,20 @@ data class TimelineWindow(val start: Duration, val end: Duration, val total: Dur
     fun shareOf(position: Duration): Double = (position - start).toMillis().toDouble() / span.toMillis().coerceAtLeast(1)
 
     /** The window [factor] times as long (below 1 zooms in), keeping the position at [anchor] (a share of the width) in place. */
-    fun zoom(factor: Double, anchor: Double): TimelineWindow {
-        val pinned = positionAt(anchor)
-        val span = (span.toMillis() * factor).toLong()
-        return clamped(pinned.toMillis() - (span * anchor).toLong(), span)
-    }
+    fun zoom(factor: Double, anchor: Double): TimelineWindow = moved(from = anchor, to = anchor, zoom = 1.0 / factor)
 
-    /** The window moved later by [by] (earlier when negative). */
-    fun pan(by: Duration): TimelineWindow = clamped((start + by).toMillis(), span.toMillis())
+    /**
+     * The window after fingers moved over the timeline, as a map moves under them: the moment that
+     * was at [from] (a share of the width) is now at [to], and the window shows [zoom] times as much
+     * detail (above 1 zooms in). Dragging one finger is a move without zoom; a pinch zooms around
+     * the point between the fingers and pans with it at the same time.
+     */
+    fun moved(from: Double, to: Double, zoom: Double = 1.0): TimelineWindow {
+        val pinned = start.toMillis() + span.toMillis() * from
+        // Limited first, so the moment stays under the fingers also where zooming stops.
+        val span = spanWithin((span.toMillis() / zoom).toLong())
+        return clamped(Math.round(pinned - span * to), span)
+    }
 
     /** A window of the same span centred on [position]. */
     fun centredOn(position: Duration): TimelineWindow = clamped(position.toMillis() - span.toMillis() / 2, span.toMillis())
@@ -53,10 +59,14 @@ data class TimelineWindow(val start: Duration, val end: Duration, val total: Dur
     fun following(position: Duration): TimelineWindow =
         if (position in start..end) this else clamped(position.toMillis() - span.toMillis() / 10, span.toMillis())
 
-    private fun clamped(startMillis: Long, spanMillis: Long): TimelineWindow {
+    private fun spanWithin(spanMillis: Long): Long {
         val totalMillis = total.toMillis()
-        val span = spanMillis.coerceIn(minOf(MIN_SPAN.toMillis(), totalMillis), totalMillis)
-        val start = startMillis.coerceIn(0, totalMillis - span)
+        return spanMillis.coerceIn(minOf(MIN_SPAN.toMillis(), totalMillis), totalMillis)
+    }
+
+    private fun clamped(startMillis: Long, spanMillis: Long): TimelineWindow {
+        val span = spanWithin(spanMillis)
+        val start = startMillis.coerceIn(0, total.toMillis() - span)
         return TimelineWindow(Duration.ofMillis(start), Duration.ofMillis(start + span), total)
     }
 

@@ -213,8 +213,8 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                         unavailable = state.unavailable,
                         position = position,
                         window = window,
-                        onWindowChange = {
-                            window = it
+                        onWindowChange = { change ->
+                            window = change(window)
                             autoZoom = false
                         },
                         autoZoom = autoZoom,
