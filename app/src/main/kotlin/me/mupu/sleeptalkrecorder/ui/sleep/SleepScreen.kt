@@ -6,8 +6,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -74,6 +76,7 @@ import me.mupu.sleeptalkrecorder.transcription.TranscriptionStatus
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.AppBarIcon
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
+import me.mupu.sleeptalkrecorder.ui.components.SegmentLabel
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.formatEventLength
 import me.mupu.sleeptalkrecorder.ui.format.formatPosition
@@ -388,27 +391,30 @@ private fun PlayerPosition(timeline: SleepTimeline, position: () -> Duration, mo
 /** Full or cut playback, as two connected buttons. */
 @Composable
 private fun PlaybackMode(cut: Boolean, enabled: Boolean, onCutChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
-    SingleChoiceSegmentedButtonRow(modifier) {
+    // Equally high buttons, also when one label takes two lines.
+    SingleChoiceSegmentedButtonRow(modifier.height(IntrinsicSize.Min)) {
         SegmentedButton(
             selected = !cut,
             onClick = { onCutChange(false) },
             shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
             enabled = enabled,
+            modifier = Modifier.fillMaxHeight(),
         ) {
-            Text(stringResource(R.string.playback_full))
+            SegmentLabel(stringResource(R.string.playback_full))
         }
         SegmentedButton(
             selected = cut,
             onClick = { onCutChange(true) },
             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
             enabled = enabled,
+            modifier = Modifier.fillMaxHeight(),
             icon = {
                 SegmentedButtonDefaults.Icon(active = cut) {
                     Icon(painterResource(R.drawable.ic_content_cut), contentDescription = null, modifier = Modifier.size(18.dp))
                 }
             },
         ) {
-            Text(stringResource(R.string.playback_cut))
+            SegmentLabel(stringResource(R.string.playback_cut))
         }
     }
 }

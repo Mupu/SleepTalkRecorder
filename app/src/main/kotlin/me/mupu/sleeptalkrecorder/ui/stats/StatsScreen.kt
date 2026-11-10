@@ -4,10 +4,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -35,6 +38,8 @@ import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.time.SleepKind
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
+import me.mupu.sleeptalkrecorder.ui.components.FittingText
+import me.mupu.sleeptalkrecorder.ui.components.SegmentLabel
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.formatEventLength
 import me.mupu.sleeptalkrecorder.ui.format.sleepTitle
@@ -73,14 +78,16 @@ fun StatsScreen(viewModel: StatsViewModel, onBack: () -> Unit) {
 @Composable
 private fun ScopeSwitch(scope: StatsScope, onScopeChange: (StatsScope) -> Unit) {
     val labels = listOf(StatsScope.THIS_SLEEP to R.string.stats_this_sleep, StatsScope.ALL_SLEEPS to R.string.stats_all_sleeps)
-    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+    // Equally high buttons, also when one label takes two lines.
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(IntrinsicSize.Min)) {
         labels.forEachIndexed { index, (value, label) ->
             SegmentedButton(
                 selected = scope == value,
                 onClick = { onScopeChange(value) },
                 shape = SegmentedButtonDefaults.itemShape(index, labels.size),
+                modifier = Modifier.fillMaxHeight(),
             ) {
-                Text(stringResource(label))
+                SegmentLabel(stringResource(label))
             }
         }
     }
@@ -232,7 +239,7 @@ private fun Tiles(vararg tiles: Pair<String, String>) {
                         modifier = Modifier.weight(1f),
                     ) {
                         Column(Modifier.padding(14.dp)) {
-                            Text(value, style = MaterialTheme.typography.headlineSmall, maxLines = 1)
+                            FittingText(value, style = MaterialTheme.typography.headlineSmall)
                             Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }

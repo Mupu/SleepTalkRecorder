@@ -5,8 +5,11 @@ import androidx.annotation.DrawableRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardActions
@@ -44,6 +47,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import me.mupu.sleeptalkrecorder.R
+import me.mupu.sleeptalkrecorder.ui.components.SegmentLabel
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
 import java.time.Duration
 import java.time.LocalTime
@@ -80,7 +84,8 @@ internal fun <T> ChoiceSetting(
 ) {
     Column {
         SettingLabel(icon, label)
-        SingleChoiceSegmentedButtonRow((if (hint == null) ControlPadding else HintedControlPadding).fillMaxWidth()) {
+        // Equally high buttons, also when one label takes two lines.
+        SingleChoiceSegmentedButtonRow((if (hint == null) ControlPadding else HintedControlPadding).fillMaxWidth().height(IntrinsicSize.Min)) {
             val crowded = options.size > MAX_OPTIONS_WITH_CHECK
             options.forEachIndexed { index, option ->
                 SegmentedButton(
@@ -91,8 +96,9 @@ internal fun <T> ChoiceSetting(
                     // a phone; the fill alone marks the choice then.
                     icon = if (crowded) ({}) else ({ SegmentedButtonDefaults.Icon(option == selected) }),
                     contentPadding = if (crowded) CrowdedPadding else SegmentedButtonDefaults.ContentPadding,
+                    modifier = Modifier.fillMaxHeight(),
                 ) {
-                    Text(optionLabel(option), maxLines = 1)
+                    SegmentLabel(optionLabel(option))
                 }
             }
         }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -249,7 +250,8 @@ internal fun TranscriptLine(
         )
     }
     if (expanded) {
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        // A row as long as both fit; in a narrow column or a long language the second goes below.
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             SmallTextButton(R.drawable.ic_edit, stringResource(R.string.correct_text), onCorrect)
             SmallTextButton(R.drawable.ic_voice_over_off, stringResource(R.string.not_speech), onNotSpeech)
         }
@@ -269,7 +271,7 @@ private fun SmallTextButton(@DrawableRes icon: Int, label: String, onClick: () -
     TextButton(onClick = onClick, contentPadding = ButtonDefaults.TextButtonWithIconContentPadding) {
         Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
         Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-        Text(label)
+        Text(label, maxLines = 1)
     }
 }
 

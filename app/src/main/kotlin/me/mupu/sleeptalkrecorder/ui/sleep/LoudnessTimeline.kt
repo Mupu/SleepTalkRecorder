@@ -57,6 +57,7 @@ import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.ThemeRole
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
+import me.mupu.sleeptalkrecorder.ui.components.FittingText
 import me.mupu.sleeptalkrecorder.ui.format.ClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.formatDuration
@@ -286,15 +287,16 @@ fun LoudnessTimeline(
                 Icon(painterResource(R.drawable.ic_center_focus_strong), contentDescription = stringResource(R.string.auto_zoom))
             }
             if (timeline.pieces.isNotEmpty()) {
-                Text(
+                // Clock times above the length; 12-hour times are long enough to need shrinking.
+                FittingText(
                     stringResource(
                         R.string.timeline_span,
                         clock.format(timeline.instantAtClock(window.start), zone),
                         clock.format(timeline.instantAtClock(window.end), zone),
                         formatDuration(resources, window.span),
                     ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall.copy(color = colors.onSurfaceVariant),
+                    maxLines = 2,
                     modifier = Modifier.padding(start = 4.dp),
                 )
             }

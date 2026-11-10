@@ -3,6 +3,13 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.2.1] - 2026-11-10
+
+### Fixed
+
+- Labels that did not fit no longer break apart or get cut off: “Not speech” under a transcript, the choices for when speech recognition runs, the 12-hour time format, the shown stretch of the timeline and time ranges in the stats now fit, also at a larger font size.
+- The stats chart of time talked per night is called “Time talked per night”, as it shows seconds as well as minutes.
+
 ## [0.2.0] - 2026-11-10
 
 ### Changed

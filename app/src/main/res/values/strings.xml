@@ -77,8 +77,8 @@
     <string name="playback_cut">Cut</string>
     <string name="cut_nothing_to_play">No events to play. Full playback plays the whole sleep.</string>
     <string name="auto_zoom">Auto zoom: follow the current event</string>
-    <!-- The stretch the timeline shows: "02:10–02:40 · 30 min". -->
-    <string name="timeline_span">%1$s–%2$s · %3$s</string>
+    <!-- The stretch the timeline shows, its clock times above its length: "02:10–02:40", "30 min". -->
+    <string name="timeline_span">%1$s–%2$s\n%3$s</string>
     <string name="finding_events">Finding events…</string>
     <string name="no_events">No events in this sleep.</string>
     <plurals name="event_count">
@@ -220,7 +220,7 @@
     </plurals>
     <string name="stats_compare_no_night">There is no other night to compare with yet.</string>
     <string name="stats_compare_no_nap">There is no other nap to compare with yet.</string>
-    <string name="stats_talk_per_night">Minutes talked per night</string>
+    <string name="stats_talk_per_night">Time talked per night</string>
     <string name="stats_per_hour">Events by clock hour (avg per night)</string>
     <string name="stats_per_hour_text">When in the night most happens.</string>
     <!-- %2$s is the date of the first night, for example "3 October". -->
@@ -241,7 +241,7 @@
     <string name="settings_language">Language</string>
     <string name="settings_time_format">Time format</string>
     <string name="time_format_24">24-hour</string>
-    <string name="time_format_12">12-hour (AM/PM)</string>
+    <string name="time_format_12">12-hour (AM/&#8288;PM)</string>
     <string name="settings_playback">Playback</string>
     <string name="settings_lead_in">Lead-in</string>
     <string name="settings_lead_in_hint">Before each event in cut playback</string>

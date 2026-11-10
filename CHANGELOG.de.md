@@ -3,6 +3,13 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.2.1] - 2026-11-10
+
+### Behoben
+
+- Beschriftungen, die nicht passten, zerfallen nicht mehr und werden nicht mehr abgeschnitten: „Keine Sprache“ unter einem Transkript, die Auswahl, wann die Spracherkennung läuft, das 12-Stunden-Format, der gezeigte Ausschnitt der Zeitleiste und Zeitspannen in der Statistik passen jetzt, auch bei größerer Schrift.
+- Das Diagramm der gesprochenen Zeit pro Nacht heißt „Gesprochene Zeit pro Nacht“, weil es auch Sekunden zeigt.
+
 ## [0.2.0] - 2026-11-10
 
 ### Geändert

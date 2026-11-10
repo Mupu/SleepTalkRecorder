@@ -68,7 +68,7 @@
     <string name="playback_cut">Nur Ereignisse</string>
     <string name="cut_nothing_to_play">Keine Ereignisse zum Abspielen. Vollständig spielt den ganzen Schlaf.</string>
     <string name="auto_zoom">Auto-Zoom: dem aktuellen Ereignis folgen</string>
-    <string name="timeline_span">%1$s–%2$s · %3$s</string>
+    <string name="timeline_span">%1$s–%2$s\n%3$s</string>
     <string name="finding_events">Ereignisse werden gesucht…</string>
     <string name="no_events">Keine Ereignisse in diesem Schlaf.</string>
     <plurals name="event_count">
@@ -189,7 +189,7 @@
     </plurals>
     <string name="stats_compare_no_night">Noch keine andere Nacht zum Vergleichen.</string>
     <string name="stats_compare_no_nap">Noch kein anderer Mittagsschlaf zum Vergleichen.</string>
-    <string name="stats_talk_per_night">Gesprochene Minuten pro Nacht</string>
+    <string name="stats_talk_per_night">Gesprochene Zeit pro Nacht</string>
     <string name="stats_per_hour">Ereignisse je Uhrzeit (Ø pro Nacht)</string>
     <string name="stats_per_hour_text">Wann in der Nacht am meisten passiert.</string>
     <plurals name="stats_nights_since">
@@ -209,7 +209,7 @@
     <string name="settings_language">Sprache</string>
     <string name="settings_time_format">Uhrzeitformat</string>
     <string name="time_format_24">24 Stunden</string>
-    <string name="time_format_12">12 Stunden (AM/PM)</string>
+    <string name="time_format_12">12 Stunden (AM/&#8288;PM)</string>
     <string name="settings_playback">Wiedergabe</string>
     <string name="settings_lead_in">Vorlauf</string>
     <string name="settings_lead_in_hint">Vor jedem Ereignis beim geschnittenen Abspielen</string>
