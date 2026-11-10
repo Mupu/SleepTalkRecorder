@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.4.1] - 2026-11-10
+
+### Behoben
+
+- „Für Analyse exportieren“ zeigt seinen Fortschritt, sagt vorher, wie viel es kopieren wird, und kopiert nur noch, was sich seit dem letzten Export geändert hat, statt alles erneut.
+
 ## [0.4.0] - 2026-11-10
 
 ### Hinzugefügt

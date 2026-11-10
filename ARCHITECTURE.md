@@ -251,9 +251,12 @@ the work runs and across daylight saving changes.
 of shared storage, `Android/data/<app>/files/export/`, because a release build's private storage
 cannot be read from outside: the database as `sleeps.db` (a `VACUUM INTO` snapshot, made in
 private storage and then copied, since SQLite creates it readable by the app alone) and every
-recording's directory under `recordings/`. A PC pulls it over USB with adb. A new export replaces
-the old one, it refuses to start without room for the recordings, and it runs in the container's
-scope, so leaving the settings does not stop it.
+recording's directory under `recordings/`. A PC pulls it over USB with adb. A finished recording's
+files never change, so a new export copies only the files that are new, grown or newer
+(`ExportPlan`) and removes those of sleeps deleted since; the database is copied fresh each time.
+The settings show what the recordings take and what an export would still copy, and a progress
+bar while it copies. It refuses to start without room for what it copies, and it runs in the
+container's scope, so leaving the settings does not stop it.
 
 ## Finding events
 

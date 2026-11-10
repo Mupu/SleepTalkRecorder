@@ -75,7 +75,12 @@ class SettingsViewModel(
     /** The folder the export goes to, as shown in its hint; null without shared storage. */
     val exportPath: String? = export.path
 
-    /** Copies every sleep for analysis, replacing an earlier export. */
+    init {
+        // The sizes change with every recording and deletion, so they are counted when the settings open.
+        export.refresh()
+    }
+
+    /** Copies what changed since the last export for analysis. */
     fun exportForAnalysis() = export.export()
 
     /** Deletes the export for analysis. */

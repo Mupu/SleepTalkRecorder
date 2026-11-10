@@ -393,9 +393,10 @@
     <!-- Export for analysis -->
     <string name="settings_analysis">Analyse</string>
     <string name="export">Für Analyse exportieren</string>
-    <string name="export_hint">Kopiert alle Schlafzeiten mit Ton nach %1$s, wo ein PC sie über USB liest. Braucht so viel Platz wie die Aufnahmen und ersetzt einen früheren Export.</string>
+    <string name="export_hint">Kopiert alle Schlafzeiten mit Ton nach %1$s, wo ein PC sie über USB liest. Ein neuer Export kopiert nur, was sich seit dem letzten geändert hat.</string>
     <string name="export_action">Exportieren</string>
-    <string name="export_running">Wird exportiert…</string>
+    <string name="export_sizes">Aufnahmen: %1$s · noch zu kopieren: %2$s</string>
+    <string name="export_running">Wird exportiert… %1$s von %2$s</string>
     <string name="export_done">Letzter Export: %1$s</string>
     <string name="export_failed">Der Export ist fehlgeschlagen. Ist genug Platz frei?</string>
 </resources>
