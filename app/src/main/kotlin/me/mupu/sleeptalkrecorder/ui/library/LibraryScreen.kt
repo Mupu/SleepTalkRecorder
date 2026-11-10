@@ -1,12 +1,16 @@
 package me.mupu.sleeptalkrecorder.ui.library
 
-import androidx.compose.foundation.background
 import android.text.format.Formatter
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,6 +23,9 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -27,7 +34,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +49,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.mupu.sleeptalkrecorder.R
@@ -47,17 +58,21 @@ import me.mupu.sleeptalkrecorder.time.SleepKind
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.AppBarIcon
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
+import me.mupu.sleeptalkrecorder.ui.components.SegmentLabel
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.formatDuration
+import me.mupu.sleeptalkrecorder.ui.format.formatEventLength
 import me.mupu.sleeptalkrecorder.ui.format.formatPosition
 import me.mupu.sleeptalkrecorder.ui.format.groupDate
 import me.mupu.sleeptalkrecorder.ui.format.sleepTitle
+import me.mupu.sleeptalkrecorder.ui.sleep.kindName
 import java.time.Duration
 import java.time.ZoneId
 
 /**
- * Every sleep, grouped by the day it is named after; the running sleep on top. A long press on a
- * finished sleep deletes it after a confirmation.
+ * Every sleep, grouped by the day it is named after, with the running sleep on top; a long press
+ * on a finished sleep deletes it after a confirmation. The second tab lists the favourites of all
+ * sleeps under the sleep each belongs to; tapping one plays it in its sleep.
  */
 @Composable
 fun LibraryScreen(
@@ -65,11 +80,11 @@ fun LibraryScreen(
     onBack: () -> Unit,
     onOpenRunning: () -> Unit,
     onOpenSleep: (Long) -> Unit,
+    onOpenFavourite: (sleepId: Long, eventId: Long) -> Unit,
     onOpenStats: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val resources = LocalResources.current
-    val zone = ZoneId.systemDefault()
+    var showFavourites by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val deletionFailedMessage = stringResource(R.string.delete_sleep_failed)
@@ -90,65 +105,159 @@ fun LibraryScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding)) {
-            state.running?.let { running ->
-                item(key = "running") { RunningSleepItem(running, onClick = onOpenRunning) }
-            }
-            for (group in state.groups) {
-                item(key = "date-${group.date}") {
-                    Text(
-                        groupDate(resources, group.date),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
-                    )
-                }
-                items(group.sleeps, key = { it.id }) { sleep ->
-                    val date = sleep.date
-                    ListItem(
-                        leadingContent = { SleepKindIcon(date.kind) },
-                        headlineContent = { Text(sleepTitle(resources, date)) },
-                        supportingContent = {
-                            Column {
-                                Text(sleepSubtitle(sleep, zone))
-                                EventsTag(sleep)
-                            }
-                        },
-                        trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
-                        modifier = Modifier.combinedClickable(
-                            onClick = { onOpenSleep(sleep.id) },
-                            onLongClick = { viewModel.askToDelete(sleep) },
-                        ),
-                    )
-                }
-            }
-            if (state.groups.isNotEmpty()) {
-                item(key = "hint") {
-                    Text(
-                        stringResource(R.string.library_long_press_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    )
-                }
-            }
-            if (state.loaded && state.running == null && state.groups.isEmpty()) {
-                item(key = "empty") {
-                    Text(
-                        stringResource(R.string.library_empty),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth().padding(32.dp),
-                    )
-                }
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            LibraryTabs(showFavourites, onSelect = { showFavourites = it })
+            if (showFavourites) {
+                FavouriteList(state, onOpenFavourite)
+            } else {
+                SleepList(state, onOpenRunning, onOpenSleep, onDelete = viewModel::askToDelete)
             }
         }
     }
 
     state.deletion?.let { request ->
         DeleteSleepDialog(request, onConfirm = viewModel::confirmDeletion, onDismiss = viewModel::cancelDeletion)
+    }
+}
+
+/** Sleeps or favourites, as two connected buttons below the top bar. */
+@Composable
+private fun LibraryTabs(showFavourites: Boolean, onSelect: (Boolean) -> Unit) {
+    val tabs = listOf(false to R.string.library_tab_sleeps, true to R.string.library_tab_favourites)
+    // Equally high buttons, also when one label takes two lines.
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).height(IntrinsicSize.Min)) {
+        tabs.forEachIndexed { index, (favourites, label) ->
+            SegmentedButton(
+                selected = showFavourites == favourites,
+                onClick = { onSelect(favourites) },
+                shape = SegmentedButtonDefaults.itemShape(index, tabs.size),
+                modifier = Modifier.fillMaxHeight(),
+            ) {
+                SegmentLabel(stringResource(label))
+            }
+        }
+    }
+}
+
+/** Every sleep under the day it is named after, the running sleep on top. */
+@Composable
+private fun SleepList(state: LibraryUiState, onOpenRunning: () -> Unit, onOpenSleep: (Long) -> Unit, onDelete: (SleepSummary) -> Unit) {
+    val resources = LocalResources.current
+    val zone = ZoneId.systemDefault()
+
+    LazyColumn(Modifier.fillMaxSize()) {
+        state.running?.let { running ->
+            item(key = "running") { RunningSleepItem(running, onClick = onOpenRunning) }
+        }
+        for (group in state.groups) {
+            item(key = "date-${group.date}") {
+                Text(
+                    groupDate(resources, group.date),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+                )
+            }
+            items(group.sleeps, key = { it.id }) { sleep ->
+                val date = sleep.date
+                ListItem(
+                    leadingContent = { SleepKindIcon(date.kind) },
+                    headlineContent = { Text(sleepTitle(resources, date)) },
+                    supportingContent = {
+                        Column {
+                            Text(sleepSubtitle(sleep, zone))
+                            EventsTag(sleep)
+                        }
+                    },
+                    trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
+                    modifier = Modifier.combinedClickable(
+                        onClick = { onOpenSleep(sleep.id) },
+                        onLongClick = { onDelete(sleep) },
+                    ),
+                )
+            }
+        }
+        if (state.groups.isNotEmpty()) {
+            item(key = "hint") {
+                Text(
+                    stringResource(R.string.library_long_press_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                )
+            }
+        }
+        if (state.loaded && state.running == null && state.groups.isEmpty()) {
+            item(key = "empty") {
+                Text(
+                    stringResource(R.string.library_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The favourites of all sleeps under the name of their sleep: each by its name, else its words,
+ * else its kind, with the clock time it began and its length.
+ */
+@Composable
+private fun FavouriteList(state: LibraryUiState, onOpenFavourite: (sleepId: Long, eventId: Long) -> Unit) {
+    val resources = LocalResources.current
+    val clock = LocalClockFormatter.current
+    val zone = ZoneId.systemDefault()
+
+    LazyColumn(Modifier.fillMaxSize()) {
+        for (group in state.favourites) {
+            item(key = "favourites-${group.sleep.id}") {
+                Text(
+                    sleepTitle(resources, group.sleep.date),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+                )
+            }
+            items(group.favourites, key = { "favourite-${it.event.id}" }) { favourite ->
+                val event = favourite.event
+                val transcript = event.transcript?.let { stringResource(R.string.transcript_quoted, it) }
+                val details = listOfNotNull(
+                    favourite.at?.let { clock.format(it, zone, seconds = true) },
+                    formatEventLength(resources, event.end - event.start),
+                ).joinToString(" · ")
+                ListItem(
+                    leadingContent = {
+                        Icon(painterResource(R.drawable.ic_star), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    },
+                    headlineContent = {
+                        Text(event.name ?: transcript ?: kindName(event.kindId, event.kindName), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    },
+                    supportingContent = {
+                        Column {
+                            if (event.name != null && transcript != null) Text(transcript, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(details)
+                        }
+                    },
+                    trailingContent = { Icon(painterResource(R.drawable.ic_play), contentDescription = stringResource(R.string.play_event)) },
+                    modifier = Modifier.clickable { onOpenFavourite(group.sleep.id, event.id) },
+                )
+            }
+        }
+        if (state.loaded && state.favourites.isEmpty()) {
+            item(key = "no-favourites") {
+                Text(
+                    stringResource(R.string.library_no_favourites),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                )
+            }
+        }
     }
 }
 

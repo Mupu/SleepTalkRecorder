@@ -36,8 +36,12 @@ _Avoid_: Voice line, clip, utterance, detection
 An event the user marked as not interesting; it stays in the sleep but is skipped and greyed out like silence.
 _Avoid_: Deleted event, false positive
 
+**Favourite**:
+An event the user keeps to hear again, optionally with a name they gave it; it is never hidden, and a sleep with favourites is not deleted automatically.
+_Avoid_: Bookmark, starred event
+
 **Speech event**:
-An event in which transcription found words or wordless murmuring; the mark is a guess layered on top of the event and never hides or removes it. The user can turn a speech event back into a plain event.
+An event in which transcription found words or wordless murmuring; the mark is a guess layered on top of the event and never hides or removes it. The user can turn a speech event back into a plain event, and mark any event as speech.
 _Avoid_: Voice line, confirmed speech
 
 **Murmur**:

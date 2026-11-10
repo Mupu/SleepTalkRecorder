@@ -202,7 +202,7 @@ Room (`SleepDatabase`) holds four tables:
   a kind, `SENSITIVITY` with a start threshold in `value`: the one the detector chose for the
   sleep, or one the user set for the stretch,
   `MICROPHONE_UNAVAILABLE` from the recorder, `TRANSCRIPT` with the kind speech recognition or
-  the user gives an event and its words in `text`, `HIDDEN` from the user over an event they hid), and `origin` (`DEVICE`, `SERVER` or `USER`),
+  the user gives an event and its words in `text`, `HIDDEN` from the user over an event they hid, `FAVOURITE` from the user over an event they keep, with the name they gave it in `text`), and `origin` (`DEVICE`, `SERVER` or `USER`),
   `producer` and `producer_version` say who stated it. Gaps between recordings take no time on
   this axis and need no annotation: they follow from the recordings' start instants and lengths.
 
@@ -217,6 +217,13 @@ again with slightly different bounds, and the mark still keeps to it. A mark who
 longer found hides nothing until the event is found again. Hidden events stay in the sleep and
 in its speech recognition, but are left out of the counts the library, the sleep screen and the
 stats show.
+
+A favourite follows the same rule: an event is a favourite while a `FAVOURITE` mark overlaps it,
+and its name is that of the latest such mark. Hiding an event removes its favourite marks and
+making it a favourite removes its hidden marks, so an event is never both. Automatic deletion
+keeps a sleep that has favourites (`SleepSummary.favouriteCount`). The library's second tab lists
+the favourites of all sleeps under their sleep, newest first (`SleepRepository.favourites`), and
+opening one opens its sleep and plays the event on its own.
 
 The schema is exported to `app/schemas/`. Data derived from a sleep or a recording goes into
 tables of its own that reference it by foreign key, so the `sleep` and `recording` tables stay
@@ -343,7 +350,9 @@ unchanged keeps its transcript, and the phone's transcripts of stretches that ar
 event are removed with the new events.
 
 The user corrects a speech event's text in a dialog, or says it is not speech, which a snackbar
-undoes. Either is a `TRANSCRIPT` annotation of the user over the event (the speech kind with the
+undoes; every event action is in the ⋮ menu of its row. Any event can also be marked as speech:
+that removes the user's own transcripts over it, and if speech recognition found no speech there
+a transcript of the user's own makes it a murmur whose words they can then write. Either is a `TRANSCRIPT` annotation of the user over the event (the speech kind with the
 user's words, none for a *murmur*, or the plain event kind) in place of the user's earlier ones
 there. It wins over every analysis and, like a hidden mark, counts for every event it overlaps,
 so it keeps to its event when a search with other settings finds it with other bounds, and no
@@ -428,8 +437,8 @@ microphone is played around an event.
 *Cut playback*, the default, plays the events the list shows in this way, one after the other.
 The list's filter chips exclude each other: "All" lists every event that is not hidden, "Speech
 only" (one chip per event kind that has a filter) those of the kind that are not hidden, and
-"Hidden" only the hidden events, so they can be gone through by ear and unhidden with the button
-on their row. Hiding is undone from a snackbar.
+"Favourites" only the favourites, and "Hidden" only the hidden events, so they can be gone
+through by ear and unhidden with the button on their row. Hiding is undone from a snackbar.
 `CutPlan` joins the stretches of events that overlap, so close events play without a jump, and
 keeps stretches apart that only touch where a recording starts. While playing, the player jumps
 from the end of a stretch to 200 ms before the next (ExoPlayer starts a seeked WAV stream at its

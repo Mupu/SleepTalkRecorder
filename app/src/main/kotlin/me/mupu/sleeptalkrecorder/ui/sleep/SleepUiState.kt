@@ -79,6 +79,9 @@ data class SensitivityUiState(
  */
 data class SensitivityApplied(val wholeSleep: Boolean, val events: Int)
 
+/** The user removed [event] from the favourites; [previous] are its favourite marks before, which undo restores. */
+class FavouriteRemoved(val event: SleepEvent, val previous: List<AnnotationEntity>)
+
 /**
  * The user marked [event] as speech ([speech] true) or as not speech; [previous] are the user's
  * transcripts over it before, which undo restores.

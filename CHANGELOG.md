@@ -7,6 +7,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [Sem
 
 ### Added
 
+- Keep events as favourites and give them a name in their ⋮ menu. A star marks them, the “Favourites” filter lists only them, and the library’s new “Favourites” tab lists the favourites of all sleeps; tap one to hear it in its sleep. Automatic deletion keeps sleeps with favourites.
 - Mark any event as speech in its ⋮ menu, for speech or a murmur that recognition missed; you can then write its words with “Correct text”. On an event you marked as not speech, the same item brings back what recognition found.
 
 ### Changed

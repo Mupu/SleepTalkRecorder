@@ -22,6 +22,11 @@ sealed interface EventFilter {
         override fun shows(event: SleepEvent) = !event.hidden && event.kindId == kindId
     }
 
+    /** Only the favourites, of every kind; a favourite is never hidden. */
+    data object Favourites : EventFilter {
+        override fun shows(event: SleepEvent) = event.favourite && !event.hidden
+    }
+
     /** Only the hidden events, of every kind. */
     data object Hidden : EventFilter {
         override fun shows(event: SleepEvent) = event.hidden

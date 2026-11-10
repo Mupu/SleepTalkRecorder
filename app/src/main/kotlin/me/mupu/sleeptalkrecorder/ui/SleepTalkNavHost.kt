@@ -40,13 +40,18 @@ private object Routes {
     const val PERMISSIONS = "permissions"
     const val WHATS_NEW = "whats_new"
     const val SLEEP_ID = "sleepId"
-    const val SLEEP = "sleep/{$SLEEP_ID}"
+    const val EVENT_ID = "eventId"
+    const val SLEEP = "sleep/{$SLEEP_ID}?$EVENT_ID={$EVENT_ID}"
     const val STATS = "stats?$SLEEP_ID={$SLEEP_ID}"
 
     /** No sleep: the stats screen opened from the library counts all sleeps. */
     const val NO_SLEEP = -1L
 
-    fun sleep(id: Long) = "sleep/$id"
+    /** No event: the sleep screen opens at the start of the sleep. */
+    const val NO_EVENT = -1L
+
+    /** The sleep [id], opened at the start or, given [eventId], playing that event. */
+    fun sleep(id: Long, eventId: Long? = null) = if (eventId == null) "sleep/$id" else "sleep/$id?$EVENT_ID=$eventId"
 
     fun stats(sleepId: Long? = null) = if (sleepId == null) "stats" else "stats?$SLEEP_ID=$sleepId"
 }
@@ -86,6 +91,7 @@ fun SleepTalkNavHost(container: AppContainer) {
                 onBack = { navController.popBackStack() },
                 onOpenRunning = { navController.popBackStack(Routes.HOME, inclusive = false) },
                 onOpenSleep = { navController.navigate(Routes.sleep(it)) },
+                onOpenFavourite = { sleepId, eventId -> navController.navigate(Routes.sleep(sleepId, eventId)) },
                 onOpenStats = { navController.navigate(Routes.stats()) },
             )
         }
@@ -101,13 +107,20 @@ fun SleepTalkNavHost(container: AppContainer) {
         }
         composable(
             Routes.SLEEP,
-            arguments = listOf(navArgument(Routes.SLEEP_ID) { type = NavType.LongType }),
+            arguments = listOf(
+                navArgument(Routes.SLEEP_ID) { type = NavType.LongType },
+                navArgument(Routes.EVENT_ID) {
+                    type = NavType.LongType
+                    defaultValue = Routes.NO_EVENT
+                },
+            ),
         ) { entry ->
             val sleepId = entry.arguments?.getLong(Routes.SLEEP_ID) ?: return@composable
+            val eventId = entry.arguments?.getLong(Routes.EVENT_ID)?.takeIf { it != Routes.NO_EVENT }
             val context = LocalContext.current.applicationContext
             SleepScreen(
                 viewModel = viewModel {
-                    SleepViewModel(sleepId, container.sleepRepository, container.settings, SleepPlayer(context, container::playbackChanged), container.transcriptions)
+                    SleepViewModel(sleepId, container.sleepRepository, container.settings, SleepPlayer(context, container::playbackChanged), container.transcriptions, playEventId = eventId)
                 },
                 onBack = { navController.popBackStack() },
                 onOpenStats = { navController.navigate(Routes.stats(sleepId)) },

@@ -161,7 +161,7 @@ private val WaitReason.text: Int
 
 /**
  * The exclusive filter chips with the number of events each lists: "All 12", one "Speech only 3"
- * per kind with a filter, and "Hidden 2". Tapping the selected kind or "Hidden" again shows all.
+ * per kind with a filter, "Favourites 1" and "Hidden 2". Tapping the selected one again shows all.
  */
 @Composable
 internal fun EventFilterChips(
@@ -187,6 +187,7 @@ internal fun EventFilterChips(
         for (kind in kinds) {
             Chip(EventFilter.Kind(kind.id), stringResource(R.string.filter_kind_only, kindName(kind.id, kind.name)))
         }
+        Chip(EventFilter.Favourites, stringResource(R.string.filter_favourites))
         Chip(EventFilter.Hidden, stringResource(R.string.filter_hidden))
     }
 }

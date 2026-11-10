@@ -234,6 +234,8 @@ class SleepRepository(
         database.withTransaction {
             dao.deleteHidden(sleepId, event.start, event.end)
             if (hidden) {
+                // A hidden event is no favourite: one is kept to be heard again, the other skipped.
+                dao.deleteFavourites(sleepId, event.start, event.end)
                 dao.insertAnnotations(
                     listOf(
                         AnnotationEntity(
@@ -248,6 +250,63 @@ class SleepRepository(
             }
         }
     }
+
+    /**
+     * Keeps [event] as a favourite with the [name] the user gave it (null for none), or, with
+     * [favourite] false, removes every favourite mark that overlaps it. A favourite is shown again
+     * if it was hidden. Marks are the user's, so neither a new search for events nor speech
+     * recognition removes them.
+     *
+     * Returns the favourite marks it replaced, which [restoreFavourites] puts back.
+     */
+    suspend fun setFavourite(sleepId: Long, event: SleepEvent, favourite: Boolean, name: String?): List<AnnotationEntity> =
+        database.withTransaction {
+            val replaced = dao.favourites(sleepId, event.start, event.end)
+            dao.deleteFavourites(sleepId, event.start, event.end)
+            if (favourite) {
+                dao.deleteHidden(sleepId, event.start, event.end)
+                dao.insertAnnotations(
+                    listOf(
+                        AnnotationEntity(
+                            sleepId = sleepId,
+                            type = AnnotationType.FAVOURITE,
+                            start = event.start,
+                            end = event.end,
+                            text = name?.trim()?.ifBlank { null },
+                            origin = AnnotationOrigin.USER,
+                        ),
+                    ),
+                )
+            }
+            replaced
+        }
+
+    /** Undoes [setFavourite] on [event]: its favourite marks become the [previous] ones again. */
+    suspend fun restoreFavourites(sleepId: Long, event: SleepEvent, previous: List<AnnotationEntity>) {
+        database.withTransaction {
+            dao.deleteFavourites(sleepId, event.start, event.end)
+            dao.insertAnnotations(previous.map { it.copy(id = 0) })
+        }
+    }
+
+    /**
+     * The favourites of all sleeps with the sleep each belongs to, the newest sleep first, each
+     * with the kind and words of its winning transcript like [events].
+     */
+    fun favourites(): Flow<List<SleepEventOf>> = combine(
+        dao.favouriteEvents(),
+        dao.favouriteTranscripts(),
+        dao.kinds(),
+    ) { events, transcripts, kinds ->
+        val byKind = kinds.associateBy { it.id }
+        val bySleep = transcripts.groupBy { it.sleepId }
+        events.groupBy { it.sleepId }.flatMap { (sleepId, of) ->
+            withTranscripts(of.map { it.event }, bySleep[sleepId].orEmpty(), byKind).map { SleepEventOf(sleepId, it) }
+        }
+    }
+        .conflate()
+        .flowOn(Dispatchers.Default)
+        .distinctUntilChanged()
 
     /**
      * Sets what [event] is, as the user's transcript over its stretch in place of the user's

@@ -422,4 +422,18 @@
     <string name="setup_updates_install">Install unknown apps</string>
     <string name="setup_updates_install_why">Allow it for %1$s, and updates install without asking each time. Without it, Android asks before every update.</string>
     <string name="setup_updates_never_recording">An update never installs during a recording.</string>
+
+    <!-- Favourites -->
+    <string name="filter_favourites">Favourites</string>
+    <string name="favourite">Favourite</string>
+    <string name="add_favourite">Add to favourites</string>
+    <string name="remove_favourite">Remove from favourites</string>
+    <string name="favourite_removed">Removed from favourites</string>
+    <string name="name_event_menu">Name</string>
+    <string name="name_event">Name this event</string>
+    <string name="name_event_hint">Naming it keeps it as a favourite. Leave it empty for no name.</string>
+    <string name="no_favourites">No favourites in this sleep.</string>
+    <string name="library_tab_sleeps">Sleeps</string>
+    <string name="library_tab_favourites">Favourites</string>
+    <string name="library_no_favourites">No favourites yet. Add an event to them in its ⋮ menu.</string>
 </resources>

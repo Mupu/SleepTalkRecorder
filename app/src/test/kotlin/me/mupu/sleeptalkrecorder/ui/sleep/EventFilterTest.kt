@@ -34,6 +34,13 @@ class EventFilterTest {
     }
 
     @Test
+    fun `favourites lists only the favourites, of every kind`() {
+        val favourites = listOf(event(6, EventKinds.EVENT).copy(favourite = true), event(7, EventKinds.SPEECH).copy(favourite = true))
+
+        assertEquals(listOf(6L, 7L), (events + favourites).filter(EventFilter.Favourites::shows).map { it.id })
+    }
+
+    @Test
     fun `hidden lists only the hidden events, of every kind`() {
         assertEquals(listOf(3L, 4L), listed(EventFilter.Hidden))
     }

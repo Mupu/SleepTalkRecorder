@@ -33,8 +33,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
@@ -62,6 +62,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -124,6 +125,16 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                 duration = SnackbarDuration.Long,
             )
             if (result == SnackbarResult.ActionPerformed) viewModel.setHidden(event, hidden = false)
+        }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.favouriteRemoved.collect { change ->
+            val result = snackbars.showSnackbar(
+                resources.getString(R.string.favourite_removed),
+                actionLabel = resources.getString(R.string.undo),
+                duration = SnackbarDuration.Long,
+            )
+            if (result == SnackbarResult.ActionPerformed) viewModel.undoFavouriteRemoval(change)
         }
     }
     LaunchedEffect(viewModel) {
@@ -194,6 +205,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                 var window by remember(timeline) { mutableStateOf(TimelineWindow.whole(timeline.clockDuration)) }
                 var autoZoom by remember { mutableStateOf(true) }
                 var correcting by remember { mutableStateOf<SleepEvent?>(null) }
+                var naming by remember { mutableStateOf<SleepEvent?>(null) }
 
                 val current = state.currentEvent
                 LaunchedEffect(autoZoom, current?.id) {
@@ -252,12 +264,21 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     },
                     onTogglePlay = viewModel::togglePlayEvent,
                     onHide = viewModel::setHidden,
+                    onFavourite = { event, favourite -> viewModel.setFavourite(event, favourite) },
+                    onName = { naming = it },
                     onSensitivity = if (state.sensitivityAvailable) viewModel::openSensitivity else null,
                     modelChange = modelChange,
                     onCorrect = { correcting = it },
                     onMarkSpeech = viewModel::markSpeech,
                     onRerun = viewModel::runSpeechRecognition,
                 )
+                naming?.let { event ->
+                    NameEventDialog(
+                        event,
+                        onSave = { name -> viewModel.setFavourite(event, favourite = true, name = name) },
+                        onDismiss = { naming = null },
+                    )
+                }
                 correcting?.let { event ->
                     CorrectTranscriptDialog(
                         event,
@@ -436,6 +457,8 @@ private fun EventList(
     onSelect: (SleepEvent) -> Unit,
     onTogglePlay: (SleepEvent) -> Unit,
     onHide: (SleepEvent, Boolean) -> Unit,
+    onFavourite: (SleepEvent, Boolean) -> Unit,
+    onName: (SleepEvent) -> Unit,
     onSensitivity: ((SleepEvent) -> Unit)?,
     modelChange: ModelChange?,
     onCorrect: (SleepEvent) -> Unit,
@@ -470,6 +493,8 @@ private fun EventList(
                 onSelect = onSelect,
                 onTogglePlay = onTogglePlay,
                 onHide = onHide,
+                onFavourite = onFavourite,
+                onName = onName,
                 onSensitivity = onSensitivity,
                 modelChange = modelChange,
                 onCorrect = onCorrect,
@@ -482,6 +507,7 @@ private fun EventList(
                 val empty = when {
                     !sleep.eventsFound -> R.string.finding_events
                     filter == EventFilter.Hidden -> R.string.no_hidden_events
+                    filter == EventFilter.Favourites -> R.string.no_favourites
                     filter != EventFilter.All -> R.string.no_events_filter
                     else -> R.string.no_events
                 }
@@ -508,6 +534,8 @@ private fun EventRow(
     onSelect: (SleepEvent) -> Unit,
     onTogglePlay: (SleepEvent) -> Unit,
     onHide: (SleepEvent, Boolean) -> Unit,
+    onFavourite: (SleepEvent, Boolean) -> Unit,
+    onName: (SleepEvent) -> Unit,
     onSensitivity: ((SleepEvent) -> Unit)?,
     modelChange: ModelChange?,
     onCorrect: (SleepEvent) -> Unit,
@@ -548,7 +576,11 @@ private fun EventRow(
                     stringResource(R.string.event_heading, time, formatEventLength(resources, event.end - event.start)),
                     style = MaterialTheme.typography.titleSmall.merge(Numbers),
                 )
+                if (event.favourite) FavouriteStar()
                 if (event.hidden) HiddenTag()
+            }
+            event.name?.let { name ->
+                Text(name, style = MaterialTheme.typography.labelLarge, color = colors.primary, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             Text(
                 stringResource(R.string.event_details, kindName(event.kindId, event.kindName), formatPosition(event.start)),
@@ -578,6 +610,9 @@ private fun EventRow(
         }
         MoreMenu(
             listOfNotNull(
+                MenuEntry(R.string.add_favourite, R.drawable.ic_star_border) { onFavourite(event, true) }.takeUnless { event.favourite },
+                MenuEntry(R.string.remove_favourite, R.drawable.ic_star) { onFavourite(event, false) }.takeIf { event.favourite },
+                MenuEntry(R.string.name_event_menu, R.drawable.ic_label) { onName(event) },
                 MenuEntry(R.string.hide_event, R.drawable.ic_visibility_off) { onHide(event, true) }.takeUnless { event.hidden },
                 onSensitivity?.let { MenuEntry(R.string.sensitivity_here, R.drawable.ic_tune) { it(event) } },
                 MenuEntry(R.string.correct_text, R.drawable.ic_edit) { onCorrect(event) }.takeIf { event.isSpeech },

@@ -20,10 +20,10 @@ class SleepRetention(keep: Duration) {
 
     /**
      * The sleeps among [sleeps] that are past their days on [today]. A sleep still being recorded
-     * is never among them.
+     * is never among them, nor one with favourites, which the user keeps to hear again.
      */
     fun expired(sleeps: List<SleepSummary>, today: LocalDate): List<SleepSummary> =
         sleeps.filter { sleep ->
-            !sleep.isRunning && sleep.date.date.plusDays(keepDays) < today
+            !sleep.isRunning && sleep.favouriteCount == 0 && sleep.date.date.plusDays(keepDays) < today
         }
 }

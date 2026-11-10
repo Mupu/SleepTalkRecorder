@@ -7,6 +7,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [Se
 
 ### Hinzugefügt
 
+- Behalte Ereignisse als Favoriten und gib ihnen im ⋮-Menü einen Namen. Ein Stern markiert sie, der Filter „Favoriten“ zeigt nur sie, und der neue Reiter „Favoriten“ in der Bibliothek zeigt die Favoriten aller Schlafzeiten; tippe einen an, um ihn in seinem Schlaf zu hören. Das automatische Löschen behält Schlafzeiten mit Favoriten.
 - Markiere im ⋮-Menü jedes Ereignis als Sprache, wenn die Erkennung Sprache oder ein Murmeln übersehen hat; mit „Text korrigieren“ kannst du dann die Wörter eintragen. Bei einem Ereignis, das du als keine Sprache markiert hast, holt derselbe Punkt zurück, was die Erkennung gefunden hatte.
 
 ### Geändert

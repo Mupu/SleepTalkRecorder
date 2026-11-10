@@ -144,7 +144,7 @@ interface SleepDao {
         """
         SELECT event.id, event.start_ms, event.end_ms, kind.id AS kind_id, kind.name AS kind_name,
             kind.color AS kind_color, NULL AS transcript, NULL AS transcript_origin,
-            NULL AS transcript_producer, $IS_HIDDEN AS hidden
+            NULL AS transcript_producer, $IS_HIDDEN AS hidden, $IS_FAVOURITE AS favourite, $FAVOURITE_NAME AS name
         FROM annotation AS event
         JOIN event_kind AS kind ON kind.id = event.kind_id
         WHERE event.sleep_id = :sleepId AND event.type = 'EVENT'
@@ -158,7 +158,7 @@ interface SleepDao {
         """
         SELECT event.sleep_id, event.id, event.start_ms, event.end_ms, kind.id AS kind_id, kind.name AS kind_name,
             kind.color AS kind_color, NULL AS transcript, NULL AS transcript_origin,
-            NULL AS transcript_producer, $IS_HIDDEN AS hidden
+            NULL AS transcript_producer, $IS_HIDDEN AS hidden, $IS_FAVOURITE AS favourite, $FAVOURITE_NAME AS name
         FROM annotation AS event
         JOIN event_kind AS kind ON kind.id = event.kind_id
         WHERE event.type = 'EVENT'
@@ -212,6 +212,49 @@ interface SleepDao {
         """,
     )
     fun transcriptModels(sleepId: Long): Flow<List<ModelTranscripts>>
+
+    /**
+     * The favourite events of all sleeps, like [events] gives those of one: the newest sleep
+     * first, its favourites in order. Hidden events are none, as hiding removes the favourite.
+     */
+    @Query(
+        """
+        SELECT event.sleep_id, event.id, event.start_ms, event.end_ms, kind.id AS kind_id, kind.name AS kind_name,
+            kind.color AS kind_color, NULL AS transcript, NULL AS transcript_origin,
+            NULL AS transcript_producer, 0 AS hidden, 1 AS favourite, $FAVOURITE_NAME AS name
+        FROM annotation AS event
+        JOIN event_kind AS kind ON kind.id = event.kind_id
+        JOIN sleep ON sleep.id = event.sleep_id
+        WHERE event.type = 'EVENT' AND $IS_FAVOURITE AND NOT $IS_HIDDEN
+        ORDER BY sleep.started_at DESC, event.start_ms, event.id
+        """,
+    )
+    fun favouriteEvents(): Flow<List<SleepEventOf>>
+
+    /** The transcripts over the favourites of all sleeps, so [favouriteEvents] can show their words. */
+    @Query(
+        """
+        SELECT * FROM annotation AS transcript WHERE type = 'TRANSCRIPT' AND EXISTS (
+            SELECT 1 FROM annotation AS mark WHERE mark.sleep_id = transcript.sleep_id AND mark.type = 'FAVOURITE'
+                AND mark.start_ms < transcript.end_ms AND mark.end_ms > transcript.start_ms)
+        ORDER BY id
+        """,
+    )
+    fun favouriteTranscripts(): Flow<List<AnnotationEntity>>
+
+    /** The user's favourite marks that overlap a stretch. */
+    @Query(
+        """
+        SELECT * FROM annotation WHERE sleep_id = :sleepId AND type = 'FAVOURITE'
+            AND start_ms < :end AND end_ms > :start
+        ORDER BY id
+        """,
+    )
+    suspend fun favourites(sleepId: Long, start: Duration, end: Duration): List<AnnotationEntity>
+
+    /** Removes the favourite marks that overlap a stretch. */
+    @Query("DELETE FROM annotation WHERE sleep_id = :sleepId AND type = 'FAVOURITE' AND start_ms < :end AND end_ms > :start")
+    suspend fun deleteFavourites(sleepId: Long, start: Duration, end: Duration)
 
     /** Removes the hidden marks that overlap a stretch, which shows the events in it again. */
     @Query("DELETE FROM annotation WHERE sleep_id = :sleepId AND type = 'HIDDEN' AND start_ms < :end AND end_ms > :start")
@@ -300,6 +343,18 @@ private const val IS_HIDDEN = """
         AND mark.start_ms < event.end_ms AND mark.end_ms > event.start_ms)
 """
 
+/** Whether the event `event` is a favourite: a favourite mark overlaps it, like a hidden mark. */
+private const val IS_FAVOURITE = """
+    EXISTS (SELECT 1 FROM annotation AS mark WHERE mark.sleep_id = event.sleep_id AND mark.type = 'FAVOURITE'
+        AND mark.start_ms < event.end_ms AND mark.end_ms > event.start_ms)
+"""
+
+/** The name of the event `event`'s latest favourite mark; null without one. */
+private const val FAVOURITE_NAME = """
+    (SELECT mark.text FROM annotation AS mark WHERE mark.sleep_id = event.sleep_id AND mark.type = 'FAVOURITE'
+        AND mark.start_ms < event.end_ms AND mark.end_ms > event.start_ms ORDER BY mark.id DESC LIMIT 1)
+"""
+
 /** An event of the sleep [sleepId]. */
 data class SleepEventOf(@ColumnInfo(name = "sleep_id") val sleepId: Long, @Embedded val event: SleepEvent)
 
@@ -318,6 +373,8 @@ private const val SUMMARY = """
         (SELECT COALESCE(SUM(event.end_ms - event.start_ms), 0) FROM annotation AS event
             WHERE event.sleep_id = sleep.id AND event.type = 'EVENT' AND NOT $IS_HIDDEN) AS event_ms,
         EXISTS (SELECT 1 FROM annotation WHERE annotation.sleep_id = sleep.id AND type = 'SENSITIVITY'
-            AND producer = :producer AND producer_version = :version) AS events_found
+            AND producer = :producer AND producer_version = :version) AS events_found,
+        (SELECT COUNT(*) FROM annotation AS event WHERE event.sleep_id = sleep.id AND event.type = 'EVENT'
+            AND $IS_FAVOURITE AND NOT $IS_HIDDEN) AS favourite_count
     FROM sleep
 """

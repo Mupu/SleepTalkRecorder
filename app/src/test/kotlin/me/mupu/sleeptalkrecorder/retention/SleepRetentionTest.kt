@@ -86,4 +86,11 @@ class SleepRetentionTest {
 
         assertEquals(listOf(1L), expiredIds(Duration.ofDays(7), "2026-11-09", old, recent))
     }
+
+    @Test
+    fun `a sleep with favourites is never deleted`() {
+        val kept = sleep(1, "2026-10-01T23:00", "2026-10-02T07:00").copy(favouriteCount = 1)
+
+        assertEquals(emptyList<Long>(), expiredIds(Duration.ofDays(1), "2026-11-09", kept))
+    }
 }

@@ -375,4 +375,18 @@
     <string name="setup_updates_install">Unbekannte Apps installieren</string>
     <string name="setup_updates_install_why">Erlaube es für %1$s, dann installieren sich Updates, ohne jedes Mal zu fragen. Ohne fragt Android vor jedem Update.</string>
     <string name="setup_updates_never_recording">Ein Update wird nie während einer Aufnahme installiert.</string>
+
+    <!-- Favourites -->
+    <string name="filter_favourites">Favoriten</string>
+    <string name="favourite">Favorit</string>
+    <string name="add_favourite">Zu Favoriten</string>
+    <string name="remove_favourite">Aus Favoriten entfernen</string>
+    <string name="favourite_removed">Aus Favoriten entfernt</string>
+    <string name="name_event_menu">Benennen</string>
+    <string name="name_event">Ereignis benennen</string>
+    <string name="name_event_hint">Benennen macht es zum Favoriten. Leer lassen für keinen Namen.</string>
+    <string name="no_favourites">Keine Favoriten in diesem Schlaf.</string>
+    <string name="library_tab_sleeps">Schlafzeiten</string>
+    <string name="library_tab_favourites">Favoriten</string>
+    <string name="library_no_favourites">Noch keine Favoriten. Füge im ⋮-Menü eines Ereignisses eines hinzu.</string>
 </resources>

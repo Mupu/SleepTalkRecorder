@@ -108,6 +108,13 @@ enum class AnnotationType {
      * later search finds it with slightly different bounds.
      */
     HIDDEN,
+
+    /**
+     * The user keeps the events over the stretch as favourites, with the name they gave them
+     * ([AnnotationEntity.text], null without one). Like a hidden mark, it counts for every event
+     * that overlaps it; an event is never a favourite and hidden at once.
+     */
+    FAVOURITE,
 }
 
 /** Where an annotation comes from. */
@@ -204,6 +211,8 @@ data class SleepSummary(
     @ColumnInfo(name = "event_ms") val eventMillis: Long,
     /** Whether its events have been found, which happens right after the stop. */
     @ColumnInfo(name = "events_found") val eventsFound: Boolean,
+    /** How many of its events the user keeps as favourites; automatic deletion keeps such a sleep. */
+    @ColumnInfo(name = "favourite_count") val favouriteCount: Int = 0,
 ) {
     /** Whether the sleep is still being recorded. */
     val isRunning: Boolean get() = endedAt == null
@@ -231,6 +240,10 @@ data class SleepEvent(
     @ColumnInfo(name = "transcript_producer") val transcriptProducer: String? = null,
     /** Whether the user hid the event: a [AnnotationType.HIDDEN] annotation overlaps its stretch. */
     val hidden: Boolean = false,
+    /** Whether the user keeps it as a favourite: a [AnnotationType.FAVOURITE] annotation overlaps it. */
+    val favourite: Boolean = false,
+    /** The name the user gave the favourite; null without one or when it is no favourite. */
+    val name: String? = null,
 ) {
     /** Whether the user corrected the transcript or said the event is not speech. */
     val corrected: Boolean get() = transcriptOrigin == AnnotationOrigin.USER

@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
@@ -47,6 +48,8 @@ class SleepViewModel(
     settings: SettingsStore,
     private val player: SleepPlayer,
     private val transcriptions: Transcriptions,
+    /** The event to play once the sleep is loaded, as when a favourite is opened; null for none. */
+    playEventId: Long? = null,
 ) : ViewModel() {
 
     private val timeline = MutableStateFlow<SleepTimeline?>(null)
@@ -120,6 +123,15 @@ class SleepViewModel(
 
     init {
         viewModelScope.launch { cutPlan.collect(player::setCutPlan) }
+
+        // A favourite opened from the library plays on its own once the audio and the events are read.
+        if (playEventId != null) {
+            viewModelScope.launch {
+                timeline.first { it != null }
+                val event = sleepAndEvents.first { (_, events, _) -> events.any { it.id == playEventId } }.second.first { it.id == playEventId }
+                togglePlayEvent(event)
+            }
+        }
     }
 
     /** Where speech recognition stands for the sleep; it starts once the events are found. */
@@ -305,6 +317,27 @@ class SleepViewModel(
             repository.setHidden(sleepId, event, hidden)
             if (hidden) hiddenChannel.send(event)
         }
+    }
+
+    private val favouriteRemovedChannel = Channel<FavouriteRemoved>(Channel.BUFFERED)
+
+    /** Each event the user removed from the favourites, once it is stored, so that can be undone. */
+    val favouriteRemoved: Flow<FavouriteRemoved> = favouriteRemovedChannel.receiveAsFlow()
+
+    /**
+     * Keeps [event] as a favourite ([favourite] true) with [name], which shows it again if it was
+     * hidden, or removes it from the favourites, reported once through [favouriteRemoved].
+     */
+    fun setFavourite(event: SleepEvent, favourite: Boolean, name: String? = event.name) {
+        viewModelScope.launch {
+            val previous = repository.setFavourite(sleepId, event, favourite, name)
+            if (!favourite) favouriteRemovedChannel.send(FavouriteRemoved(event, previous))
+        }
+    }
+
+    /** Makes the event of [change] a favourite again, with the name it had. */
+    fun undoFavouriteRemoval(change: FavouriteRemoved) {
+        viewModelScope.launch { repository.restoreFavourites(sleepId, change.event, change.previous) }
     }
 
     private val speechMarkedChannel = Channel<SpeechMarked>(Channel.BUFFERED)
