@@ -164,4 +164,20 @@ class EventTranscriptsTest {
         assertEquals(listOf(listOf(2L), listOf(1L)), stored.map { sleep -> sleep.recordings.map { it.sleepId } })
         assertEquals(listOf("hello", null), stored.map { it.events.single().transcript })
     }
+
+    @Test
+    fun `marking as speech after not speech needs no mark of the user's own when recognition found speech`() {
+        val event = event(1, 1_000, 2_000)
+        val transcripts = listOf(transcript(1_000, 2_000, EventKinds.SPEECH, "hello"), notSpeech(1_000, 2_000))
+
+        assertEquals(false, needsUserSpeechMark(event, transcripts, kinds))
+    }
+
+    @Test
+    fun `marking a plain event as speech needs a mark of the user's own`() {
+        val transcripts = listOf(transcript(1_000, 2_000, EventKinds.EVENT, null))
+
+        assertEquals(true, needsUserSpeechMark(event(1, 1_000, 2_000), transcripts, kinds))
+        assertEquals(true, needsUserSpeechMark(event(2, 5_000, 6_000), emptyList(), kinds))
+    }
 }

@@ -1,11 +1,9 @@
 package me.mupu.sleeptalkrecorder.ui.sleep
 
-import androidx.annotation.DrawableRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -196,8 +194,8 @@ internal fun EventFilterChips(
 /**
  * What speech recognition found in a speech event: for a murmur that no words were recognised;
  * else its transcript, one line until tapped, then whole, marked as automatic or as corrected by
- * the user, with buttons to correct it or to say it is not speech. After a [modelChange] an
- * automatic transcript also offers the re-run with the active model.
+ * the user; correcting it and saying it is not speech are in the event's menu. After a
+ * [modelChange] an automatic transcript also offers the re-run with the active model.
  */
 @Composable
 internal fun TranscriptLine(
@@ -205,8 +203,6 @@ internal fun TranscriptLine(
     expanded: Boolean,
     onToggle: () -> Unit,
     modelChange: ModelChange?,
-    onCorrect: () -> Unit,
-    onNotSpeech: () -> Unit,
     onRerun: () -> Unit,
 ) {
     if (!event.isSpeech) return
@@ -250,11 +246,6 @@ internal fun TranscriptLine(
         )
     }
     if (expanded) {
-        // A row as long as both fit; in a narrow column or a long language the second goes below.
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            SmallTextButton(R.drawable.ic_edit, stringResource(R.string.correct_text), onCorrect)
-            SmallTextButton(R.drawable.ic_voice_over_off, stringResource(R.string.not_speech), onNotSpeech)
-        }
         if (modelChange != null && !event.corrected) {
             FilledTonalButton(onClick = onRerun, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
                 Icon(painterResource(R.drawable.ic_subtitles), contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
@@ -262,16 +253,6 @@ internal fun TranscriptLine(
                 Text(stringResource(R.string.rerun_with, modelChange.active.displayName))
             }
         }
-    }
-}
-
-/** A text button with an icon, as the actions of an open transcript use them. */
-@Composable
-private fun SmallTextButton(@DrawableRes icon: Int, label: String, onClick: () -> Unit) {
-    TextButton(onClick = onClick, contentPadding = ButtonDefaults.TextButtonWithIconContentPadding) {
-        Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-        Text(label, maxLines = 1)
     }
 }
 

@@ -3,6 +3,17 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.3.0] - 2026-11-10
+
+### Added
+
+- Mark any event as speech in its ⋮ menu, for speech or a murmur that recognition missed; you can then write its words with “Correct text”. On an event you marked as not speech, the same item brings back what recognition found.
+
+### Changed
+
+- The actions of an event are only in its ⋮ menu; an open transcript no longer repeats them as buttons.
+- “Full” and “Cut” no longer show icons, so their labels fit next to the speed button.
+
 ## [0.2.2] - 2026-11-10
 
 ### Fixed

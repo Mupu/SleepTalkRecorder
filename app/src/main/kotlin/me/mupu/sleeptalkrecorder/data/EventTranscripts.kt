@@ -40,6 +40,16 @@ fun withTranscripts(
     }
 }
 
+/**
+ * Whether marking [event] as speech by hand needs a transcript of the user's own: not when the
+ * transcripts of analyses among [transcripts] already make it a speech event, because their words
+ * show again once the user's own transcripts over it are gone.
+ */
+fun needsUserSpeechMark(event: SleepEvent, transcripts: List<AnnotationEntity>, kinds: Map<String, EventKindEntity>): Boolean {
+    val analyses = transcripts.filter { it.origin != AnnotationOrigin.USER }
+    return !withTranscripts(listOf(event.copy(kindId = EventKinds.EVENT)), analyses, kinds).single().isSpeech
+}
+
 /** The order in which the transcripts of analyses win: a server's before the phone's. */
 private val AnnotationOrigin.rank: Int
     get() = when (this) {

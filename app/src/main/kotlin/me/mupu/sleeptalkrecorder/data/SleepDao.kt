@@ -193,6 +193,16 @@ interface SleepDao {
     )
     suspend fun userTranscripts(sleepId: Long, start: Duration, end: Duration): List<AnnotationEntity>
 
+    /** Every transcript that overlaps a stretch, the user's and those of analyses. */
+    @Query(
+        """
+        SELECT * FROM annotation WHERE sleep_id = :sleepId AND type = 'TRANSCRIPT'
+            AND start_ms < :end AND end_ms > :start
+        ORDER BY id
+        """,
+    )
+    suspend fun transcripts(sleepId: Long, start: Duration, end: Duration): List<AnnotationEntity>
+
     /** How many of a sleep's events each model gave a transcript of the phone, by the model's id. */
     @Query(
         """

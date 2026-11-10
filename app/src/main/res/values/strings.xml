@@ -116,10 +116,11 @@
     <string name="transcript_corrected">corrected by you</string>
     <string name="correct_text">Correct text</string>
     <string name="correct_text_hint">Kept even when speech recognition runs again. Leave it empty for a murmur without words.</string>
-    <string name="not_speech">Not speech</string>
     <!-- The event menu entry that turns a speech event into a plain event. -->
     <string name="not_speech_plain_event">Not speech – plain event</string>
     <string name="marked_not_speech">Marked as a plain event</string>
+    <string name="mark_speech">Mark as speech</string>
+    <string name="marked_speech">Marked as speech</string>
     <!-- %1$s is the name of the model that made the transcripts, %2$s that of the active model. -->
     <string name="model_change_hint">Transcripts by %1$s. %2$s is now active in the settings.</string>
     <!-- %1$s is the name of the active model. -->

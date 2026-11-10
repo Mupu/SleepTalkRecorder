@@ -3,6 +3,17 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.3.0] - 2026-11-10
+
+### Hinzugefügt
+
+- Markiere im ⋮-Menü jedes Ereignis als Sprache, wenn die Erkennung Sprache oder ein Murmeln übersehen hat; mit „Text korrigieren“ kannst du dann die Wörter eintragen. Bei einem Ereignis, das du als keine Sprache markiert hast, holt derselbe Punkt zurück, was die Erkennung gefunden hatte.
+
+### Geändert
+
+- Die Aktionen eines Ereignisses gibt es nur noch in seinem ⋮-Menü; ein aufgeklapptes Transkript wiederholt sie nicht mehr als Knöpfe.
+- „Vollständig“ und „Nur Ereignisse“ zeigen keine Symbole mehr, damit die Beschriftung neben dem Tempo-Knopf Platz hat.
+
 ## [0.2.2] - 2026-11-10
 
 ### Behoben

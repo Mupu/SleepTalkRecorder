@@ -127,13 +127,13 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
         }
     }
     LaunchedEffect(viewModel) {
-        viewModel.notSpeech.collect { change ->
+        viewModel.speechMarked.collect { change ->
             val result = snackbars.showSnackbar(
-                resources.getString(R.string.marked_not_speech),
+                resources.getString(if (change.speech) R.string.marked_speech else R.string.marked_not_speech),
                 actionLabel = resources.getString(R.string.undo),
                 duration = SnackbarDuration.Long,
             )
-            if (result == SnackbarResult.ActionPerformed) viewModel.undoNotSpeech(change)
+            if (result == SnackbarResult.ActionPerformed) viewModel.undoSpeechMark(change)
         }
     }
     LaunchedEffect(viewModel) {
@@ -255,7 +255,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     onSensitivity = if (state.sensitivityAvailable) viewModel::openSensitivity else null,
                     modelChange = modelChange,
                     onCorrect = { correcting = it },
-                    onNotSpeech = viewModel::markNotSpeech,
+                    onMarkSpeech = viewModel::markSpeech,
                     onRerun = viewModel::runSpeechRecognition,
                 )
                 correcting?.let { event ->
@@ -388,7 +388,10 @@ private fun PlayerPosition(timeline: SleepTimeline, position: () -> Duration, mo
     }
 }
 
-/** Full or cut playback, as two connected buttons. */
+/**
+ * Full or cut playback, as two connected buttons. The fill alone marks the choice: the row shares
+ * its width with the speed button, which leaves no room for a check mark beside "Nur Ereignisse".
+ */
 @Composable
 private fun PlaybackMode(cut: Boolean, enabled: Boolean, onCutChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     // Equally high buttons, also when one label takes two lines.
@@ -399,6 +402,7 @@ private fun PlaybackMode(cut: Boolean, enabled: Boolean, onCutChange: (Boolean) 
             shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
             enabled = enabled,
             modifier = Modifier.fillMaxHeight(),
+            icon = {},
         ) {
             SegmentLabel(stringResource(R.string.playback_full))
         }
@@ -408,11 +412,7 @@ private fun PlaybackMode(cut: Boolean, enabled: Boolean, onCutChange: (Boolean) 
             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
             enabled = enabled,
             modifier = Modifier.fillMaxHeight(),
-            icon = {
-                SegmentedButtonDefaults.Icon(active = cut) {
-                    Icon(painterResource(R.drawable.ic_content_cut), contentDescription = null, modifier = Modifier.size(18.dp))
-                }
-            },
+            icon = {},
         ) {
             SegmentLabel(stringResource(R.string.playback_cut))
         }
@@ -439,7 +439,7 @@ private fun EventList(
     onSensitivity: ((SleepEvent) -> Unit)?,
     modelChange: ModelChange?,
     onCorrect: (SleepEvent) -> Unit,
-    onNotSpeech: (SleepEvent) -> Unit,
+    onMarkSpeech: (SleepEvent, Boolean) -> Unit,
     onRerun: () -> Unit,
 ) {
     val listState = rememberLazyListState()
@@ -473,7 +473,7 @@ private fun EventList(
                 onSensitivity = onSensitivity,
                 modelChange = modelChange,
                 onCorrect = onCorrect,
-                onNotSpeech = onNotSpeech,
+                onMarkSpeech = onMarkSpeech,
                 onRerun = onRerun,
             )
         }
@@ -511,7 +511,7 @@ private fun EventRow(
     onSensitivity: ((SleepEvent) -> Unit)?,
     modelChange: ModelChange?,
     onCorrect: (SleepEvent) -> Unit,
-    onNotSpeech: (SleepEvent) -> Unit,
+    onMarkSpeech: (SleepEvent, Boolean) -> Unit,
     onRerun: () -> Unit,
 ) {
     val clock = LocalClockFormatter.current
@@ -560,8 +560,6 @@ private fun EventRow(
                 transcriptExpanded,
                 onToggleTranscript,
                 modelChange,
-                onCorrect = { onCorrect(event) },
-                onNotSpeech = { onNotSpeech(event) },
                 onRerun = onRerun,
             )
         }
@@ -583,7 +581,8 @@ private fun EventRow(
                 MenuEntry(R.string.hide_event, R.drawable.ic_visibility_off) { onHide(event, true) }.takeUnless { event.hidden },
                 onSensitivity?.let { MenuEntry(R.string.sensitivity_here, R.drawable.ic_tune) { it(event) } },
                 MenuEntry(R.string.correct_text, R.drawable.ic_edit) { onCorrect(event) }.takeIf { event.isSpeech },
-                MenuEntry(R.string.not_speech_plain_event, R.drawable.ic_voice_over_off) { onNotSpeech(event) }.takeIf { event.isSpeech },
+                MenuEntry(R.string.not_speech_plain_event, R.drawable.ic_voice_over_off) { onMarkSpeech(event, false) }.takeIf { event.isSpeech },
+                MenuEntry(R.string.mark_speech, R.drawable.ic_record_voice) { onMarkSpeech(event, true) }.takeUnless { event.isSpeech },
             ),
         )
     }

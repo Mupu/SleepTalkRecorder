@@ -79,5 +79,8 @@ data class SensitivityUiState(
  */
 data class SensitivityApplied(val wholeSleep: Boolean, val events: Int)
 
-/** The user said [event] is not speech; [previous] are the user's transcripts over it before, which undo restores. */
-class NotSpeech(val event: SleepEvent, val previous: List<AnnotationEntity>)
+/**
+ * The user marked [event] as speech ([speech] true) or as not speech; [previous] are the user's
+ * transcripts over it before, which undo restores.
+ */
+class SpeechMarked(val event: SleepEvent, val speech: Boolean, val previous: List<AnnotationEntity>)

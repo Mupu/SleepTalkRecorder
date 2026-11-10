@@ -307,10 +307,10 @@ class SleepViewModel(
         }
     }
 
-    private val notSpeechChannel = Channel<NotSpeech>(Channel.BUFFERED)
+    private val speechMarkedChannel = Channel<SpeechMarked>(Channel.BUFFERED)
 
-    /** Each event the user said is not speech, once it is stored, so that can be undone. */
-    val notSpeech: Flow<NotSpeech> = notSpeechChannel.receiveAsFlow()
+    /** Each event the user marked as speech or as not speech, once it is stored, so that can be undone. */
+    val speechMarked: Flow<SpeechMarked> = speechMarkedChannel.receiveAsFlow()
 
     /**
      * Replaces the words of speech event [event] with the user's [text]; blank text leaves a
@@ -320,16 +320,23 @@ class SleepViewModel(
         viewModelScope.launch { repository.setUserTranscript(sleepId, event, EventKinds.SPEECH, text.trim().ifBlank { null }) }
     }
 
-    /** Turns speech event [event] into a plain event; reported once through [notSpeech]. */
-    fun markNotSpeech(event: SleepEvent) {
+    /**
+     * Makes [event] a speech event ([speech] true), with the recognised words if speech recognition
+     * found any, or turns it into a plain event; reported once through [speechMarked].
+     */
+    fun markSpeech(event: SleepEvent, speech: Boolean) {
         viewModelScope.launch {
-            val previous = repository.setUserTranscript(sleepId, event, EventKinds.EVENT, null)
-            notSpeechChannel.send(NotSpeech(event, previous))
+            val previous = if (speech) {
+                repository.markSpeech(sleepId, event)
+            } else {
+                repository.setUserTranscript(sleepId, event, EventKinds.EVENT, null)
+            }
+            speechMarkedChannel.send(SpeechMarked(event, speech, previous))
         }
     }
 
-    /** Makes the event of [change] what it was before the user said it is not speech. */
-    fun undoNotSpeech(change: NotSpeech) {
+    /** Makes the event of [change] what it was before the user marked it. */
+    fun undoSpeechMark(change: SpeechMarked) {
         viewModelScope.launch { repository.restoreUserTranscripts(sleepId, change.event, change.previous) }
     }
 

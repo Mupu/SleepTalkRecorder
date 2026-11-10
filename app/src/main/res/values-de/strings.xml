@@ -97,9 +97,10 @@
     <string name="transcript_corrected">von dir korrigiert</string>
     <string name="correct_text">Text korrigieren</string>
     <string name="correct_text_hint">Bleibt erhalten, auch wenn die Sprache neu erkannt wird. Leer lassen für ein Murmeln ohne Wörter.</string>
-    <string name="not_speech">Keine Sprache</string>
     <string name="not_speech_plain_event">Keine Sprache – normales Ereignis</string>
     <string name="marked_not_speech">Als normales Ereignis markiert</string>
+    <string name="mark_speech">Als Sprache markieren</string>
+    <string name="marked_speech">Als Sprache markiert</string>
     <string name="model_change_hint">Transkripte von %1$s. In den Einstellungen ist jetzt %2$s aktiv.</string>
     <string name="rerun_with">Mit %1$s neu erkennen</string>
     <string name="more_options">Weitere Optionen</string>

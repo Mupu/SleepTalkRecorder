@@ -277,7 +277,37 @@ class SleepRepository(
             replaced
         }
 
-    /** Undoes [setUserTranscript] on [event]: its user transcripts become the [previous] ones again. */
+    /**
+     * Makes [event] a speech event by hand. The user's earlier transcripts over it go, so if speech
+     * recognition found speech there its words show again; otherwise a transcript of the user's
+     * own makes it a speech event without words, a murmur whose words they can write later.
+     *
+     * Returns the user's transcripts it replaced, which [restoreUserTranscripts] puts back.
+     */
+    suspend fun markSpeech(sleepId: Long, event: SleepEvent): List<AnnotationEntity> =
+        database.withTransaction {
+            val replaced = dao.userTranscripts(sleepId, event.start, event.end)
+            dao.deleteAnnotations(replaced.map { it.id })
+            val kinds = dao.allKinds().associateBy { it.id }
+            if (needsUserSpeechMark(event, dao.transcripts(sleepId, event.start, event.end), kinds)) {
+                dao.insertAnnotations(
+                    listOf(
+                        AnnotationEntity(
+                            sleepId = sleepId,
+                            type = AnnotationType.TRANSCRIPT,
+                            start = event.start,
+                            end = event.end,
+                            kindId = EventKinds.SPEECH,
+                            text = null,
+                            origin = AnnotationOrigin.USER,
+                        ),
+                    ),
+                )
+            }
+            replaced
+        }
+
+    /** Undoes [setUserTranscript] or [markSpeech] on [event]: its user transcripts become the [previous] ones again. */
     suspend fun restoreUserTranscripts(sleepId: Long, event: SleepEvent, previous: List<AnnotationEntity>) {
         database.withTransaction {
             dao.deleteAnnotations(dao.userTranscripts(sleepId, event.start, event.end).map { it.id })
