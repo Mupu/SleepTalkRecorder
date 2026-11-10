@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.2.2] - 2026-11-10
+
+### Behoben
+
+- Im Empfindlichkeits-Fenster zerfällt „Übernehmen“ nicht mehr: Passen die Knöpfe nicht in eine Zeile, rutschen „Zurücksetzen“ und „Übernehmen“ unter „Anhören“. Die Legende bricht nur zwischen ganzen Einträgen um, und die Uhrzeiten unter dem Diagramm wiederholen sich nicht mehr und überlappen nicht mehr.
+
 ## [0.2.1] - 2026-11-10
 
 ### Behoben

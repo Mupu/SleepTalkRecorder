@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.2.2] - 2026-11-10
+
+### Fixed
+
+- In the sensitivity sheet, “Apply” no longer breaks apart: when the buttons do not fit in one line, “Reset” and “Apply” move below “Listen”. The legend wraps by whole items, and the time labels below the chart no longer repeat the same time or overlap.
+
 ## [0.2.1] - 2026-11-10
 
 ### Fixed

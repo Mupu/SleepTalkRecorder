@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -139,17 +140,24 @@ fun SensitivitySheet(
                 modifier = Modifier.padding(top = 8.dp),
             )
 
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 16.dp)) {
+            // Listening on the left, resetting and applying on the right; when the three do not fit in
+            // one line (long labels, a large font), the two on the right move to a line of their own.
+            FlowRow(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 16.dp),
+            ) {
                 if (event != null) {
                     OutlinedButton(onClick = onListen) {
                         Icon(painterResource(R.drawable.ic_play), contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.listen))
+                        Text(stringResource(R.string.listen), maxLines = 1)
                     }
                 }
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = onReset, enabled = !state.applying) { Text(stringResource(R.string.reset)) }
-                Button(onClick = onApply, enabled = state.changed && !state.applying) { Text(stringResource(R.string.apply)) }
+                Row(horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    TextButton(onClick = onReset, enabled = !state.applying) { Text(stringResource(R.string.reset), maxLines = 1) }
+                    Button(onClick = onApply, enabled = state.changed && !state.applying) { Text(stringResource(R.string.apply), maxLines = 1) }
+                }
             }
         }
     }
@@ -223,11 +231,20 @@ private fun SensitivityChartView(state: SensitivityUiState, position: () -> Dura
             drawRect(colors.onSurface, topLeft = Offset(playhead * size.width - 1.dp.toPx(), 0f), size = Size(2.dp.toPx(), top + plot.height))
         }
 
+        // Across a few seconds, neighbouring labels can fall in the same second, and a large font can
+        // make them overlap: each time is named once, and a label that would touch the one before is left out.
+        var previous: String? = null
+        var previousRight = Float.NEGATIVE_INFINITY
         for (tick in 0..TICKS) {
             val share = tick / TICKS.toFloat()
-            val text = textMeasurer.measure(clockAt(editor.positionAt(share)), labelStyle)
+            val label = clockAt(editor.positionAt(share))
+            if (label == previous) continue
+            val text = textMeasurer.measure(label, labelStyle)
             val inset = 6.dp.toPx()
             val left = (share * size.width - text.size.width / 2).coerceIn(inset, size.width - text.size.width - inset)
+            if (left < previousRight + inset) continue
+            previous = label
+            previousRight = left + text.size.width
             drawText(text, topLeft = Offset(left, size.height - ticksHeight + 3.dp.toPx()))
         }
     }
@@ -237,7 +254,8 @@ private fun SensitivityChartView(state: SensitivityUiState, position: () -> Dura
 @Composable
 private fun Legend() {
     val colors = MaterialTheme.colorScheme
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(top = 6.dp)) {
+    // Whole items move to a second line when they do not fit side by side.
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(top = 6.dp)) {
         LegendItem(colors.primary, stringResource(R.string.sensitivity_found), height = 10.dp)
         LegendItem(colors.onSurfaceVariant, stringResource(R.string.baseline), height = 2.dp)
         LegendItem(colors.error, stringResource(R.string.sensitivity_line), height = 2.dp)
@@ -249,7 +267,7 @@ private fun LegendItem(color: Color, label: String, height: Dp) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(width = 14.dp, height = height).background(color, RoundedCornerShape(1.dp)))
         Spacer(Modifier.width(6.dp))
-        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
     }
 }
 
