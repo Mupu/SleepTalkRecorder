@@ -223,7 +223,7 @@ and its name is that of the latest such mark. Hiding an event removes its favour
 making it a favourite removes its hidden marks, so an event is never both. Automatic deletion
 keeps a sleep that has favourites (`SleepSummary.favouriteCount`). The library's second tab lists
 the favourites of all sleeps under their sleep, newest first (`SleepRepository.favourites`), and
-opening one opens its sleep and plays the event on its own.
+opening one opens its sleep at the event, paused, while its play button also plays the event on its own.
 
 The schema is exported to `app/schemas/`. Data derived from a sleep or a recording goes into
 tables of its own that reference it by foreign key, so the `sleep` and `recording` tables stay

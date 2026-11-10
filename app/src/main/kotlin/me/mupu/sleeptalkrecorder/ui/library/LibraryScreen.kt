@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -72,7 +73,7 @@ import java.time.ZoneId
 /**
  * Every sleep, grouped by the day it is named after, with the running sleep on top; a long press
  * on a finished sleep deletes it after a confirmation. The second tab lists the favourites of all
- * sleeps under the sleep each belongs to; tapping one plays it in its sleep.
+ * sleeps under the sleep each belongs to; tapping one opens its sleep there, its play button plays it.
  */
 @Composable
 fun LibraryScreen(
@@ -80,7 +81,7 @@ fun LibraryScreen(
     onBack: () -> Unit,
     onOpenRunning: () -> Unit,
     onOpenSleep: (Long) -> Unit,
-    onOpenFavourite: (sleepId: Long, eventId: Long) -> Unit,
+    onOpenFavourite: (sleepId: Long, eventId: Long, play: Boolean) -> Unit,
     onOpenStats: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -207,7 +208,7 @@ private fun SleepList(state: LibraryUiState, onOpenRunning: () -> Unit, onOpenSl
  * else its kind, with the clock time it began and its length.
  */
 @Composable
-private fun FavouriteList(state: LibraryUiState, onOpenFavourite: (sleepId: Long, eventId: Long) -> Unit) {
+private fun FavouriteList(state: LibraryUiState, onOpenFavourite: (sleepId: Long, eventId: Long, play: Boolean) -> Unit) {
     val resources = LocalResources.current
     val clock = LocalClockFormatter.current
     val zone = ZoneId.systemDefault()
@@ -242,8 +243,12 @@ private fun FavouriteList(state: LibraryUiState, onOpenFavourite: (sleepId: Long
                             Text(details)
                         }
                     },
-                    trailingContent = { Icon(painterResource(R.drawable.ic_play), contentDescription = stringResource(R.string.play_event)) },
-                    modifier = Modifier.clickable { onOpenFavourite(group.sleep.id, event.id) },
+                    trailingContent = {
+                        IconButton(onClick = { onOpenFavourite(group.sleep.id, event.id, true) }) {
+                            Icon(painterResource(R.drawable.ic_play), contentDescription = stringResource(R.string.play_event))
+                        }
+                    },
+                    modifier = Modifier.clickable { onOpenFavourite(group.sleep.id, event.id, false) },
                 )
             }
         }

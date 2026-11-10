@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.3.1] - 2026-11-10
+
+### Changed
+
+- Tapping a favourite in the library opens its sleep at that event without playing it; its play button opens it and plays it.
+
 ## [0.3.0] - 2026-11-10
 
 ### Added

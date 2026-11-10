@@ -48,8 +48,10 @@ class SleepViewModel(
     settings: SettingsStore,
     private val player: SleepPlayer,
     private val transcriptions: Transcriptions,
-    /** The event to play once the sleep is loaded, as when a favourite is opened; null for none. */
-    playEventId: Long? = null,
+    /** The event to jump to once the sleep is loaded, as when a favourite is opened; null for none. */
+    openEventId: Long? = null,
+    /** Whether [openEventId] then plays on its own; otherwise playback stays paused there. */
+    playOpenEvent: Boolean = false,
 ) : ViewModel() {
 
     private val timeline = MutableStateFlow<SleepTimeline?>(null)
@@ -124,12 +126,13 @@ class SleepViewModel(
     init {
         viewModelScope.launch { cutPlan.collect(player::setCutPlan) }
 
-        // A favourite opened from the library plays on its own once the audio and the events are read.
-        if (playEventId != null) {
+        // A favourite opened from the library: once the audio and the events are read, playback jumps
+        // to it, and plays it on its own only when its play button opened it.
+        if (openEventId != null) {
             viewModelScope.launch {
                 timeline.first { it != null }
-                val event = sleepAndEvents.first { (_, events, _) -> events.any { it.id == playEventId } }.second.first { it.id == playEventId }
-                togglePlayEvent(event)
+                val event = sleepAndEvents.first { (_, events, _) -> events.any { it.id == openEventId } }.second.first { it.id == openEventId }
+                if (playOpenEvent) togglePlayEvent(event) else seekToEvent(event)
             }
         }
     }

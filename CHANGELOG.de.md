@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.3.1] - 2026-11-10
+
+### Geändert
+
+- Ein Tipp auf einen Favoriten in der Bibliothek öffnet seinen Schlaf an dieser Stelle, ohne abzuspielen; sein Play-Knopf öffnet ihn und spielt ihn ab.
+
 ## [0.3.0] - 2026-11-10
 
 ### Hinzugefügt
