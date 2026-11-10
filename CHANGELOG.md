@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.5.1] - 2026-11-10
+
+### Fixed
+
+- When “Check now” in the settings finds a newer version, the settings offer its download and “Update” right there, with the same progress as home, instead of only on home.
+
 ## [0.5.0] - 2026-11-10
 
 ### Added

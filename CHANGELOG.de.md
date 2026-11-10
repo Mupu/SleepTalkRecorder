@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.5.1] - 2026-11-10
+
+### Behoben
+
+- Findet „Jetzt suchen“ in den Einstellungen eine neuere Version, bieten die Einstellungen ihr Laden und „Aktualisieren“ direkt dort an, mit demselben Fortschritt wie die Startseite, statt nur auf der Startseite.
+
 ## [0.5.0] - 2026-11-10
 
 ### Hinzugefügt

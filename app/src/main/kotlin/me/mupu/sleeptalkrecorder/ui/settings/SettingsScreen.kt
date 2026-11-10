@@ -188,6 +188,8 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenWhats
                     state = current,
                     onCheckAutomaticallyChange = { viewModel.set(Settings.checkForUpdates, it) },
                     onCheckNow = viewModel::checkForUpdates,
+                    onDownload = viewModel::downloadUpdate,
+                    onInstall = viewModel::installUpdate,
                 )
             }
             LinkSetting(

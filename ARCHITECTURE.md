@@ -101,15 +101,16 @@ ask only a test source given at build time and otherwise do not update themselve
 ([README](README.md#testing-the-updater)).
 
 The `Updater` downloads the APK into the cache on its own only on an unmetered network; on mobile
-data home offers the download with its size. A download continues where it stopped, and the file
-gets its final name only once its SHA-256 matches the published checksum and the package manager
-reads it as this app, with a higher version code, signed with exactly the installed app's
-certificates; anything else is deleted and shown as refused. A verified file is offered again on
+data home's update card and the updates section of the settings offer the download with its
+size. A download continues where it stopped, and the file gets its final name only once its
+SHA-256 matches the published checksum and the package manager reads it as this app, with a
+higher version code, signed with exactly the installed app's certificates; anything else is deleted and shown as refused. A verified file is offered again on
 every later start, before and whatever the check finds, until it is installed.
 
 Installing kills all of the app's processes, so it never happens during a recording (`UpdatePolicy`),
-and home shows nothing about updates while one runs. Home's Update button installs at once
-otherwise; on its own the app installs only when it has been
+and home shows nothing about updates while one runs. Once an update is found, the settings show
+the same steps and buttons as home's card below its status, in place of "Check now". The Update
+button installs at once otherwise; on its own the app installs only when it has been
 off the screen for ten seconds and nothing records, plays or recognises speech. The install is a
 `PackageInstaller` session that asks for no user action: with "Install unknown apps" granted (a
 setup step), `UPDATE_PACKAGES_WITHOUT_USER_ACTION` declared and the app updating itself, Android

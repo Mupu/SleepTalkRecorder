@@ -17,6 +17,7 @@ import me.mupu.sleeptalkrecorder.settings.TimeFormat
 import me.mupu.sleeptalkrecorder.settings.TranscriptLanguage
 import me.mupu.sleeptalkrecorder.settings.TranscriptionMode
 import me.mupu.sleeptalkrecorder.time.SleepWindows
+import me.mupu.sleeptalkrecorder.ui.components.action
 import me.mupu.sleeptalkrecorder.update.UpdateState
 import me.mupu.sleeptalkrecorder.update.Updater
 import java.time.Duration
@@ -55,10 +56,17 @@ data class UpdatesUiState(
     val checkAutomatically: Boolean,
     val update: UpdateState,
 ) {
-    /** Whether "Check now" can start a check: not while one runs, downloads or installs. */
-    val canCheck: Boolean
-        get() = update != UpdateState.Off && update != UpdateState.Checking &&
+    /**
+     * Whether the row offers "Check now": not while a found update offers its own button, as home's
+     * update card does, or downloads or installs.
+     */
+    val offersCheck: Boolean
+        get() = update != UpdateState.Off && update.action == null &&
             update !is UpdateState.Downloading && update !is UpdateState.Installing
+
+    /** Whether "Check now" can start a check: not while one runs. */
+    val canCheck: Boolean
+        get() = offersCheck && update != UpdateState.Checking
 }
 
 /** State and actions of the settings screen. */
@@ -109,6 +117,10 @@ class SettingsViewModel(
 
     /** Looks for an update now. */
     fun checkForUpdates() = updater.check()
+
+    fun downloadUpdate() = updater.download()
+
+    fun installUpdate() = updater.install()
 
     /** The speech recognition settings, combined into one value like the pairs above. */
     private data class Speech(
