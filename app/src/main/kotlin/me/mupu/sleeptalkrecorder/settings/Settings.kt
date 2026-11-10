@@ -54,7 +54,7 @@ object Settings {
     val transcriptionMode = enumSetting("transcription_mode", TranscriptionMode.AFTER_STOP)
 
     /** How much of the sound before an event cut playback plays. */
-    val leadIn = durationSetting("lead_in_ms", Duration.ofMillis(1500), Duration.ZERO..Duration.ofSeconds(3))
+    val leadIn = durationSetting("lead_in_ms", Duration.ofMillis(1000), Duration.ZERO..Duration.ofSeconds(3))
 
     /** How much of the sound after an event cut playback plays. */
     val tail = durationSetting("tail_ms", Duration.ofMillis(500), Duration.ZERO..Duration.ofSeconds(3))

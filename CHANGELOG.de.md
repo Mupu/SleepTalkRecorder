@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.4.2] - 2026-11-10
+
+### Geändert
+
+- „Nur Ereignisse“ beginnt standardmäßig 1 s vor jedem Ereignis statt 1,5 s. Einen selbst eingestellten Vorlauf behält die App.
+
 ## [0.4.1] - 2026-11-10
 
 ### Behoben

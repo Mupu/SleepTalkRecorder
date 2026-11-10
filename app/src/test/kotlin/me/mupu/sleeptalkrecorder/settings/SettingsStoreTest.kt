@@ -30,7 +30,7 @@ class SettingsStoreTest {
         val store = SettingsStore(InMemoryDataStore())
 
         assertEquals(ThemeMode.SYSTEM, store.flow(Settings.theme).first())
-        assertEquals(Duration.ofMillis(1500), store.flow(Settings.leadIn).first())
+        assertEquals(Duration.ofMillis(1000), store.flow(Settings.leadIn).first())
         assertEquals(Duration.ofMillis(500), store.flow(Settings.tail).first())
         assertEquals(false, store.flow(Settings.languageChosen).first())
         assertEquals(true, store.flow(Settings.stopAtEnabled).first())

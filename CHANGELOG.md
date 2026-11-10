@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.4.2] - 2026-11-10
+
+### Changed
+
+- Cut playback starts 1 s before each event by default instead of 1.5 s. A lead-in you set yourself stays as it is.
+
 ## [0.4.1] - 2026-11-10
 
 ### Fixed
