@@ -2,6 +2,8 @@ package me.mupu.sleeptalkrecorder.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import me.mupu.sleeptalkrecorder.data.AnalysisExport
+import me.mupu.sleeptalkrecorder.data.ExportState
 import me.mupu.sleeptalkrecorder.models.ModelLibrary
 import me.mupu.sleeptalkrecorder.models.ModelStatus
 import me.mupu.sleeptalkrecorder.models.TranscriptionModel
@@ -64,7 +66,20 @@ class SettingsViewModel(
     private val store: SettingsStore,
     private val models: ModelLibrary,
     private val updater: Updater,
+    private val export: AnalysisExport,
 ) : ViewModel() {
+
+    /** Where the export for analysis stands. */
+    val exportState: StateFlow<ExportState> = export.state
+
+    /** The folder the export goes to, as shown in its hint; null without shared storage. */
+    val exportPath: String? = export.path
+
+    /** Copies every sleep for analysis, replacing an earlier export. */
+    fun exportForAnalysis() = export.export()
+
+    /** Deletes the export for analysis. */
+    fun deleteExport() = export.delete()
 
     private val deleting = MutableStateFlow<TranscriptionModel?>(null)
 

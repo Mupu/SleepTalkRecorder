@@ -178,6 +178,10 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenWhats
                 )
             }
 
+            SettingsSection(stringResource(R.string.settings_analysis))
+            val export by viewModel.exportState.collectAsStateWithLifecycle()
+            ExportSetting(export, viewModel.exportPath, onExport = viewModel::exportForAnalysis, onDelete = viewModel::deleteExport)
+
             SettingsSection(stringResource(R.string.settings_updates))
             updates?.let { current ->
                 UpdateSettings(

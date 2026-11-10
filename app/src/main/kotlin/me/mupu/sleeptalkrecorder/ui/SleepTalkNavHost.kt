@@ -99,7 +99,7 @@ fun SleepTalkNavHost(container: AppContainer) {
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(
-                viewModel = viewModel { SettingsViewModel(container.settings, container.modelLibrary, container.updater) },
+                viewModel = viewModel { SettingsViewModel(container.settings, container.modelLibrary, container.updater, container.analysisExport) },
                 onBack = { navController.popBackStack() },
                 onOpenWhatsNew = { navController.navigate(Routes.WHATS_NEW) },
             )

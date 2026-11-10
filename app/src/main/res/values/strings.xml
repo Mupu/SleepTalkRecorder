@@ -436,4 +436,13 @@
     <string name="library_tab_sleeps">Sleeps</string>
     <string name="library_tab_favourites">Favourites</string>
     <string name="library_no_favourites">No favourites yet. Add an event to them in its ⋮ menu.</string>
+
+    <!-- Export for analysis -->
+    <string name="settings_analysis">Analysis</string>
+    <string name="export">Export for analysis</string>
+    <string name="export_hint">Copies every sleep with its audio to %1$s, where a PC reads it over USB. It takes as much space as the recordings and replaces an earlier export.</string>
+    <string name="export_action">Export</string>
+    <string name="export_running">Exporting…</string>
+    <string name="export_done">Last export: %1$s</string>
+    <string name="export_failed">The export failed. Is there enough free space?</string>
 </resources>

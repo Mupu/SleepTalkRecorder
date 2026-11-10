@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.4.0] - 2026-11-10
+
+### Hinzugefügt
+
+- „Für Analyse exportieren“ in den Einstellungen kopiert alle Schlafzeiten mit Ton in den Ordner der App auf dem Handy-Speicher, wo ein PC sie über USB liest. „Löschen“ gibt den Platz wieder frei.
+
 ## [0.3.1] - 2026-11-10
 
 ### Geändert

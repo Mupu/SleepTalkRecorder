@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.4.0] - 2026-11-10
+
+### Added
+
+- “Export for analysis” in the settings copies every sleep with its audio to the app’s folder on the phone’s storage, where a PC reads it over USB. “Delete” frees the space again.
+
 ## [0.3.1] - 2026-11-10
 
 ### Changed

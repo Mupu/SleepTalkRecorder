@@ -56,7 +56,7 @@ import kotlin.math.roundToLong
 // Settings rows follow one layout: a choice between several options sits below its label, and an
 // on/off switch sits at the right end of its row. Controls below a label start where the label
 // text starts, right of the icon column.
-private val ControlPadding = Modifier.padding(start = 56.dp, end = 16.dp, bottom = 8.dp)
+internal val ControlPadding = Modifier.padding(start = 56.dp, end = 16.dp, bottom = 8.dp)
 private val HintedControlPadding = Modifier.padding(start = 56.dp, end = 16.dp, bottom = 4.dp)
 
 /** The heading of a group of settings. */

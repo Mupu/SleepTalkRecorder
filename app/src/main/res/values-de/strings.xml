@@ -389,4 +389,13 @@
     <string name="library_tab_sleeps">Schlafzeiten</string>
     <string name="library_tab_favourites">Favoriten</string>
     <string name="library_no_favourites">Noch keine Favoriten. Füge im ⋮-Menü eines Ereignisses eines hinzu.</string>
+
+    <!-- Export for analysis -->
+    <string name="settings_analysis">Analyse</string>
+    <string name="export">Für Analyse exportieren</string>
+    <string name="export_hint">Kopiert alle Schlafzeiten mit Ton nach %1$s, wo ein PC sie über USB liest. Braucht so viel Platz wie die Aufnahmen und ersetzt einen früheren Export.</string>
+    <string name="export_action">Exportieren</string>
+    <string name="export_running">Wird exportiert…</string>
+    <string name="export_done">Letzter Export: %1$s</string>
+    <string name="export_failed">Der Export ist fehlgeschlagen. Ist genug Platz frei?</string>
 </resources>

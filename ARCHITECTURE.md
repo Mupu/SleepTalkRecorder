@@ -12,7 +12,7 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 | `time` | The time model: the *sleep windows* that name *nights* and *naps*, the timeline of a *recording*, the latest stop time | none |
 | `recording` | The recording session, WAV chunk writer, microphone, foreground service and its notifications | only in `MicrophoneSource`, `Recorder`, `RecordingService`, `RecordingNotifications` |
 | `detection` | The feature track (extraction and file format) and the `EventDetector` with its baseline | none |
-| `data` | Room database, entities, the `SleepRepository` through which screens read and change sleeps, `SleepRecordings` (the recording session's `RecordingStore`), `SleepTranscripts` (speech recognition's `TranscriptStore`), the `RecordingFiles` of each recording, and loading feature tracks for a sleep | Room |
+| `data` | Room database, entities, the `SleepRepository` through which screens read and change sleeps, `SleepRecordings` (the recording session's `RecordingStore`), `SleepTranscripts` (speech recognition's `TranscriptStore`), the `RecordingFiles` of each recording, loading feature tracks for a sleep, and the `AnalysisExport` of every sleep | Room |
 | `playback` | The `SleepTimeline` of a sleep's chunk files, the `SleepAudio` stream made of them, the `CutPlan` of cut playback and the `SleepPlayer` that plays it | only in `SleepPlayer` (Media3) |
 | `retention` | Automatic deletion: which sleeps are old enough (`SleepRetention`) and the WorkManager job that deletes them | only in `AutoDeletion` (WorkManager) |
 | `settings` | The user's settings and the `SettingsStore` that keeps them; the app language | DataStore; AppCompat only in `AppLanguages` |
@@ -246,6 +246,14 @@ once more whenever the setting or its days change. It deletes every sleep whose 
 is named after, lies more than the chosen number of calendar days before today: a sleep kept for
 30 days is still there on the 30th day after its date and gone on the 31st, whatever time of day
 the work runs and across daylight saving changes.
+
+"Export for analysis" in the settings (`AnalysisExport`) copies every sleep onto the app's folder
+of shared storage, `Android/data/<app>/files/export/`, because a release build's private storage
+cannot be read from outside: the database as `sleeps.db` (a `VACUUM INTO` snapshot, made in
+private storage and then copied, since SQLite creates it readable by the app alone) and every
+recording's directory under `recordings/`. A PC pulls it over USB with adb. A new export replaces
+the old one, it refuses to start without room for the recordings, and it runs in the container's
+scope, so leaving the settings does not stop it.
 
 ## Finding events
 

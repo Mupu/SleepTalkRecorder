@@ -3,6 +3,7 @@ package me.mupu.sleeptalkrecorder
 import android.app.Application
 import android.content.Context
 import android.util.Log
+import me.mupu.sleeptalkrecorder.data.AnalysisExport
 import me.mupu.sleeptalkrecorder.data.RecordingFiles
 import me.mupu.sleeptalkrecorder.data.SleepDatabase
 import me.mupu.sleeptalkrecorder.data.SleepRecordings
@@ -14,6 +15,7 @@ import me.mupu.sleeptalkrecorder.models.ModelLibrary
 import me.mupu.sleeptalkrecorder.models.WorkManagerDownloads
 import me.mupu.sleeptalkrecorder.readiness.PhoneReadiness
 import me.mupu.sleeptalkrecorder.recording.Recorder
+import me.mupu.sleeptalkrecorder.recording.RecorderState
 import me.mupu.sleeptalkrecorder.retention.AutoDeletion
 import me.mupu.sleeptalkrecorder.settings.AppLanguages
 import me.mupu.sleeptalkrecorder.settings.Settings
@@ -25,10 +27,6 @@ import me.mupu.sleeptalkrecorder.transcription.TranscriptionRunner
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionScheduler
 import me.mupu.sleeptalkrecorder.transcription.Transcriptions
 import me.mupu.sleeptalkrecorder.transcription.batteryState
-import me.mupu.sleeptalkrecorder.whatsnew.BundledChangelogs
-import me.mupu.sleeptalkrecorder.whatsnew.Version
-import me.mupu.sleeptalkrecorder.whatsnew.WhatsNew
-import me.mupu.sleeptalkrecorder.recording.RecorderState
 import me.mupu.sleeptalkrecorder.ui.setup.SetupStep
 import me.mupu.sleeptalkrecorder.update.AppActivity
 import me.mupu.sleeptalkrecorder.update.GitHubReleases
@@ -36,6 +34,9 @@ import me.mupu.sleeptalkrecorder.update.PackageApks
 import me.mupu.sleeptalkrecorder.update.SessionInstaller
 import me.mupu.sleeptalkrecorder.update.Updater
 import me.mupu.sleeptalkrecorder.update.isMetered
+import me.mupu.sleeptalkrecorder.whatsnew.BundledChangelogs
+import me.mupu.sleeptalkrecorder.whatsnew.Version
+import me.mupu.sleeptalkrecorder.whatsnew.WhatsNew
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,9 +50,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /** The application; it owns the [AppContainer] that screens and the recording service share. */
 class SleepTalkApplication : Application() {
@@ -78,6 +79,14 @@ class AppContainer(context: Context) {
 
     /** Sleeps, their recordings and their events, as the screens read and change them. */
     val sleepRepository = SleepRepository(database, recordingFiles)
+
+    /** Copies every sleep onto the app's folder of shared storage, where a PC reads it with adb. */
+    val analysisExport = AnalysisExport(
+        database,
+        recordingFiles.recordingsDirectory,
+        context.getExternalFilesDir(null)?.let { File(it, "export") },
+        scope,
+    )
 
     /** The user's settings. */
     val settings = SettingsStore.open(context)
