@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.5.0] - 2026-11-10
+
+### Added
+
+- “Share” in an event’s ⋮ menu, and a share button beside each favourite, send the event as an audio file to WhatsApp, Telegram, mail or any other app. Before sharing you can move its start and end and listen to it; it starts as cut playback plays the event, with its lead-in and tail.
+
 ## [0.4.2] - 2026-11-10
 
 ### Changed

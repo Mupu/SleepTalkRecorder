@@ -1,5 +1,6 @@
 package me.mupu.sleeptalkrecorder.ui.sleep
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import me.mupu.sleeptalkrecorder.data.EventKindEntity
@@ -18,6 +19,8 @@ import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
 import me.mupu.sleeptalkrecorder.settings.Settings
 import me.mupu.sleeptalkrecorder.settings.SettingsStore
+import me.mupu.sleeptalkrecorder.share.EventShares
+import me.mupu.sleeptalkrecorder.share.ShareStretch
 import me.mupu.sleeptalkrecorder.transcription.ModelChange
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionStatus
 import me.mupu.sleeptalkrecorder.transcription.Transcriptions
@@ -48,10 +51,11 @@ class SleepViewModel(
     settings: SettingsStore,
     private val player: SleepPlayer,
     private val transcriptions: Transcriptions,
+    private val shares: EventShares,
     /** The event to jump to once the sleep is loaded, as when a favourite is opened; null for none. */
     openEventId: Long? = null,
-    /** Whether [openEventId] then plays on its own; otherwise playback stays paused there. */
-    playOpenEvent: Boolean = false,
+    /** What happens with [openEventId] once playback stands there. */
+    openAction: OpenEventAction = OpenEventAction.SHOW,
 ) : ViewModel() {
 
     private val timeline = MutableStateFlow<SleepTimeline?>(null)
@@ -113,7 +117,7 @@ class SleepViewModel(
             filter,
             events,
             events.map { event ->
-                if (timeline == null) Stretch(event.start, event.end) else eventWithLeadInAndTail(event, timeline, leadIn, tail, unavailable)
+                if (timeline == null) event.stretch else timeline.withLeadInAndTail(event.stretch, leadIn, tail, unavailable)
             },
         )
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, ListedEvents(EventFilter.All, emptyList(), emptyList()))
@@ -127,12 +131,19 @@ class SleepViewModel(
         viewModelScope.launch { cutPlan.collect(player::setCutPlan) }
 
         // A favourite opened from the library: once the audio and the events are read, playback jumps
-        // to it, and plays it on its own only when its play button opened it.
+        // to it, and plays it on its own or opens its share step when those buttons opened it.
         if (openEventId != null) {
             viewModelScope.launch {
                 timeline.first { it != null }
                 val event = sleepAndEvents.first { (_, events, _) -> events.any { it.id == openEventId } }.second.first { it.id == openEventId }
-                if (playOpenEvent) togglePlayEvent(event) else seekToEvent(event)
+                when (openAction) {
+                    OpenEventAction.SHOW -> seekToEvent(event)
+                    OpenEventAction.PLAY -> togglePlayEvent(event)
+                    OpenEventAction.SHARE -> {
+                        seekToEvent(event)
+                        openShare(event)
+                    }
+                }
             }
         }
     }
@@ -300,10 +311,10 @@ class SleepViewModel(
         player.playRange(stretch.start, stretch.end)
     }
 
-    /** [eventWithLeadInAndTail] with this sleep's audio and the current settings. */
+    /** [SleepTimeline.withLeadInAndTail] with this sleep's audio and the current settings. */
     private fun withLeadInAndTail(event: SleepEvent): Stretch {
-        val timeline = timeline.value ?: return Stretch(event.start, event.end)
-        return eventWithLeadInAndTail(event, timeline, leadIn.value, tail.value, unavailable.value)
+        val timeline = timeline.value ?: return event.stretch
+        return timeline.withLeadInAndTail(event.stretch, leadIn.value, tail.value, unavailable.value)
     }
 
     /** Lists, and so plays, the events [filter] shows. */
@@ -444,6 +455,69 @@ class SleepViewModel(
         if (sheet.value?.applying != true) sheet.value = null
     }
 
+    /** The open share step; null while it is closed. */
+    private val shareStep = MutableStateFlow<ShareStep?>(null)
+
+    /** The share step, with whether its stretch is being listened to; null while it is closed. */
+    val share: StateFlow<ShareUiState?> = combine(shareStep, playback) { step, playback ->
+        step?.let { ShareUiState(it.event, it.stretch, playing = playback.playing, preparing = it.preparing) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    private val sharedChannel = Channel<Uri?>(Channel.BUFFERED)
+
+    /** Each audio file ready for Android's share sheet, or null when it could not be written. */
+    val shared: Flow<Uri?> = sharedChannel.receiveAsFlow()
+
+    /** Opens the share step for [event], with its lead-in and tail as cut playback plays it. */
+    fun openShare(event: SleepEvent) {
+        val timeline = timeline.value ?: return
+        player.pause()
+        shareStep.value = ShareStep(event, ShareStretch.of(event.stretch, timeline, leadIn.value, tail.value, unavailable.value), preparing = false)
+    }
+
+    /** Moves the shared stretch to run from [start] until [end], as far as it may reach. */
+    fun selectShare(start: Duration, end: Duration) {
+        val step = shareStep.value?.takeUnless { it.preparing } ?: return
+        shareStep.value = step.copy(stretch = step.stretch.select(start, end))
+    }
+
+    /** Takes the shared stretch back to the event with its lead-in and tail. */
+    fun resetShare() {
+        val step = shareStep.value?.takeUnless { it.preparing } ?: return
+        shareStep.value = step.copy(stretch = step.stretch.copy(selected = step.stretch.default))
+    }
+
+    /** Plays the shared stretch, or pauses it while it plays. */
+    fun listenToShare() {
+        val selected = shareStep.value?.stretch?.selected ?: return
+        if (player.state.value.playing) {
+            player.pause()
+            return
+        }
+        eventPlayed.value = null
+        player.playRange(selected.start, selected.end)
+    }
+
+    /** Writes the shared stretch as an audio file, closes the step and reports it through [shared]. */
+    fun share() {
+        val step = shareStep.value?.takeUnless { it.preparing } ?: return
+        val timeline = timeline.value ?: return
+        shareStep.value = step.copy(preparing = true)
+        player.pause()
+        viewModelScope.launch {
+            val uri = shares.write(timeline, step.stretch.selected, step.event.start)
+            shareStep.value = null
+            sharedChannel.send(uri)
+        }
+    }
+
+    /** Closes the share step and stops listening to it, unless its file is being written. */
+    fun closeShare() {
+        if (shareStep.value?.preparing == true) return
+        shareStep.value = null
+        player.pause()
+    }
+
     override fun onCleared() {
         player.release()
     }
@@ -456,6 +530,9 @@ class SleepViewModel(
         const val CHART_COLUMNS = 400
     }
 
+    /** The open share step: its event, the stretch chosen so far and whether its file is being written. */
+    private data class ShareStep(val event: SleepEvent, val stretch: ShareStretch, val preparing: Boolean)
+
     /** The open sensitivity sheet: what it was opened for and the setting the user made so far. */
     private data class Sheet(
         val event: SleepEvent?,
@@ -466,20 +543,20 @@ class SleepViewModel(
     )
 }
 
-/**
- * The stretch from [leadIn] before [event] to [tail] after it, which ends early at a gap or where
- * the microphone was [unavailable], so that neither is played around the event.
- */
-private fun eventWithLeadInAndTail(
-    event: SleepEvent,
-    timeline: SleepTimeline,
-    leadIn: Duration,
-    tail: Duration,
-    unavailable: List<Stretch>,
-): Stretch {
-    val wanted = Stretch((event.start - leadIn).coerceAtLeast(Duration.ZERO), event.end + tail)
-    return timeline.uninterrupted(wanted.start, wanted.end, Stretch(event.start, event.end), unavailable)
+/** What the sleep screen does with the event it is opened at. */
+enum class OpenEventAction {
+    /** Playback stands paused at the event. */
+    SHOW,
+
+    /** The event plays on its own. */
+    PLAY,
+
+    /** Playback stands at the event and its share step is open. */
+    SHARE,
 }
+
+/** The stretch of the sleep's audio the event covers. */
+private val SleepEvent.stretch: Stretch get() = Stretch(start, end)
 
 /** The [PlaybackState] of the player without its position; [playsStretch] while a stretch plays on its own. */
 private data class PlaybackControls(

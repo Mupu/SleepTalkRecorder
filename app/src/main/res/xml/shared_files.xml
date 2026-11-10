@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The only files the app shares: the audio of a shared event, in the cache folder EventShares writes. -->
+<paths>
+    <cache-path
+        name="shared"
+        path="shared/" />
+</paths>

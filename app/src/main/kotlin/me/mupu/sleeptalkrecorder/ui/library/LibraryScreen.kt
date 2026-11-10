@@ -7,6 +7,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -66,6 +67,7 @@ import me.mupu.sleeptalkrecorder.ui.format.formatEventLength
 import me.mupu.sleeptalkrecorder.ui.format.formatPosition
 import me.mupu.sleeptalkrecorder.ui.format.groupDate
 import me.mupu.sleeptalkrecorder.ui.format.sleepTitle
+import me.mupu.sleeptalkrecorder.ui.sleep.OpenEventAction
 import me.mupu.sleeptalkrecorder.ui.sleep.kindName
 import java.time.Duration
 import java.time.ZoneId
@@ -81,7 +83,7 @@ fun LibraryScreen(
     onBack: () -> Unit,
     onOpenRunning: () -> Unit,
     onOpenSleep: (Long) -> Unit,
-    onOpenFavourite: (sleepId: Long, eventId: Long, play: Boolean) -> Unit,
+    onOpenFavourite: (sleepId: Long, eventId: Long, action: OpenEventAction) -> Unit,
     onOpenStats: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -208,7 +210,7 @@ private fun SleepList(state: LibraryUiState, onOpenRunning: () -> Unit, onOpenSl
  * else its kind, with the clock time it began and its length.
  */
 @Composable
-private fun FavouriteList(state: LibraryUiState, onOpenFavourite: (sleepId: Long, eventId: Long, play: Boolean) -> Unit) {
+private fun FavouriteList(state: LibraryUiState, onOpenFavourite: (sleepId: Long, eventId: Long, action: OpenEventAction) -> Unit) {
     val resources = LocalResources.current
     val clock = LocalClockFormatter.current
     val zone = ZoneId.systemDefault()
@@ -244,11 +246,16 @@ private fun FavouriteList(state: LibraryUiState, onOpenFavourite: (sleepId: Long
                         }
                     },
                     trailingContent = {
-                        IconButton(onClick = { onOpenFavourite(group.sleep.id, event.id, true) }) {
-                            Icon(painterResource(R.drawable.ic_play), contentDescription = stringResource(R.string.play_event))
+                        Row {
+                            IconButton(onClick = { onOpenFavourite(group.sleep.id, event.id, OpenEventAction.SHARE) }) {
+                                Icon(painterResource(R.drawable.ic_share), contentDescription = stringResource(R.string.share_favourite))
+                            }
+                            IconButton(onClick = { onOpenFavourite(group.sleep.id, event.id, OpenEventAction.PLAY) }) {
+                                Icon(painterResource(R.drawable.ic_play), contentDescription = stringResource(R.string.play_event))
+                            }
                         }
                     },
-                    modifier = Modifier.clickable { onOpenFavourite(group.sleep.id, event.id, false) },
+                    modifier = Modifier.clickable { onOpenFavourite(group.sleep.id, event.id, OpenEventAction.SHOW) },
                 )
             }
         }

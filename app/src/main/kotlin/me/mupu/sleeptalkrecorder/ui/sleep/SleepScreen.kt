@@ -54,6 +54,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -72,6 +73,7 @@ import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.playback.PlaybackKind
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
+import me.mupu.sleeptalkrecorder.share.EventShares
 import me.mupu.sleeptalkrecorder.transcription.ModelChange
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionStatus
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
@@ -99,6 +101,7 @@ import java.time.ZoneId
  * hidden event has an Unhide button on its row, and the timeline draws it grey like silence. A speech event's text can be
  * corrected, or the event marked as not speech, which a snackbar undoes; when the active model is
  * another than the one that made the sleep's transcripts, a hint offers to recognise them again.
+ * Sharing an event opens [ShareSheet], and the audio file it writes goes to Android's share sheet.
  */
 @Composable
 fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -> Unit) {
@@ -107,10 +110,12 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
     val transcription by viewModel.transcription.collectAsStateWithLifecycle()
     val filterKinds by viewModel.filterKinds.collectAsStateWithLifecycle()
     val modelChange by viewModel.modelChange.collectAsStateWithLifecycle()
+    val share by viewModel.share.collectAsStateWithLifecycle()
     // Read only where it is drawn or shown, so the moving playhead recomposes nothing else.
     val positionState = viewModel.position.collectAsStateWithLifecycle()
     val position = remember(positionState) { { positionState.value } }
     val resources = LocalResources.current
+    val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     val snackbars = remember { SnackbarHostState() }
 
@@ -145,6 +150,15 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                 duration = SnackbarDuration.Long,
             )
             if (result == SnackbarResult.ActionPerformed) viewModel.undoSpeechMark(change)
+        }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.shared.collect { uri ->
+            if (uri == null) {
+                snackbars.showSnackbar(resources.getString(R.string.share_failed))
+            } else {
+                context.startActivity(EventShares.chooser(uri, resources.getString(R.string.share_chooser)))
+            }
         }
     }
     LaunchedEffect(viewModel) {
@@ -266,6 +280,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     onHide = viewModel::setHidden,
                     onFavourite = { event, favourite -> viewModel.setFavourite(event, favourite) },
                     onName = { naming = it },
+                    onShare = viewModel::openShare,
                     onSensitivity = if (state.sensitivityAvailable) viewModel::openSensitivity else null,
                     modelChange = modelChange,
                     onCorrect = { correcting = it },
@@ -287,6 +302,19 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     )
                 }
 
+                share?.let { step ->
+                    ShareSheet(
+                        state = step,
+                        timeline = timeline,
+                        loudness = state.loudness,
+                        position = position,
+                        onSelect = viewModel::selectShare,
+                        onReset = viewModel::resetShare,
+                        onListen = viewModel::listenToShare,
+                        onShare = viewModel::share,
+                        onDismiss = viewModel::closeShare,
+                    )
+                }
                 sensitivity?.let { sheet ->
                     SensitivitySheet(
                         state = sheet,
@@ -442,7 +470,7 @@ private fun PlaybackMode(cut: Boolean, enabled: Boolean, onCutChange: (Boolean) 
 
 /**
  * The events the [filter] shows, in order; a tap shows one on the timeline, its button plays it
- * alone, a hidden one has a button that unhides it, and its menu hides it, opens the sensitivity around it while [onSensitivity]
+ * alone, a hidden one has a button that unhides it, and its menu shares it, hides it, opens the sensitivity around it while [onSensitivity]
  * is given, and for a speech event corrects its text or marks it as not speech. The event at the
  * playhead is highlighted and scrolled into view.
  */
@@ -459,6 +487,7 @@ private fun EventList(
     onHide: (SleepEvent, Boolean) -> Unit,
     onFavourite: (SleepEvent, Boolean) -> Unit,
     onName: (SleepEvent) -> Unit,
+    onShare: (SleepEvent) -> Unit,
     onSensitivity: ((SleepEvent) -> Unit)?,
     modelChange: ModelChange?,
     onCorrect: (SleepEvent) -> Unit,
@@ -495,6 +524,7 @@ private fun EventList(
                 onHide = onHide,
                 onFavourite = onFavourite,
                 onName = onName,
+                onShare = onShare,
                 onSensitivity = onSensitivity,
                 modelChange = modelChange,
                 onCorrect = onCorrect,
@@ -536,6 +566,7 @@ private fun EventRow(
     onHide: (SleepEvent, Boolean) -> Unit,
     onFavourite: (SleepEvent, Boolean) -> Unit,
     onName: (SleepEvent) -> Unit,
+    onShare: (SleepEvent) -> Unit,
     onSensitivity: ((SleepEvent) -> Unit)?,
     modelChange: ModelChange?,
     onCorrect: (SleepEvent) -> Unit,
@@ -613,6 +644,7 @@ private fun EventRow(
                 MenuEntry(R.string.add_favourite, R.drawable.ic_star_border) { onFavourite(event, true) }.takeUnless { event.favourite },
                 MenuEntry(R.string.remove_favourite, R.drawable.ic_star) { onFavourite(event, false) }.takeIf { event.favourite },
                 MenuEntry(R.string.name_event_menu, R.drawable.ic_label) { onName(event) },
+                MenuEntry(R.string.share_event, R.drawable.ic_share) { onShare(event) },
                 MenuEntry(R.string.hide_event, R.drawable.ic_visibility_off) { onHide(event, true) }.takeUnless { event.hidden },
                 onSensitivity?.let { MenuEntry(R.string.sensitivity_here, R.drawable.ic_tune) { it(event) } },
                 MenuEntry(R.string.correct_text, R.drawable.ic_edit) { onCorrect(event) }.takeIf { event.isSpeech },

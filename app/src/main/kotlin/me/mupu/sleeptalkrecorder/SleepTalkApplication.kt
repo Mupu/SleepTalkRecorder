@@ -20,6 +20,7 @@ import me.mupu.sleeptalkrecorder.retention.AutoDeletion
 import me.mupu.sleeptalkrecorder.settings.AppLanguages
 import me.mupu.sleeptalkrecorder.settings.Settings
 import me.mupu.sleeptalkrecorder.settings.SettingsStore
+import me.mupu.sleeptalkrecorder.share.EventShares
 import me.mupu.sleeptalkrecorder.transcription.EventAnalysis
 import me.mupu.sleeptalkrecorder.transcription.SherpaTranscriber
 import me.mupu.sleeptalkrecorder.transcription.SpeechRecognition
@@ -126,6 +127,9 @@ class AppContainer(context: Context) {
     val transcriptions = Transcriptions(transcriptionRunner, transcriptionScheduler, settings, modelLibrary)
 
     private val appContext = context.applicationContext
+
+    /** Writes events as audio files for Android's share sheet. */
+    val eventShares = EventShares(appContext)
 
     /** Whether the phone's permissions and battery settings let a whole night be recorded. */
     val readiness = PhoneReadiness(context)

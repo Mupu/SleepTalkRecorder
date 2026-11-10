@@ -194,6 +194,14 @@ class SleepTimeline(
         return Stretch(maxOf(from, start), minOf(until, end))
     }
 
+    /**
+     * The stretch from [leadIn] before [event] to [tail] after it, as cut playback plays it: it
+     * ends early at a gap or where the microphone was [unavailable], so that neither is played
+     * around the event.
+     */
+    fun withLeadInAndTail(event: Stretch, leadIn: Duration, tail: Duration, unavailable: List<Stretch>): Stretch =
+        uninterrupted((event.start - leadIn).coerceAtLeast(Duration.ZERO), event.end + tail, event, unavailable)
+
     /** The recording that holds [position]; on the boundary of two, the later one. */
     private fun recordingAt(position: Duration): Int = recordingPositions.indexOfLast { it <= position }.coerceAtLeast(0)
 

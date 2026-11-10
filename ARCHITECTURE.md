@@ -14,6 +14,7 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 | `detection` | The feature track (extraction and file format) and the `EventDetector` with its baseline | none |
 | `data` | Room database, entities, the `SleepRepository` through which screens read and change sleeps, `SleepRecordings` (the recording session's `RecordingStore`), `SleepTranscripts` (speech recognition's `TranscriptStore`), the `RecordingFiles` of each recording, loading feature tracks for a sleep, and the `AnalysisExport` of every sleep | Room |
 | `playback` | The `SleepTimeline` of a sleep's chunk files, the `SleepAudio` stream made of them, the `CutPlan` of cut playback and the `SleepPlayer` that plays it | only in `SleepPlayer` (Media3) |
+| `share` | Sharing an event as an audio file: the stretch that is shared (`ShareStretch`), the `M4aEncoder` and `EventShares`, which writes the file and hands it to Android's share sheet | only in `M4aEncoder` (`MediaCodec`, `MediaMuxer`) and `EventShares` (`FileProvider`, intents) |
 | `retention` | Automatic deletion: which sleeps are old enough (`SleepRetention`) and the WorkManager job that deletes them | only in `AutoDeletion` (WorkManager) |
 | `settings` | The user's settings and the `SettingsStore` that keeps them; the app language | DataStore; AppCompat only in `AppLanguages` |
 | `models` | The transcription models: the catalogue of downloadable models (`TranscriptionModel`), the `ModelInstaller` that downloads and checks their files, the `ModelLibrary` with their states and the active one, and the WorkManager job that downloads them | only in `ModelDownloadWorker` (WorkManager) |
@@ -30,7 +31,7 @@ The root package holds `MainActivity`, the only activity, and `SleepTalkApplicat
 automatic deletion scheduled, starts the search for events of finished sleeps, schedules their
 speech recognition and owns the `Updater`. Logic that can be tested without a device
 (`time`, `detection`, the WAV writer, the recording session, level computation, the sleep
-timeline and its audio stream, the cut plan, the timeline view and the event filter of the sleep screen, the
+timeline and its audio stream, the cut plan, the stretch an event is shared with, the timeline view and the event filter of the sleep screen, the
 sensitivity sheet's re-scan, the numbers of the stats screen, the settings,
 which sleeps automatic deletion removes, the model downloads and states, the transcript filter,
 the speech recognition run, which transcript each event shows, reading the changelogs, and finding,
@@ -223,7 +224,8 @@ and its name is that of the latest such mark. Hiding an event removes its favour
 making it a favourite removes its hidden marks, so an event is never both. Automatic deletion
 keeps a sleep that has favourites (`SleepSummary.favouriteCount`). The library's second tab lists
 the favourites of all sleeps under their sleep, newest first (`SleepRepository.favourites`), and
-opening one opens its sleep at the event, paused, while its play button also plays the event on its own.
+opening one opens its sleep at the event, paused, while its play button also plays the event on its own
+and its share button opens the event's share step there (see [Sharing an event](#sharing-an-event)).
 
 The schema is exported to `app/schemas/`. Data derived from a sleep or a recording goes into
 tables of its own that reference it by foreign key, so the `sleep` and `recording` tables stay
@@ -465,6 +467,24 @@ of its lead-in to the end of its tail as cut playback plays them. Auto zoom, on 
 opens, frames that event on the timeline with four times its length (30 s to 2 min) and keeps the
 playhead in view while playing; panning or zooming by hand, also with the overview, switches it
 off, its button on again.
+
+### Sharing an event
+
+"Share" in an event's menu opens a step that sends a stretch of the sleep's audio to another app
+through Android's share sheet. `ShareStretch` starts it as cut playback plays the event, with the
+settings' lead-in and tail, and lets a range slider move its ends up to 10 s around the event (at
+least 0.5 s long), as far as the audio reaches without a gap or a taken microphone, the same edges
+as the lead-in's. The step draws the loudness of that range with the shared stretch coloured, and
+plays the stretch on the sleep's player to listen to it.
+
+`EventShares` reads the stretch's samples from the chunk files, fades them in and out like cut
+playback, and encodes them with Android's own `MediaCodec` and `MediaMuxer` as AAC-LC at the
+recording's rate in an M4A file, the format messengers and mail apps take everywhere, so no
+library is needed. The file is named after the event's local date and time (`SleepTalk 2026-11-08
+22-55-41.m4a`) and lies in the cache folder `shared/`, which holds only the latest shared file; a
+`FileProvider` hands it out, granting the receiving app read access to that one file. The encoder
+puts 1 024 samples of priming silence before the audio and fills the last AAC frame, so a file
+plays up to about 0.2 s longer than its stretch.
 
 ## Stats
 

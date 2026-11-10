@@ -68,6 +68,17 @@
             android:foregroundServiceType="dataSync"
             tools:node="merge" />
 
+        <!-- Hands the audio file of a shared event to the app it is shared with. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.share"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/shared_files" />
+        </provider>
+
         <!-- Keeps the per-app language on Android 12, where the system has no setting for it. -->
         <service
             android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"

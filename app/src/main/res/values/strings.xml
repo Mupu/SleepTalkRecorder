@@ -446,4 +446,17 @@
     <string name="export_running">Exporting… %1$s of %2$s</string>
     <string name="export_done">Last export: %1$s</string>
     <string name="export_failed">The export failed. Is there enough free space?</string>
+
+    <!-- Sharing an event -->
+    <string name="share_event">Share</string>
+    <string name="share_favourite">Share this event</string>
+    <!-- Title of the share step: "Share the event at 03:14:07". -->
+    <string name="share_title">Share the event at %1$s</string>
+    <!-- The stretch that is shared: "03:14:05–03:14:09 · 4.0 s". -->
+    <string name="share_stretch">%1$s–%2$s · %3$s</string>
+    <string name="share_chart">Loudness around the event with the stretch that is shared</string>
+    <string name="share_range">Stretch that is shared</string>
+    <string name="share_hint">Drag the ends to choose what is shared. It starts as cut playback plays the event, with its lead-in and tail.</string>
+    <string name="share_chooser">Share event</string>
+    <string name="share_failed">The audio could not be prepared for sharing.</string>
 </resources>

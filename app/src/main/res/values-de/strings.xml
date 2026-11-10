@@ -399,4 +399,15 @@
     <string name="export_running">Wird exportiert… %1$s von %2$s</string>
     <string name="export_done">Letzter Export: %1$s</string>
     <string name="export_failed">Der Export ist fehlgeschlagen. Ist genug Platz frei?</string>
+
+    <!-- Sharing an event -->
+    <string name="share_event">Teilen</string>
+    <string name="share_favourite">Dieses Ereignis teilen</string>
+    <string name="share_title">Ereignis um %1$s teilen</string>
+    <string name="share_stretch">%1$s–%2$s · %3$s</string>
+    <string name="share_chart">Lautstärke um das Ereignis mit dem Abschnitt, der geteilt wird</string>
+    <string name="share_range">Abschnitt, der geteilt wird</string>
+    <string name="share_hint">Ziehe die Enden, um festzulegen, was geteilt wird. Zu Beginn ist es das Ereignis mit Vorlauf und Nachlauf, wie beim geschnittenen Abspielen.</string>
+    <string name="share_chooser">Ereignis teilen</string>
+    <string name="share_failed">Der Ton konnte nicht zum Teilen vorbereitet werden.</string>
 </resources>

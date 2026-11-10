@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.5.0] - 2026-11-10
+
+### Hinzugefügt
+
+- „Teilen“ im ⋮-Menü eines Ereignisses und ein Teilen-Knopf neben jedem Favoriten schicken das Ereignis als Audiodatei an WhatsApp, Telegram, E-Mail oder jede andere App. Vor dem Teilen kannst du Anfang und Ende verschieben und es dir anhören; zu Beginn ist es das Ereignis mit Vorlauf und Nachlauf, wie beim geschnittenen Abspielen.
+
 ## [0.4.2] - 2026-11-10
 
 ### Geändert

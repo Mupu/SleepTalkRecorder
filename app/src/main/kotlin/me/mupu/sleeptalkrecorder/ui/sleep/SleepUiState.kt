@@ -6,6 +6,7 @@ import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.playback.PlaybackKind
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
+import me.mupu.sleeptalkrecorder.share.ShareStretch
 import java.time.Duration
 
 /** The player of the sleep screen, once the sleep's audio is known; its position is [SleepViewModel.position]. */
@@ -53,6 +54,17 @@ data class SleepUiState(
     val currentEvent: SleepEvent? = null,
     /** Whether the sensitivity can be set: the sleep is finished, its events found and its loudness read. */
     val sensitivityAvailable: Boolean = false,
+)
+
+/** The share step of [event] while it is open. */
+data class ShareUiState(
+    val event: SleepEvent,
+    /** The stretch shared and how far it can be moved. */
+    val stretch: ShareStretch,
+    /** Whether the player plays, which only listening to the stretch can while the step is open. */
+    val playing: Boolean,
+    /** Whether the audio file is being written. */
+    val preparing: Boolean,
 )
 
 /** The sensitivity sheet while it is open, for the whole sleep or around one event. */

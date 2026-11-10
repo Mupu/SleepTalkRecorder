@@ -78,6 +78,17 @@ class SleepAudio(timeline: SleepTimeline) : Closeable {
      * @throws java.io.IOException when a chunk file cannot be read.
      */
     fun clip(stretch: Stretch): FloatArray {
+        val pcm = pcm(stretch)
+        return FloatArray(pcm.size) { pcm[it] / PCM_SCALE }
+    }
+
+    /**
+     * The 16-bit samples of [stretch] of the sleep's audio, as recorded, as far as the sleep has
+     * audio there.
+     *
+     * @throws java.io.IOException when a chunk file cannot be read.
+     */
+    fun pcm(stretch: Stretch): ShortArray {
         fun byteAt(position: Duration): Long {
             val frame = position.toNanos().coerceAtLeast(0) * sampleRate / NANOS_PER_SECOND
             return (HEADER_BYTES + frame * ChunkedWavWriter.BYTES_PER_FRAME).coerceAtMost(length)
@@ -87,8 +98,9 @@ class SleepAudio(timeline: SleepTimeline) : Closeable {
         var done = 0
         while (done < bytes.size) done += read(from + done, bytes, done, bytes.size - done)
 
-        val pcm = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
-        return FloatArray(bytes.size / ChunkedWavWriter.BYTES_PER_FRAME) { pcm.get(it) / PCM_SCALE }
+        val samples = ShortArray(bytes.size / ChunkedWavWriter.BYTES_PER_FRAME)
+        ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(samples)
+        return samples
     }
 
     override fun close() {
