@@ -53,6 +53,8 @@
     <!-- Sleep screen -->
     <string name="play">Abspielen</string>
     <string name="pause">Pause</string>
+    <string name="previous_event">Vorheriges Ereignis</string>
+    <string name="next_event">Nächstes Ereignis</string>
     <string name="timeline">Position im Schlaf</string>
     <string name="position_short">Pos %1$s</string>
     <string name="speed_value">%1$s×</string>

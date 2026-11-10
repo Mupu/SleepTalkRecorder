@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.6.0] - 2026-11-11
+
+### Added
+
+- Buttons left and right of the play button jump to the previous and the next event in the list, also with a filter, and play on or stay paused. So you can go back to an event to mark it as a favourite once the next one has started.
+
 ## [0.5.1] - 2026-11-10
 
 ### Fixed

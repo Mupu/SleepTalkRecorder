@@ -59,6 +59,8 @@
     <!-- Sleep screen -->
     <string name="play">Play</string>
     <string name="pause">Pause</string>
+    <string name="previous_event">Previous event</string>
+    <string name="next_event">Next event</string>
     <string name="timeline">Position in the sleep</string>
     <!-- Time into the sleep's audio, for example "Pos 6:10:00". -->
     <string name="position_short">Pos %1$s</string>

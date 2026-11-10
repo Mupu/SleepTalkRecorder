@@ -186,13 +186,18 @@ class SleepViewModel(
         .distinctUntilChanged()
         .flowOn(Dispatchers.Default)
 
+    /** The listed events the player's buttons step to, published only when they change. */
+    private val neighbours = combine(listed, position) { listed, position -> neighbourEvents(listed.events, listed.played, position) }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
+
     val state: StateFlow<SleepUiState> = combine(
         sleepAndEvents,
         combine(timeline, loudness, ::Pair),
-        combine(playback, current, ::Pair),
+        combine(playback, current, neighbours, ::Triple),
         combine(eventPlayed, cut, cutPlan, ::Triple),
         listed,
-    ) { (sleep, events, unavailable), (timeline, loudness), (playback, current), (played, cut, plan), listed ->
+    ) { (sleep, events, unavailable), (timeline, loudness), (playback, current, neighbours), (played, cut, plan), listed ->
         val player = timeline?.let {
             PlayerUiState(
                 duration = it.duration,
@@ -216,6 +221,8 @@ class SleepViewModel(
             unavailable = unavailable,
             playingEventId = played.takeIf { playback.playing && playback.playsStretch },
             currentEvent = current,
+            previousEvent = neighbours.previous,
+            nextEvent = neighbours.next,
             sensitivityAvailable = loudness != null && sleep?.eventsFound == true && !sleep.isRunning,
         )
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SleepUiState())
@@ -298,6 +305,18 @@ class SleepViewModel(
     /** Moves the playback to just before [event], with the lead-in of the settings. */
     fun seekToEvent(event: SleepEvent) {
         player.seekTo(withLeadInAndTail(event).start)
+    }
+
+    /**
+     * Moves the playback to the start of the listed event before the playhead ([forward] false) or
+     * after it, with its lead-in as cut playback plays it; it plays on if it played. Nothing
+     * happens without such an event.
+     */
+    fun skipEvent(forward: Boolean) {
+        val listed = listed.value
+        val neighbours = neighbourEvents(listed.events, listed.played, player.state.value.position)
+        val event = (if (forward) neighbours.next else neighbours.previous) ?: return
+        player.seekTo(listed.played[listed.events.indexOf(event)].start)
     }
 
     /** Plays [event] on its own with the settings' lead-in and tail, or pauses it while it plays. */

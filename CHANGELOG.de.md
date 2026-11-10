@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.6.0] - 2026-11-11
+
+### Hinzugefügt
+
+- Knöpfe links und rechts vom Abspielknopf springen zum vorherigen und zum nächsten Ereignis der Liste, auch mit einem Filter, und spielen weiter oder bleiben pausiert. So kommst du zu einem Ereignis zurück, um es als Favorit zu markieren, wenn schon das nächste läuft.
+
 ## [0.5.1] - 2026-11-10
 
 ### Behoben

@@ -52,6 +52,10 @@ data class SleepUiState(
     val playingEventId: Long? = null,
     /** The event at the playhead (see [currentEvent]), which the list highlights and auto zoom frames. */
     val currentEvent: SleepEvent? = null,
+    /** The listed event the player steps back to (see [neighbourEvents]); null if there is none. */
+    val previousEvent: SleepEvent? = null,
+    /** The listed event the player steps on to; null if there is none. */
+    val nextEvent: SleepEvent? = null,
     /** Whether the sensitivity can be set: the sleep is finished, its events found and its loudness read. */
     val sensitivityAvailable: Boolean = false,
 )

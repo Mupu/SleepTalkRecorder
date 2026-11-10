@@ -257,6 +257,9 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                         timeline,
                         position,
                         onTogglePlay = viewModel::togglePlay,
+                        canSkipBack = state.previousEvent != null,
+                        canSkipForward = state.nextEvent != null,
+                        onSkip = viewModel::skipEvent,
                         onNextSpeed = viewModel::nextSpeed,
                         onCutChange = viewModel::setCut,
                     )
@@ -374,10 +377,16 @@ private fun Player(
     timeline: SleepTimeline,
     position: () -> Duration,
     onTogglePlay: () -> Unit,
+    canSkipBack: Boolean,
+    canSkipForward: Boolean,
+    onSkip: (forward: Boolean) -> Unit,
     onNextSpeed: () -> Unit,
     onCutChange: (Boolean) -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+        IconButton(onClick = { onSkip(false) }, enabled = player.hasAudio && canSkipBack) {
+            Icon(painterResource(R.drawable.ic_skip_previous), contentDescription = stringResource(R.string.previous_event))
+        }
         FilledIconButton(
             onClick = onTogglePlay,
             enabled = player.hasAudio && !player.cutIsEmpty,
@@ -390,7 +399,10 @@ private fun Player(
                 modifier = Modifier.size(30.dp),
             )
         }
-        Spacer(Modifier.width(16.dp))
+        IconButton(onClick = { onSkip(true) }, enabled = player.hasAudio && canSkipForward) {
+            Icon(painterResource(R.drawable.ic_skip_next), contentDescription = stringResource(R.string.next_event))
+        }
+        Spacer(Modifier.width(12.dp))
         PlayerPosition(timeline, position, Modifier.weight(1f))
     }
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {

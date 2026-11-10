@@ -469,6 +469,12 @@ opens, frames that event on the timeline with four times its length (30 s to 2 m
 playhead in view while playing; panning or zooming by hand, also with the overview, switches it
 off, its button on again.
 
+The buttons left and right of the play button step to the previous and the next listed event, in
+full and in cut playback, to the start of its lead-in as cut playback plays it; playback plays on
+or stays paused. They go from the last event whose stretch has begun at the playhead
+(`neighbourEvents`): "previous" goes to the one before it while its stretch plays, and back to it
+once the stretch is over. A button is disabled where no listed event lies in its direction.
+
 ### Sharing an event
 
 "Share" in an event's menu opens a step that sends a stretch of the sleep's audio to another app
