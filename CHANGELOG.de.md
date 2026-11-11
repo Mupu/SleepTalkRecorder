@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.7.1] - 2026-11-11
+
+### Behoben
+
+- Einen Favoriten aus der Bibliothek zu teilen öffnet den Schritt zum Teilen direkt dort statt in seinem Schlaf, sodass du nach dem Teilen oder Schließen in der Bibliothek bleibst.
+
 ## [0.7.0] - 2026-11-11
 
 ### Hinzugefügt

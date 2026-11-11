@@ -36,8 +36,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -54,6 +56,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.time.SleepKind
@@ -68,6 +71,7 @@ import me.mupu.sleeptalkrecorder.ui.format.formatPosition
 import me.mupu.sleeptalkrecorder.ui.format.groupDate
 import me.mupu.sleeptalkrecorder.ui.format.sleepTitle
 import me.mupu.sleeptalkrecorder.ui.sleep.OpenEventAction
+import me.mupu.sleeptalkrecorder.ui.sleep.SleepViewModel
 import me.mupu.sleeptalkrecorder.ui.sleep.kindName
 import java.time.Duration
 import java.time.ZoneId
@@ -75,7 +79,8 @@ import java.time.ZoneId
 /**
  * Every sleep, grouped by the day it is named after, with the running sleep on top; a long press
  * on a finished sleep deletes it after a confirmation. The second tab lists the favourites of all
- * sleeps under the sleep each belongs to; tapping one opens its sleep there, its play button plays it.
+ * sleeps under the sleep each belongs to; tapping one opens its sleep there, its play button plays it,
+ * and its share button opens its share step over the library, built by [shareViewModel].
  */
 @Composable
 fun LibraryScreen(
@@ -85,12 +90,17 @@ fun LibraryScreen(
     onOpenSleep: (Long) -> Unit,
     onOpenFavourite: (sleepId: Long, eventId: Long, action: OpenEventAction) -> Unit,
     onOpenStats: () -> Unit,
+    shareViewModel: (sleepId: Long, eventId: Long) -> SleepViewModel,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var showFavourites by rememberSaveable { mutableStateOf(false) }
+    // The sleep and event id of the favourite being shared.
+    var sharing by rememberSaveable { mutableStateOf<LongArray?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val deletionFailedMessage = stringResource(R.string.delete_sleep_failed)
+    val shareFailedMessage = stringResource(R.string.share_failed)
+    val scope = rememberCoroutineScope()
     LaunchedEffect(state.deletionFailed) {
         if (state.deletionFailed) {
             snackbarHostState.showSnackbar(deletionFailedMessage)
@@ -111,13 +121,22 @@ fun LibraryScreen(
         Column(Modifier.fillMaxSize().padding(padding)) {
             LibraryTabs(showFavourites, onSelect = { showFavourites = it })
             if (showFavourites) {
-                FavouriteList(state, onOpenFavourite)
+                FavouriteList(state, onOpenFavourite, onShare = { sleepId, eventId -> sharing = longArrayOf(sleepId, eventId) })
             } else {
                 SleepList(state, onOpenRunning, onOpenSleep, onDelete = viewModel::askToDelete)
             }
         }
     }
 
+    sharing?.let { (sleepId, eventId) ->
+        key(sleepId, eventId) {
+            FavouriteShare(
+                createViewModel = { shareViewModel(sleepId, eventId) },
+                onFailed = { scope.launch { snackbarHostState.showSnackbar(shareFailedMessage) } },
+                onClosed = { sharing = null },
+            )
+        }
+    }
     state.deletion?.let { request ->
         DeleteSleepDialog(request, onConfirm = viewModel::confirmDeletion, onDismiss = viewModel::cancelDeletion)
     }
@@ -210,7 +229,11 @@ private fun SleepList(state: LibraryUiState, onOpenRunning: () -> Unit, onOpenSl
  * else its kind, with the clock time it began and its length.
  */
 @Composable
-private fun FavouriteList(state: LibraryUiState, onOpenFavourite: (sleepId: Long, eventId: Long, action: OpenEventAction) -> Unit) {
+private fun FavouriteList(
+    state: LibraryUiState,
+    onOpenFavourite: (sleepId: Long, eventId: Long, action: OpenEventAction) -> Unit,
+    onShare: (sleepId: Long, eventId: Long) -> Unit,
+) {
     val resources = LocalResources.current
     val clock = LocalClockFormatter.current
     val zone = ZoneId.systemDefault()
@@ -247,7 +270,7 @@ private fun FavouriteList(state: LibraryUiState, onOpenFavourite: (sleepId: Long
                     },
                     trailingContent = {
                         Row {
-                            IconButton(onClick = { onOpenFavourite(group.sleep.id, event.id, OpenEventAction.SHARE) }) {
+                            IconButton(onClick = { onShare(group.sleep.id, event.id) }) {
                                 Icon(painterResource(R.drawable.ic_share), contentDescription = stringResource(R.string.share_favourite))
                             }
                             IconButton(onClick = { onOpenFavourite(group.sleep.id, event.id, OpenEventAction.PLAY) }) {

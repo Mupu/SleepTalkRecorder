@@ -98,6 +98,7 @@ fun SleepTalkNavHost(container: AppContainer) {
             )
         }
         composable(Routes.LIBRARY) {
+            val context = LocalContext.current.applicationContext
             LibraryScreen(
                 viewModel = viewModel { LibraryViewModel(container.recorder, container.sleepRepository) },
                 onBack = dropUnlessResumed { navController.popBackStack() },
@@ -105,6 +106,9 @@ fun SleepTalkNavHost(container: AppContainer) {
                 onOpenSleep = { navController.navigate(Routes.sleep(it)) },
                 onOpenFavourite = { sleepId, eventId, action -> navController.navigate(Routes.sleep(sleepId, eventId, action)) },
                 onOpenStats = { navController.navigate(Routes.stats()) },
+                shareViewModel = { sleepId, eventId ->
+                    SleepViewModel(sleepId, container.sleepRepository, container.settings, SleepPlayer(context, container::playbackChanged), container.transcriptions, container.eventShares, openEventId = eventId, openAction = OpenEventAction.SHARE)
+                },
             )
         }
         composable(

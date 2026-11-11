@@ -226,7 +226,9 @@ making it a favourite removes its hidden marks, so an event is never both. Autom
 keeps a sleep that has favourites (`SleepSummary.favouriteCount`). The library's second tab lists
 the favourites of all sleeps under their sleep, newest first (`SleepRepository.favourites`), and
 opening one opens its sleep at the event, paused, while its play button also plays the event on its own
-and its share button opens the event's share step there (see [Sharing an event](#sharing-an-event)).
+and its share button opens the event's share step over the library, so sharing leaves the user
+there: `FavouriteShare` reads the sleep with a `SleepViewModel` of its own, which it lets go of once
+the step closes (see [Sharing an event](#sharing-an-event)).
 
 The schema is exported to `app/schemas/`. Data derived from a sleep or a recording goes into
 tables of its own that reference it by foreign key, so the `sleep` and `recording` tables stay

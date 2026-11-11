@@ -80,7 +80,6 @@ import me.mupu.sleeptalkrecorder.models.TranscriptionModel
 import me.mupu.sleeptalkrecorder.playback.PlaybackKind
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
-import me.mupu.sleeptalkrecorder.share.EventShares
 import me.mupu.sleeptalkrecorder.transcription.ModelChange
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionStatus
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
@@ -169,7 +168,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
             if (files == null) {
                 snackbars.showSnackbar(resources.getString(R.string.share_failed))
             } else {
-                context.startActivity(EventShares.chooser(files.uris, files.format, files.caption, resources.getString(R.string.share_chooser)))
+                startShareChooser(context, files)
             }
         }
     }
@@ -335,27 +334,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     )
                 }
 
-                share?.let { step ->
-                    val clock = LocalClockFormatter.current
-                    val labels = remember(step.events, sleep, clock, resources) {
-                        step.events.map { shareLabels(resources, clock, timeline, sleep, it) }
-                    }
-                    ShareSheet(
-                        state = step,
-                        labels = labels,
-                        timeline = timeline,
-                        loudness = state.loudness,
-                        position = position,
-                        onSelect = viewModel::selectShare,
-                        onMargins = viewModel::setShareMargins,
-                        onReset = viewModel::resetShare,
-                        onFormat = viewModel::setShareFormat,
-                        onCaptionItem = viewModel::setCaptionItem,
-                        onListen = viewModel::listenToShare,
-                        onShare = { viewModel.share(labels, cardColors(context)) },
-                        onDismiss = viewModel::closeShare,
-                    )
-                }
+                share?.let { step -> SleepShareSheet(viewModel, step, sleep, timeline, state.loudness, position) }
                 sensitivity?.let { sheet ->
                     SensitivitySheet(
                         state = sheet,

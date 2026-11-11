@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.7.1] - 2026-11-11
+
+### Fixed
+
+- Sharing a favourite from the library opens the share step right there instead of in its sleep, so you stay in the library once it is shared or closed.
+
 ## [0.7.0] - 2026-11-11
 
 ### Added
