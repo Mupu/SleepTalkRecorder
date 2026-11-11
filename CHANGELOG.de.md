@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.6.1] - 2026-11-11
+
+### Behoben
+
+- Die App wird nicht mehr dauerhaft schwarz, wenn du direkt nach dem Zurückgehen von einem anderen Bildschirm auf „Bibliothek“ tippst. Ein Tippen auf den Bildschirm, der sich gerade schließt, geht nicht mehr ein zweites Mal zurück.
+
 ## [0.6.0] - 2026-11-11
 
 ### Hinzugefügt

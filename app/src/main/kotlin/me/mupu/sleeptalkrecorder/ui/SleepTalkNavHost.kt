@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -62,6 +63,10 @@ private object Routes {
 /**
  * Navigation between home, library, settings, the sleep screen, stats, the permissions page and the
  * list of all updates, with the pop-up of an update's news over whichever screen is open.
+ *
+ * A screen's back action works only while the screen is resumed. A screen that is left still fades
+ * out on top and takes taps, and its back arrow lies where home's library button is: a tap on that
+ * button right after going back would pop home as well and leave nothing to show.
  */
 @Composable
 fun SleepTalkNavHost(container: AppContainer) {
@@ -84,14 +89,14 @@ fun SleepTalkNavHost(container: AppContainer) {
             PermissionsScreen(
                 viewModel = viewModel { PermissionsViewModel(container.settings, container.readiness) },
                 place = PermissionsPlace.FromHome,
-                onBack = { navController.popBackStack() },
-                onDone = { navController.popBackStack() },
+                onBack = dropUnlessResumed { navController.popBackStack() },
+                onDone = dropUnlessResumed { navController.popBackStack() },
             )
         }
         composable(Routes.LIBRARY) {
             LibraryScreen(
                 viewModel = viewModel { LibraryViewModel(container.recorder, container.sleepRepository) },
-                onBack = { navController.popBackStack() },
+                onBack = dropUnlessResumed { navController.popBackStack() },
                 onOpenRunning = { navController.popBackStack(Routes.HOME, inclusive = false) },
                 onOpenSleep = { navController.navigate(Routes.sleep(it)) },
                 onOpenFavourite = { sleepId, eventId, action -> navController.navigate(Routes.sleep(sleepId, eventId, action)) },
@@ -101,12 +106,12 @@ fun SleepTalkNavHost(container: AppContainer) {
         composable(Routes.SETTINGS) {
             SettingsScreen(
                 viewModel = viewModel { SettingsViewModel(container.settings, container.modelLibrary, container.updater, container.analysisExport) },
-                onBack = { navController.popBackStack() },
+                onBack = dropUnlessResumed { navController.popBackStack() },
                 onOpenWhatsNew = { navController.navigate(Routes.WHATS_NEW) },
             )
         }
         composable(Routes.WHATS_NEW) {
-            WhatsNewScreen(viewModel = whatsNew, onBack = { navController.popBackStack() })
+            WhatsNewScreen(viewModel = whatsNew, onBack = dropUnlessResumed { navController.popBackStack() })
         }
         composable(
             Routes.SLEEP,
@@ -130,7 +135,7 @@ fun SleepTalkNavHost(container: AppContainer) {
                 viewModel = viewModel {
                     SleepViewModel(sleepId, container.sleepRepository, container.settings, SleepPlayer(context, container::playbackChanged), container.transcriptions, container.eventShares, openEventId = eventId, openAction = action)
                 },
-                onBack = { navController.popBackStack() },
+                onBack = dropUnlessResumed { navController.popBackStack() },
                 onOpenStats = { navController.navigate(Routes.stats(sleepId)) },
             )
         }
@@ -146,7 +151,7 @@ fun SleepTalkNavHost(container: AppContainer) {
             val sleepId = entry.arguments?.getLong(Routes.SLEEP_ID)?.takeIf { it != Routes.NO_SLEEP }
             StatsScreen(
                 viewModel = viewModel { StatsViewModel(sleepId, container.sleepRepository, container.settings) },
-                onBack = { navController.popBackStack() },
+                onBack = dropUnlessResumed { navController.popBackStack() },
             )
         }
     }

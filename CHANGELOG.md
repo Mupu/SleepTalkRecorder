@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.6.1] - 2026-11-11
+
+### Fixed
+
+- The app no longer turns black for good when you tap “Library” right after going back from another screen. A tap on the screen that is just closing no longer goes back a second time.
+
 ## [0.6.0] - 2026-11-11
 
 ### Added
