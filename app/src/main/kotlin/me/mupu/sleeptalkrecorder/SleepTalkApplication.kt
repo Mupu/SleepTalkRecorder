@@ -25,10 +25,12 @@ import me.mupu.sleeptalkrecorder.share.EventShares
 import me.mupu.sleeptalkrecorder.transcription.EventAnalysis
 import me.mupu.sleeptalkrecorder.transcription.SherpaTranscriber
 import me.mupu.sleeptalkrecorder.transcription.SpeechRecognition
+import me.mupu.sleeptalkrecorder.transcription.TranscriptionPauses
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionRunner
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionScheduler
 import me.mupu.sleeptalkrecorder.transcription.Transcriptions
 import me.mupu.sleeptalkrecorder.transcription.batteryState
+import me.mupu.sleeptalkrecorder.transcription.isPluggedIn
 import me.mupu.sleeptalkrecorder.ui.setup.SetupStep
 import me.mupu.sleeptalkrecorder.update.AppActivity
 import me.mupu.sleeptalkrecorder.update.GitHubReleases
@@ -118,15 +120,27 @@ class AppContainer(context: Context) {
     /** Starts speech recognition as the settings say, and for a sleep on request. */
     val transcriptionScheduler = TranscriptionScheduler(context)
 
+    /** The sleeps whose speech recognition the user paused. */
+    val transcriptionPauses = TranscriptionPauses(settings)
+
     /** Runs speech recognition over the events of sleeps; jobs of [transcriptionScheduler] call it. */
     val transcriptionRunner = TranscriptionRunner(
         SleepTranscripts(database, recordingFiles),
+        transcriptionPauses,
         battery = { batteryState(context) },
         onFailure = { message, error -> Log.w("Transcription", message, error) },
     )
 
     /** Speech recognition as the screens see it. */
-    val transcriptions = Transcriptions(transcriptionRunner, transcriptionScheduler, settings, modelLibrary, scope) { openSpeechRecognition(it) }
+    val transcriptions = Transcriptions(
+        transcriptionRunner,
+        transcriptionScheduler,
+        transcriptionPauses,
+        settings,
+        modelLibrary,
+        scope,
+        pluggedIn = { isPluggedIn(context) },
+    ) { openSpeechRecognition(it) }
 
     private val appContext = context.applicationContext
 
@@ -213,13 +227,22 @@ class AppContainer(context: Context) {
 
     init {
         scope.launch { AutoDeletion.followSettings(context, settings) }
-        scope.launch { settings.flow(Settings.transcriptionMode).collect(transcriptionScheduler::follow) }
+        scope.launch { settings.flow(Settings.transcriptionMode).collect(transcriptions::follow) }
         findMissingEvents()
     }
 
     /** Lets waiting events be recognised as the settings say, for example once a model is installed. */
     fun scheduleTranscription() {
         scope.launch { transcriptionScheduler.follow(settings.flow(Settings.transcriptionMode).first()) }
+    }
+
+    /** Pauses speech recognition of [sleepId], from the notification, where nothing else waits for it. */
+    fun pauseTranscription(sleepId: Long): Job = scope.launch { transcriptions.pause(sleepId) }
+
+    /** A recording ended: its events are found, and pauses that end with a recording end. */
+    fun recordingEnded() {
+        scope.launch { transcriptions.recordingEnded() }
+        findMissingEvents()
     }
 
     /**

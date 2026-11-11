@@ -121,6 +121,8 @@
     <string name="more_options">Weitere Optionen</string>
     <string name="run_speech_recognition">Spracherkennung ausführen</string>
     <string name="run_speech_recognition_again">Spracherkennung erneut ausführen</string>
+    <string name="pause_speech_recognition">Spracherkennung pausieren</string>
+    <string name="continue_speech_recognition">Spracherkennung fortsetzen</string>
     <string name="transcription_running">Prüft Ereignis %1$d von %2$d auf Sprache …</string>
     <string name="transcription_done">Alle Ereignisse geprüft. %1$d von %2$d klingen nach Sprache.</string>
     <string name="transcription_model">Modell: %1$s</string>
@@ -135,6 +137,15 @@
     <string name="transcription_waits_battery">Pausiert, weil der Akku unter 30 Prozent ist. Sie geht weiter, sobald das Handy lädt.</string>
     <string name="transcription_run_now">Jetzt ausführen</string>
     <string name="transcription_run_again">Erneut ausführen</string>
+    <string name="transcription_pause">Pausieren</string>
+    <string name="transcription_continue">Fortsetzen</string>
+    <plurals name="transcription_paused">
+        <item quantity="one">Pausiert · %1$d von %2$d Ereignis übrig</item>
+        <item quantity="other">Pausiert · %1$d von %2$d Ereignissen übrig</item>
+    </plurals>
+    <string name="transcription_paused_until_recording">Sie geht nach deiner nächsten Aufnahme weiter oder wenn du sie fortsetzt.</string>
+    <string name="transcription_paused_until_charge">Sie geht beim nächsten Laden des Handys weiter oder wenn du sie fortsetzt.</string>
+    <string name="transcription_paused_until_continue">Sie geht weiter, wenn du sie fortsetzt.</string>
     <string name="play_event">Dieses Ereignis abspielen</string>
     <string name="pause_event">Dieses Ereignis anhalten</string>
 

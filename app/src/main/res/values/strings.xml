@@ -145,6 +145,8 @@
     <string name="more_options">More options</string>
     <string name="run_speech_recognition">Run speech recognition</string>
     <string name="run_speech_recognition_again">Run speech recognition again</string>
+    <string name="pause_speech_recognition">Pause speech recognition</string>
+    <string name="continue_speech_recognition">Continue speech recognition</string>
     <!-- The speech recognition of a sleep: what runs, what is done, what waits and why. -->
     <string name="transcription_running">Checking event %1$d of %2$d for speech…</string>
     <string name="transcription_done">All events checked. %1$d of %2$d sound like speech.</string>
@@ -161,6 +163,16 @@
     <string name="transcription_waits_battery">Paused because the battery is below 30 percent. It goes on once the phone charges.</string>
     <string name="transcription_run_now">Run now</string>
     <string name="transcription_run_again">Run again</string>
+    <string name="transcription_pause">Pause</string>
+    <string name="transcription_continue">Continue</string>
+    <!-- How many of all events are left after the user paused; the quantity is that of all events. -->
+    <plurals name="transcription_paused">
+        <item quantity="one">Paused · %1$d of %2$d event left</item>
+        <item quantity="other">Paused · %1$d of %2$d events left</item>
+    </plurals>
+    <string name="transcription_paused_until_recording">It goes on after your next recording, or when you continue it.</string>
+    <string name="transcription_paused_until_charge">It goes on the next time the phone charges, or when you continue it.</string>
+    <string name="transcription_paused_until_continue">It goes on when you continue it.</string>
     <string name="play_event">Play this event</string>
     <string name="pause_event">Pause this event</string>
 

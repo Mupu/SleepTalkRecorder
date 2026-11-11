@@ -1,13 +1,19 @@
 package me.mupu.sleeptalkrecorder.transcription
 
 import android.app.Notification
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.graphics.drawable.Icon
 import android.os.BatteryManager
 import android.util.Log
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
@@ -16,12 +22,18 @@ import me.mupu.sleeptalkrecorder.SleepTalkApplication
 import me.mupu.sleeptalkrecorder.notifications.NotificationIds
 import me.mupu.sleeptalkrecorder.notifications.ProgressNotifications
 import me.mupu.sleeptalkrecorder.settings.TranscriptionMode
+import java.time.Duration
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Runs speech recognition as WorkManager jobs, which survive the app being closed and the process
@@ -31,9 +43,12 @@ import kotlinx.coroutines.launch
  *   battery and hands over to a job that waits for the charger.
  * - [TranscriptionMode.WHILE_CHARGING]: only the job that waits for the charger; WorkManager stops
  *   it when the charger is unplugged and runs it again on the next one.
- * - [TranscriptionMode.MANUAL]: no job of its own; [runNow] starts one for a sleep.
+ * - [TranscriptionMode.MANUAL]: no job of its own; [run] starts one for a sleep.
  * - [TranscriptionMode.OFF]: no job at all; switching it off cancels every job, also those
  *   started for a sleep.
+ *
+ * In [TranscriptionMode.WHILE_CHARGING] the user's pauses end on the next charge, which
+ * [watchCharger] waits for.
  */
 class TranscriptionScheduler(context: Context) {
 
@@ -46,12 +61,16 @@ class TranscriptionScheduler(context: Context) {
     /** Makes sure waiting events are recognised as [mode] says, or no longer on their own. */
     fun follow(mode: TranscriptionMode) {
         when (mode) {
-            TranscriptionMode.AFTER_STOP -> enqueue(AFTER_STOP, charging = false)
+            TranscriptionMode.AFTER_STOP -> {
+                workManager.cancelUniqueWork(CHARGER_WATCH)
+                enqueue(AFTER_STOP, charging = false)
+            }
             TranscriptionMode.WHILE_CHARGING -> {
                 workManager.cancelUniqueWork(AFTER_STOP)
                 enqueue(ON_CHARGER, charging = true)
             }
             TranscriptionMode.MANUAL -> {
+                workManager.cancelUniqueWork(CHARGER_WATCH)
                 workManager.cancelUniqueWork(AFTER_STOP)
                 workManager.cancelUniqueWork(ON_CHARGER)
             }
@@ -59,13 +78,28 @@ class TranscriptionScheduler(context: Context) {
         }
     }
 
-    /** Recognises speech in all events of [sleepId] again, now, whatever the mode. */
-    fun runNow(sleepId: Long) {
-        val request = OneTimeWorkRequestBuilder<TranscriptionWorker>()
-            .setInputData(workDataOf(TranscriptionWorker.KEY_SLEEP to sleepId))
+    /** Recognises speech in the events of [request] now, whatever the mode, in place of an earlier run of its sleep. */
+    fun run(request: TranscriptionRequest.Sleep) {
+        val work = OneTimeWorkRequestBuilder<TranscriptionWorker>()
+            .setInputData(
+                workDataOf(
+                    TranscriptionWorker.KEY_SLEEP to request.sleepId,
+                    TranscriptionWorker.KEY_FROM to request.from.toMillis(),
+                    TranscriptionWorker.KEY_ONLY_PENDING to request.onlyPending,
+                ),
+            )
             .addTag(TAG)
             .build()
-        workManager.enqueueUniqueWork("$MANUAL$sleepId", ExistingWorkPolicy.REPLACE, request)
+        workManager.enqueueUniqueWork("$MANUAL${request.sleepId}", ExistingWorkPolicy.REPLACE, work)
+    }
+
+    /** Lets the next charge end the user's pauses. */
+    fun watchCharger() {
+        val request = OneTimeWorkRequestBuilder<ChargerWatchWorker>()
+            .setConstraints(Constraints(requiresCharging = true))
+            .addTag(TAG)
+            .build()
+        workManager.enqueueUniqueWork(CHARGER_WATCH, ExistingWorkPolicy.KEEP, request)
     }
 
     /** The run after the stop paused for the battery: the rest waits for the charger. */
@@ -92,6 +126,7 @@ class TranscriptionScheduler(context: Context) {
         const val AFTER_STOP = "transcription-after-stop"
         const val ON_CHARGER = "transcription-on-charger"
         const val MANUAL = "transcription-sleep-"
+        const val CHARGER_WATCH = "transcription-charger-watch"
 
         /** Every speech recognition job carries it, so switching speech recognition off finds them all. */
         const val TAG = "transcription"
@@ -105,7 +140,16 @@ fun batteryState(context: Context): BatteryState {
 }
 
 /**
- * One speech recognition run: all events of one sleep, or every waiting event. It runs as a
+ * Whether a charger is plugged in. A pause made while one is takes this charge as its own, so it
+ * holds until the charger was unplugged; Android may count the phone as charging only some time
+ * after it is plugged in, and WorkManager runs a job that needs the charger as soon as it is.
+ */
+fun isPluggedIn(context: Context): Boolean =
+    context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        ?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)?.let { it != 0 } ?: false
+
+/**
+ * One speech recognition run: the events of one sleep, or every waiting event. It runs as a
  * foreground service with a progress notification when Android allows one, else as normal work
  * that Android may stop after ten minutes; the next run continues.
  */
@@ -117,7 +161,15 @@ class TranscriptionWorker(context: Context, params: WorkerParameters) : Coroutin
         val request = if (sleepId == NO_SLEEP) {
             TranscriptionRequest.Waiting(pauseOnLowBattery = inputData.getBoolean(KEY_PAUSE, false))
         } else {
-            TranscriptionRequest.Sleep(sleepId)
+            val onlyPending = inputData.getBoolean(KEY_ONLY_PENDING, false)
+            // Android stopped this job before (a killed process, the ten minutes of normal work):
+            // a run over all events goes on where it stopped instead of starting again.
+            val stoppedAt = if (runAttemptCount > 0 && !onlyPending) container.transcriptionPauses.rerunOf(sleepId) else null
+            TranscriptionRequest.Sleep(
+                sleepId,
+                from = stoppedAt?.from ?: Duration.ofMillis(inputData.getLong(KEY_FROM, 0)),
+                onlyPending = onlyPending,
+            )
         }
         container.transcriptionScheduler.runStarted()
 
@@ -157,13 +209,59 @@ class TranscriptionWorker(context: Context, params: WorkerParameters) : Coroutin
     companion object {
         internal const val KEY_SLEEP = "sleep"
         internal const val KEY_PAUSE = "pause_on_low_battery"
+        internal const val KEY_FROM = "from_ms"
+        internal const val KEY_ONLY_PENDING = "only_pending"
         private const val NO_SLEEP = -1L
         private const val TAG = "Transcription"
     }
 }
 
-/** The progress notification of speech recognition. */
-private class TranscriptionNotifications(context: Context) {
+/**
+ * Ends the user's pauses on the next charge. It runs only while the phone charges: after a pause
+ * made while not charging, this is the next charge. After one made while charging, it waits until
+ * WorkManager stops it because the charger was unplugged, remembers that, and WorkManager runs it
+ * again on the next charge.
+ */
+class ChargerWatchWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+
+    override suspend fun doWork(): Result {
+        val container = (applicationContext as SleepTalkApplication).container
+        val pauses = container.transcriptionPauses.state.first()
+        if (pauses.paused.isEmpty()) return Result.success()
+        if (!pauses.duringCharge) {
+            container.transcriptions.resume()
+            return Result.success()
+        }
+        try {
+            awaitCancellation()
+        } catch (stopped: CancellationException) {
+            if (stopReason == WorkInfo.STOP_REASON_CONSTRAINT_CHARGING) {
+                withContext(NonCancellable) { container.transcriptionPauses.chargeEnded() }
+            }
+            throw stopped
+        }
+    }
+}
+
+/** The Pause action of the progress notification: pauses the sleep it names. */
+class PauseTranscriptionReceiver : BroadcastReceiver() {
+
+    override fun onReceive(context: Context, intent: Intent) {
+        val sleepId = intent.getLongExtra(EXTRA_SLEEP, NO_SLEEP)
+        if (sleepId == NO_SLEEP) return
+        val container = (context.applicationContext as SleepTalkApplication).container
+        val result = goAsync()
+        container.pauseTranscription(sleepId).invokeOnCompletion { result.finish() }
+    }
+
+    internal companion object {
+        const val EXTRA_SLEEP = "sleep"
+        private const val NO_SLEEP = -1L
+    }
+}
+
+/** The progress notification of speech recognition, with a Pause action. */
+private class TranscriptionNotifications(private val context: Context) {
 
     private val progress = ProgressNotifications(
         context,
@@ -188,6 +286,20 @@ private class TranscriptionNotifications(context: Context) {
                 texts.resources.getQuantityString(R.plurals.notification_transcription_progress, progress.total, progress.done, progress.total),
             )
             setProgress(progress.total, progress.done, false)
+            addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(context, R.drawable.ic_pause),
+                    texts.getString(R.string.transcription_pause),
+                    pauseIntent(progress.sleepId),
+                ).build(),
+            )
         }
     }
+
+    private fun pauseIntent(sleepId: Long): PendingIntent = PendingIntent.getBroadcast(
+        context,
+        0,
+        Intent(context, PauseTranscriptionReceiver::class.java).putExtra(PauseTranscriptionReceiver.EXTRA_SLEEP, sleepId),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
 }

@@ -53,6 +53,7 @@ import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.TranscriptResult
 import me.mupu.sleeptalkrecorder.models.ModelStatus
 import me.mupu.sleeptalkrecorder.models.TranscriptionModel
+import me.mupu.sleeptalkrecorder.settings.TranscriptionMode
 import me.mupu.sleeptalkrecorder.transcription.ModelChange
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionStatus
 import me.mupu.sleeptalkrecorder.transcription.WaitReason
@@ -70,11 +71,18 @@ internal val TranscriptionStatus.nothingRecognised: Boolean
 
 /**
  * The top bar's speech recognition status: a spinner while it runs on the sleep, an hourglass
- * while events wait and a check mark once all are done, which each open what is running; nothing
- * while speech recognition is off.
+ * while events wait, a pause sign while the user paused it and a check mark once all are done,
+ * which each open what is running; nothing while speech recognition is off.
  */
 @Composable
-internal fun SpeechRecognitionStatus(status: TranscriptionStatus, events: List<SleepEvent>, modelChange: ModelChange?, onRun: () -> Unit) {
+internal fun SpeechRecognitionStatus(
+    status: TranscriptionStatus,
+    events: List<SleepEvent>,
+    modelChange: ModelChange?,
+    onRun: () -> Unit,
+    onPause: () -> Unit,
+    onContinue: () -> Unit,
+) {
     var showing by remember { mutableStateOf(false) }
     val label = stringResource(R.string.settings_transcription)
 
@@ -92,18 +100,20 @@ internal fun SpeechRecognitionStatus(status: TranscriptionStatus, events: List<S
                     )
                 }
                 is TranscriptionStatus.Waiting -> Icon(painterResource(R.drawable.ic_hourglass), contentDescription = label)
+                is TranscriptionStatus.Paused -> Icon(painterResource(R.drawable.ic_pause), contentDescription = label)
                 else -> Icon(painterResource(R.drawable.ic_check_circle), contentDescription = label)
             }
         }
     }
     if (showing) {
-        SpeechRecognitionDialog(status, events, modelChange, onRun = onRun, onDismiss = { showing = false })
+        SpeechRecognitionDialog(status, events, modelChange, onRun, onPause, onContinue, onDismiss = { showing = false })
     }
 }
 
 /**
- * What speech recognition does with the sleep: running, done, or waiting and why; after a
- * [modelChange] it offers the re-run with the active model.
+ * What speech recognition does with the sleep: running, which it offers to pause, paused, which it
+ * offers to continue, done, or waiting and why; after a [modelChange] it offers the re-run with
+ * the active model.
  */
 @Composable
 private fun SpeechRecognitionDialog(
@@ -111,6 +121,8 @@ private fun SpeechRecognitionDialog(
     events: List<SleepEvent>,
     modelChange: ModelChange?,
     onRun: () -> Unit,
+    onPause: () -> Unit,
+    onContinue: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val model = events.mapNotNull { it.transcriptProducer }
@@ -130,34 +142,52 @@ private fun SpeechRecognitionDialog(
                         Text(pluralStringResource(R.plurals.transcription_pending, status.events, status.pending, status.events))
                         Text(stringResource(status.reason.text))
                     }
+                    is TranscriptionStatus.Paused -> {
+                        Text(pluralStringResource(R.plurals.transcription_paused, status.events, status.left, status.events))
+                        Text(stringResource(status.mode.resumeText))
+                    }
                     else -> Text(stringResource(R.string.transcription_done, events.count { it.isSpeech }, events.size))
                 }
                 if (model != null) Text(stringResource(R.string.transcription_model, model), style = MaterialTheme.typography.bodySmall)
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ok)) } },
-        dismissButton = if (status is TranscriptionStatus.Running) {
-            null
-        } else {
-            {
-                TextButton(
-                    onClick = {
-                        onDismiss()
-                        onRun()
+        dismissButton = {
+            when (status) {
+                is TranscriptionStatus.Running -> DialogAction(stringResource(R.string.transcription_pause), onPause, onDismiss)
+                is TranscriptionStatus.Paused -> DialogAction(stringResource(R.string.transcription_continue), onContinue, onDismiss)
+                else -> DialogAction(
+                    when {
+                        modelChange != null -> stringResource(R.string.rerun_with, modelChange.active.displayName)
+                        status == TranscriptionStatus.Done -> stringResource(R.string.transcription_run_again)
+                        else -> stringResource(R.string.transcription_run_now)
                     },
-                ) {
-                    Text(
-                        when {
-                            modelChange != null -> stringResource(R.string.rerun_with, modelChange.active.displayName)
-                            status == TranscriptionStatus.Done -> stringResource(R.string.transcription_run_again)
-                            else -> stringResource(R.string.transcription_run_now)
-                        },
-                    )
-                }
+                    onRun,
+                    onDismiss,
+                )
             }
         },
     )
 }
+
+/** A dialog button labelled [label] that closes the dialog and does [onClick]. */
+@Composable
+private fun DialogAction(label: String, onClick: () -> Unit, onDismiss: () -> Unit) {
+    TextButton(
+        onClick = {
+            onDismiss()
+            onClick()
+        },
+    ) { Text(label) }
+}
+
+/** When a pause in this mode ends on its own. */
+private val TranscriptionMode.resumeText: Int
+    get() = when (this) {
+        TranscriptionMode.AFTER_STOP -> R.string.transcription_paused_until_recording
+        TranscriptionMode.WHILE_CHARGING -> R.string.transcription_paused_until_charge
+        TranscriptionMode.MANUAL, TranscriptionMode.OFF -> R.string.transcription_paused_until_continue
+    }
 
 private val WaitReason.text: Int
     get() = when (this) {

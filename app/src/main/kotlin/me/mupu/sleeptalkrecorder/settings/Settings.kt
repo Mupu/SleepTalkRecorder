@@ -54,6 +54,9 @@ object Settings {
     /** When speech recognition runs over the events of finished sleeps. */
     val transcriptionMode = enumSetting("transcription_mode", TranscriptionMode.AFTER_STOP)
 
+    /** The sleeps whose speech recognition the user paused, as `TranscriptionPauses` writes them. */
+    val transcriptionPauses = textSetting("transcription_pauses")
+
     /** How much of the sound before an event cut playback plays. */
     val leadIn = durationSetting("lead_in_ms", Duration.ofMillis(1000), Duration.ZERO..Duration.ofSeconds(3))
 

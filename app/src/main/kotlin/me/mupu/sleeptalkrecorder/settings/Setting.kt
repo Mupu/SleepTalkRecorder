@@ -82,6 +82,17 @@ fun versionSetting(key: String): Setting<Version?> = object : Setting<Version?>(
     }
 }
 
+/** A text whose meaning its owner defines; null until one is stored. */
+fun textSetting(key: String): Setting<String?> = object : Setting<String?>(null) {
+    private val preferencesKey = stringPreferencesKey(key)
+
+    override fun read(preferences: Preferences) = preferences[preferencesKey]
+
+    override fun write(preferences: MutablePreferences, value: String?) {
+        if (value == null) preferences.remove(preferencesKey) else preferences[preferencesKey] = value
+    }
+}
+
 /** A length of time within [range], stored in milliseconds. */
 fun durationSetting(key: String, default: Duration, range: ClosedRange<Duration>): DurationSetting =
     DurationSetting(key, default, range)

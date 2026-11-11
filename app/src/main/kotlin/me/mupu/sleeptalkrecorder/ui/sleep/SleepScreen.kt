@@ -388,18 +388,32 @@ private fun SleepAppBar(
         title,
         navigationIcon = { BackIcon(onBack) },
         actions = {
-            SpeechRecognitionStatus(transcription, state.events, modelChange, onRun = viewModel::runSpeechRecognition)
+            SpeechRecognitionStatus(
+                transcription,
+                state.events,
+                modelChange,
+                onRun = viewModel::runSpeechRecognition,
+                onPause = viewModel::pauseSpeechRecognition,
+                onContinue = viewModel::continueSpeechRecognition,
+            )
             AppBarIcon(R.drawable.ic_bar_chart, stringResource(R.string.stats_of_sleep), onOpenStats)
             MoreMenu(
                 listOfNotNull(
                     MenuEntry(R.string.sensitivity_sleep, R.drawable.ic_tune) { viewModel.openSensitivity(null) }
                         .takeIf { state.sensitivityAvailable },
-                    MenuEntry(
-                        if (transcription.nothingRecognised) R.string.run_speech_recognition else R.string.run_speech_recognition_again,
-                        R.drawable.ic_subtitles,
-                        enabled = transcription.canRun,
-                        onClick = viewModel::runSpeechRecognition,
-                    ).takeUnless { transcription == TranscriptionStatus.Off },
+                    when (transcription) {
+                        TranscriptionStatus.Off -> null
+                        is TranscriptionStatus.Running ->
+                            MenuEntry(R.string.pause_speech_recognition, R.drawable.ic_pause, onClick = viewModel::pauseSpeechRecognition)
+                        is TranscriptionStatus.Paused ->
+                            MenuEntry(R.string.continue_speech_recognition, R.drawable.ic_play, onClick = viewModel::continueSpeechRecognition)
+                        else -> MenuEntry(
+                            if (transcription.nothingRecognised) R.string.run_speech_recognition else R.string.run_speech_recognition_again,
+                            R.drawable.ic_subtitles,
+                            enabled = transcription.canRun,
+                            onClick = viewModel::runSpeechRecognition,
+                        )
+                    },
                 ),
             )
         },

@@ -2,6 +2,7 @@ package me.mupu.sleeptalkrecorder.transcription
 
 import me.mupu.sleeptalkrecorder.data.AnnotationEntity
 import me.mupu.sleeptalkrecorder.playback.Stretch
+import java.time.Duration
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,8 +39,11 @@ sealed interface TranscriptionRequest {
      */
     data class Waiting(val pauseOnLowBattery: Boolean) : TranscriptionRequest
 
-    /** All events of one sleep, again, also those with a result: the user asked for it. */
-    data class Sleep(val sleepId: Long) : TranscriptionRequest
+    /**
+     * The events of one sleep from the one at [from] on: all of them again, also those with a
+     * result, because the user asked for it; with [onlyPending] only those without a result.
+     */
+    data class Sleep(val sleepId: Long, val from: Duration = Duration.ZERO, val onlyPending: Boolean = false) : TranscriptionRequest
 
     /** One event of a sleep, again: the user asked for it, to compare the result of another model. */
     data class Event(val sleepId: Long, val event: Stretch) : TranscriptionRequest
@@ -51,10 +55,12 @@ data class TranscriptionProgress(val sleepId: Long, val done: Int, val total: In
 /**
  * Runs speech recognition over the events of sleeps, one event at a time, and keeps each result as
  * soon as it is there, so a run that is stopped continues where it stopped. Runs never overlap:
- * a second one waits until the first has finished, so only one model is ever in memory.
+ * a second one waits until the first has finished, so only one model is ever in memory. Sleeps the
+ * user paused are left out from their next event on.
  */
 class TranscriptionRunner(
     private val store: TranscriptStore,
+    private val pauses: PauseStore,
     private val battery: () -> BatteryState,
     /** Told when the analysis fails on an event, which then waits for the next run. */
     private val onFailure: (message: String, error: Exception) -> Unit,
@@ -75,6 +81,8 @@ class TranscriptionRunner(
 
         /** The analysis failed on the one event it was asked for. */
         FAILED,
+        /** The user paused the sleep it was asked for. */
+        PAUSED,
     }
 
     private val running = Mutex()
@@ -103,7 +111,8 @@ class TranscriptionRunner(
         val failed = HashSet<Pair<Long, Stretch>>()
         while (true) {
             val (sleepId, events) = when (request) {
-                is TranscriptionRequest.Sleep -> request.sleepId to store.eventsOf(request.sleepId, onlyPending = false)
+                is TranscriptionRequest.Sleep ->
+                    request.sleepId to store.eventsOf(request.sleepId, request.onlyPending).filter { it.start >= request.from }
                 // Events found anew meanwhile may no longer hold the stretch; then nothing is left to do.
                 is TranscriptionRequest.Event ->
                     request.sleepId to store.eventsOf(request.sleepId, onlyPending = false).filter { it == request.event }
@@ -115,11 +124,22 @@ class TranscriptionRunner(
             if (events.isEmpty()) return Outcome.FINISHED
             val opened = analysis() ?: return Outcome.NO_MODEL
 
+            // Events without a result keep waiting on their own; a run over all events remembers
+            // where it is, so one that is paused or stopped goes on there instead of starting again.
+            val rerun = request is TranscriptionRequest.Sleep && !request.onlyPending
+
             current.value = TranscriptionProgress(sleepId, 0, events.size)
             for ((index, event) in events.withIndex()) {
                 if (request is TranscriptionRequest.Waiting) {
                     if (request.pauseOnLowBattery && batteryLow()) return Outcome.LOW_BATTERY
                     if (store.isRecording()) return Outcome.RECORDING
+                }
+                if (rerun) pauses.rerunAt(sleepId, Rerun(event.start, events.size - index))
+                // A single event the user asked for is recognised also while its sleep is paused.
+                if (request !is TranscriptionRequest.Event && sleepId in pauses.paused()) {
+                    // A run over waiting events goes on with the next sleep that is not paused.
+                    if (request is TranscriptionRequest.Waiting) break
+                    return Outcome.PAUSED
                 }
                 if (!analyse(opened, sleepId, event)) {
                     if (request is TranscriptionRequest.Event) return Outcome.FAILED
@@ -127,13 +147,18 @@ class TranscriptionRunner(
                 }
                 current.value = TranscriptionProgress(sleepId, index + 1, events.size)
             }
-            if (request !is TranscriptionRequest.Waiting) return Outcome.FINISHED
+            if (request !is TranscriptionRequest.Waiting) {
+                if (rerun) pauses.rerunAt(sleepId, null)
+                return Outcome.FINISHED
+            }
         }
     }
 
-    /** The first sleep with waiting events that did not fail in this run, with those events. */
+    /** The first sleep that is not paused, with its waiting events that did not fail in this run. */
     private suspend fun nextWaiting(failed: Set<Pair<Long, Stretch>>): Pair<Long, List<Stretch>>? {
+        val paused = pauses.paused()
         for (sleepId in store.sleepsToTranscribe()) {
+            if (sleepId in paused) continue
             val events = store.eventsOf(sleepId, onlyPending = true).filter { (sleepId to it) !in failed }
             if (events.isNotEmpty()) return sleepId to events
         }

@@ -504,7 +504,19 @@ class SleepViewModel(
     }
 
     /** Recognises speech in every event of the sleep again, now, whatever the settings say. */
-    fun runSpeechRecognition() = transcriptions.runNow(sleepId)
+    fun runSpeechRecognition() {
+        viewModelScope.launch { transcriptions.runNow(sleepId) }
+    }
+
+    /** Pauses speech recognition of the sleep before its next event. */
+    fun pauseSpeechRecognition() {
+        viewModelScope.launch { transcriptions.pause(sleepId) }
+    }
+
+    /** Continues paused speech recognition where it stopped, also of the other paused sleeps. */
+    fun continueSpeechRecognition() {
+        viewModelScope.launch { transcriptions.resume() }
+    }
 
     /** Recognises speech in [event] alone again with [model], beside the results of other models. */
     fun recogniseAgain(event: SleepEvent, model: TranscriptionModel) = transcriptions.recogniseEvent(sleepId, event.stretch, model)

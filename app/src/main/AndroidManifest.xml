@@ -62,6 +62,11 @@
             android:name=".update.InstallStatusReceiver"
             android:exported="false" />
 
+        <!-- Receives the Pause action of the speech recognition notification. -->
+        <receiver
+            android:name=".transcription.PauseTranscriptionReceiver"
+            android:exported="false" />
+
         <!-- WorkManager's foreground service, which runs model downloads with a progress notification. -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"

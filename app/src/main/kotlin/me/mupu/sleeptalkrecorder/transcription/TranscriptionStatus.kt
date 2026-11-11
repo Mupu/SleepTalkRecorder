@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -32,6 +33,12 @@ sealed interface TranscriptionStatus {
     /** [pending] of the sleep's [events] wait, for the [reason]. */
     data class Waiting(val pending: Int, val events: Int, val reason: WaitReason) : TranscriptionStatus
 
+    /**
+     * The user paused it with [left] of the sleep's [events] still to do; it goes on with the next
+     * run [mode] starts on its own, or when the user continues it.
+     */
+    data class Paused(val left: Int, val events: Int, val mode: TranscriptionMode) : TranscriptionStatus
+
     /** Every event has a result. */
     data object Done : TranscriptionStatus
 
@@ -41,8 +48,8 @@ sealed interface TranscriptionStatus {
     companion object {
         /**
          * The status of sleep [sleepId] from its [count], the run in [progress], the [mode] of the
-         * settings, whether a model [hasModel] is installed and whether the last run after the
-         * stop paused for the battery.
+         * settings, whether a model [hasModel] is installed, whether the last run after the
+         * stop paused for the battery, and the user's [pauses].
          */
         fun of(
             sleepId: Long,
@@ -51,9 +58,27 @@ sealed interface TranscriptionStatus {
             mode: TranscriptionMode,
             hasModel: Boolean,
             batteryPause: Boolean,
+            pauses: PauseState,
+        ): TranscriptionStatus {
+            // A paused run over all events knows how many are left; else the waiting ones are.
+            val pausedLeft = if (sleepId in pauses.paused) pauses.reruns[sleepId]?.left ?: count.pending else 0
+            return when {
+                // Switching it off cancels a run, which may report progress a moment longer.
+                mode == TranscriptionMode.OFF -> Off
+                // The event in progress finishes after the pause, which shows at once.
+                pausedLeft > 0 -> Paused(pausedLeft, count.events, mode)
+                else -> unpaused(sleepId, count, progress, mode, hasModel, batteryPause)
+            }
+        }
+
+        private fun unpaused(
+            sleepId: Long,
+            count: TranscriptionCount,
+            progress: TranscriptionProgress?,
+            mode: TranscriptionMode,
+            hasModel: Boolean,
+            batteryPause: Boolean,
         ): TranscriptionStatus = when {
-            // Switching it off cancels a run, which may report progress a moment longer.
-            mode == TranscriptionMode.OFF -> Off
             progress?.sleepId == sleepId -> Running(progress.done, progress.total)
             count.events == 0 -> NoEvents
             count.pending == 0 -> Done
@@ -114,16 +139,22 @@ data class ModelChange(val previous: String, val active: TranscriptionModel) {
 data class EventRecognition(val sleepId: Long, val event: Stretch, val model: TranscriptionModel)
 
 /**
- * Speech recognition as the screens see it: the status of a sleep, and starting it by hand for a
- * sleep or for one event.
+ * Speech recognition as the screens see it: the status of a sleep, starting it by hand for a
+ * sleep or for one event, and pausing and continuing it. A pause holds until the next run the
+ * settings start on their own: after the next recording ([TranscriptionMode.AFTER_STOP]), on the
+ * next charge ([TranscriptionMode.WHILE_CHARGING]), or only when the user continues or starts a
+ * run ([TranscriptionMode.MANUAL]). Then every paused sleep goes on where it stopped.
  */
 class Transcriptions(
     private val runner: TranscriptionRunner,
     private val scheduler: TranscriptionScheduler,
+    private val pauses: TranscriptionPauses,
     private val settings: SettingsStore,
     private val models: ModelLibrary,
     /** Where single events are recognised, so leaving the screen does not stop them. */
     private val scope: CoroutineScope,
+    /** Whether a charger is plugged in now. */
+    private val pluggedIn: () -> Boolean,
     /** Loads the speech recognition of a model; null if it is not installed or cannot be loaded. */
     private val open: suspend (TranscriptionModel) -> EventAnalysis?,
 ) {
@@ -145,9 +176,9 @@ class Transcriptions(
         runner.progress,
         settings.flow(Settings.transcriptionMode),
         models.models.map { list -> list.any { it.active } },
-        scheduler.batteryPause,
-    ) { count, progress, mode, hasModel, batteryPause ->
-        TranscriptionStatus.of(sleepId, count, progress, mode, hasModel, batteryPause)
+        combine(scheduler.batteryPause, pauses.state, ::Pair),
+    ) { count, progress, mode, hasModel, (batteryPause, paused) ->
+        TranscriptionStatus.of(sleepId, count, progress, mode, hasModel, batteryPause, paused)
     }
 
     /**
@@ -159,8 +190,44 @@ class Transcriptions(
         models.models.map { list -> list.firstOrNull { it.active }?.model },
     ) { byModel, active -> ModelChange.of(byModel, active) }
 
-    /** Recognises speech in every event of [sleepId] again, now. */
-    fun runNow(sleepId: Long) = scheduler.runNow(sleepId)
+    /** Recognises speech in every event of [sleepId] again, now; every paused sleep goes on as well. */
+    suspend fun runNow(sleepId: Long) {
+        resume()
+        scheduler.run(TranscriptionRequest.Sleep(sleepId))
+    }
+
+    /** Pauses speech recognition of [sleepId] before its next event, until the next run the settings start. */
+    suspend fun pause(sleepId: Long) {
+        pauses.pause(sleepId, charging = pluggedIn())
+        if (settings.flow(Settings.transcriptionMode).first() == TranscriptionMode.WHILE_CHARGING) scheduler.watchCharger()
+    }
+
+    /** Ends every pause: the paused sleeps go on where they stopped. */
+    suspend fun resume() {
+        val ended = pauses.clear()
+        val mode = settings.flow(Settings.transcriptionMode).first()
+        if (mode == TranscriptionMode.OFF) return
+        for (sleepId in ended.paused) {
+            val rerun = ended.reruns[sleepId]
+            when {
+                rerun != null -> scheduler.run(TranscriptionRequest.Sleep(sleepId, from = rerun.from))
+                // Without a job of its own in this mode, the sleep's waiting events get one.
+                mode == TranscriptionMode.MANUAL -> scheduler.run(TranscriptionRequest.Sleep(sleepId, onlyPending = true))
+            }
+        }
+        follow(mode)
+    }
+
+    /** A recording ended: in [TranscriptionMode.AFTER_STOP] that ends every pause. */
+    suspend fun recordingEnded() {
+        if (settings.flow(Settings.transcriptionMode).first() == TranscriptionMode.AFTER_STOP) resume()
+    }
+
+    /** Makes sure waiting events are recognised as [mode] says, and that a pause ends on the next charge in its mode. */
+    suspend fun follow(mode: TranscriptionMode) {
+        scheduler.follow(mode)
+        if (mode == TranscriptionMode.WHILE_CHARGING && pauses.paused().isNotEmpty()) scheduler.watchCharger()
+    }
 
     /**
      * Recognises speech in [event] of [sleepId] again with [model], which keeps its own result

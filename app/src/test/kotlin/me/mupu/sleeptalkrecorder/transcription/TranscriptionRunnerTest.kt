@@ -7,6 +7,7 @@ import me.mupu.sleeptalkrecorder.data.Producer
 import me.mupu.sleeptalkrecorder.playback.Stretch
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionRunner.Outcome
 import java.time.Duration
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -33,6 +34,18 @@ class TranscriptionRunnerTest {
         }
 
         override suspend fun isRecording() = recording
+    }
+
+    /** Paused sleeps, and where runs over all events stand. */
+    private class FakePauses : PauseStore {
+        val paused = mutableSetOf<Long>()
+        val reruns = mutableMapOf<Long, Rerun>()
+
+        override suspend fun paused() = paused.toSet()
+
+        override suspend fun rerunAt(sleepId: Long, rerun: Rerun?) {
+            if (rerun == null) reruns -= sleepId else reruns[sleepId] = rerun
+        }
     }
 
     /** Counts its clips; calls [onClip] before answering each. */
@@ -64,7 +77,39 @@ class TranscriptionRunnerTest {
     private var battery = BatteryState(percent = 80, charging = false)
     private val store = FakeStore(mapOf(1L to listOf(event(10), event(20)), 2L to listOf(event(5))))
     private val failures = mutableListOf<String>()
-    private val runner = TranscriptionRunner(store, { battery }) { message, _ -> failures += message }
+    private val pauses = FakePauses()
+    private val runner = TranscriptionRunner(store, pauses, { battery }) { message, _ -> failures += message }
+
+    @Test
+    fun `a paused sleep is left out from its next event on, and the others go on`() = runTest {
+        val analysis = FakeAnalysis { pauses.paused += 1 }
+
+        assertEquals(Outcome.FINISHED, runner.run(TranscriptionRequest.Waiting(pauseOnLowBattery = false)) { analysis })
+        assertEquals(listOf(1L to event(10), 2L to event(5)), store.stored)
+    }
+
+    @Test
+    fun `a paused run over all events goes on where it stopped`() = runTest {
+        assertEquals(Outcome.PAUSED, runner.run(TranscriptionRequest.Sleep(1)) { FakeAnalysis { pauses.paused += 1 } })
+        val rerun = Rerun(event(20).start, left = 1)
+        assertEquals(rerun, pauses.reruns[1])
+
+        pauses.paused.clear()
+        val analysis = FakeAnalysis()
+        assertEquals(Outcome.FINISHED, runner.run(TranscriptionRequest.Sleep(1, from = rerun.from)) { analysis })
+        assertEquals(1, analysis.clips)
+        assertNull(pauses.reruns[1])
+    }
+
+    @Test
+    fun `a run over all events that is stopped keeps where it was`() = runTest {
+        val stopped = runCatching {
+            runner.run(TranscriptionRequest.Sleep(1)) { FakeAnalysis { if (store.stored.isNotEmpty()) throw CancellationException("stopped") } }
+        }
+
+        assertEquals(true, stopped.exceptionOrNull() is CancellationException)
+        assertEquals(Rerun(event(20).start, left = 1), pauses.reruns[1])
+    }
 
     @Test
     fun `an automatic run analyses every waiting event of every sleep and closes the model`() = runTest {

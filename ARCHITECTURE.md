@@ -18,7 +18,7 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 | `retention` | Automatic deletion: which sleeps are old enough (`SleepRetention`) and the WorkManager job that deletes them | only in `AutoDeletion` (WorkManager) |
 | `settings` | The user's settings and the `SettingsStore` that keeps them; the app language | DataStore; AppCompat only in `AppLanguages` |
 | `models` | The transcription models: the catalogue of downloadable models (`TranscriptionModel`), the `ModelInstaller` that downloads and checks their files, the `ModelLibrary` with their states and the active one, and the WorkManager job that downloads them | only in `ModelDownloadWorker` (WorkManager) |
-| `transcription` | Speech recognition of events: the `EventAnalysis` interface, the `SpeechRecognition` with its `TranscriptFilter`, the sherpa-onnx `SherpaTranscriber`, the `TranscriptionRunner` that works through the events, and the WorkManager jobs that run it | only in `TranscriptionWork` (WorkManager, notifications, battery) |
+| `transcription` | Speech recognition of events: the `EventAnalysis` interface, the `SpeechRecognition` with its `TranscriptFilter`, the sherpa-onnx `SherpaTranscriber`, the `TranscriptionRunner` that works through the events, the `TranscriptionPauses` the user made, and the WorkManager jobs that run it | only in `TranscriptionWork` (WorkManager, notifications, battery) |
 | `notifications` | The ids of all notifications and the progress notification that model downloads and speech recognition share | Android notifications, WorkManager's `ForegroundInfo` |
 | `readiness` | Whether the phone lets a whole night be recorded: the `Requirement`s it misses, the `VendorStep`s of its maker, and the `SystemPage`s that fix them | only in `PhoneReadiness` |
 | `whatsnew` | The changelogs bundled into the app: their `Changelog` parser, the `BundledChangelogs` of each app language and `WhatsNew`, which decides whether an update brought news the user has not seen | only in `BundledChangelogs.fromAssets` (assets) |
@@ -36,7 +36,7 @@ sensitivity sheet's re-scan, the numbers of the stats screen, the settings,
 which sleeps automatic deletion removes, the model downloads and states, the transcript filter,
 the speech recognition run, which transcript each event shows and which results of models it compares, reading the changelogs, and finding,
 verifying and timing an update) is plain Kotlin behind small interfaces (`PcmSource`,
-`RecordingStore`, `Clocks`, `ByteSource`, `ModelDownloads`, `TranscriptStore`, `Transcriber`,
+`RecordingStore`, `Clocks`, `ByteSource`, `ModelDownloads`, `TranscriptStore`, `PauseStore`, `Transcriber`,
 `ReleaseSource`, `ApkInspector`, `PackageInstall`) and
 is unit-tested on the JVM.
 
@@ -410,6 +410,19 @@ A job runs as a foreground service with a progress notification when Android all
 the background only for an app exempt from battery optimisation), else as normal work, which
 Android may stop after ten minutes; the next job continues. The sleep screen shows a spinner while
 its sleep is recognised and says on a tap what runs, what is done, or why events wait.
+
+The user can pause the speech recognition of a sleep, in that pop-up, in the sleep's menu or with
+the notification's Pause action, and continue it there. `TranscriptionPauses` keeps the paused
+sleeps in the settings store, so a pause survives restarts; `TranscriptionRunner` leaves a paused
+sleep out from its next event on and goes on with the next sleep that waits. A run over all
+events of a sleep keeps the event it is at there too, because those events already have results:
+once paused and continued, or stopped by Android and run again, it goes on there instead of at
+the first event; a new run from the menu starts at the first. A run over waiting events needs no
+position, as its events keep waiting. A pause holds
+until the next run the settings start on their own, then every paused sleep goes on where it
+stopped: after the next recording (after the stop), on the next charge (only while charging; a
+pause made while charging waits for that charge to end, which a job that needs the charger
+notices when WorkManager stops it), or only when the user continues or starts a run (manually).
 
 ## Transcription models
 
