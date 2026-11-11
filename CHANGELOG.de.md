@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.7.0] - 2026-11-11
+
+### Hinzugefügt
+
+- „Neu erkennen mit …“ im ⋮-Menü eines Ereignisses erkennt nur dieses Ereignis mit einem anderen installierten Modell neu, in Sekunden statt einer ganzen Nacht. Das geöffnete Transkript zeigt dann das Ergebnis jedes Modells mit seinem Namen, das des aktiven Modells zuerst. Beim Korrigieren des Texts kannst du das Ergebnis eines Modells übernehmen oder löschen; sobald du eigenen Text schreibst, wird nur noch dieser gezeigt.
+
 ## [0.6.1] - 2026-11-11
 
 ### Behoben

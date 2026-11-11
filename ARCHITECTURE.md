@@ -34,7 +34,7 @@ speech recognition and owns the `Updater`. Logic that can be tested without a de
 timeline and its audio stream, the cut plan, the stretch an event is shared with, the timeline view and the event filter of the sleep screen, the
 sensitivity sheet's re-scan, the numbers of the stats screen, the settings,
 which sleeps automatic deletion removes, the model downloads and states, the transcript filter,
-the speech recognition run, which transcript each event shows, reading the changelogs, and finding,
+the speech recognition run, which transcript each event shows and which results of models it compares, reading the changelogs, and finding,
 verifying and timing an update) is plain Kotlin behind small interfaces (`PcmSource`,
 `RecordingStore`, `Clocks`, `ByteSource`, `ModelDownloads`, `TranscriptStore`, `Transcriber`,
 `ReleaseSource`, `ApkInspector`, `PackageInstall`) and
@@ -359,9 +359,20 @@ told the transcript language: it first detects the language itself and is asked 
 user's language when it detected neither that nor English.
 
 Transcripts follow their events by stretch: the sleep screen shows an event with the kind and
-text of the transcript over the same stretch, a server's before the phone's. An event found again
-unchanged keeps its transcript, and the phone's transcripts of stretches that are no longer an
-event are removed with the new events.
+text of the transcript over the same stretch, a server's before the phone's. Each model is a
+producer of its own, so a result replaces only the same model's earlier one over the stretch, and an
+event recognised by several models keeps a result of each; of these the active model's is shown,
+else the latest. An event found again unchanged keeps its transcripts, and the phone's transcripts
+of stretches that are no longer an event are removed with the new events.
+
+"Recognise again with …" in an event's menu runs speech recognition on that event alone with an
+installed model the user picks (with only one installed it leads to the settings, where more are
+downloaded), to compare models without hours of re-running a night. It is a `TranscriptionRunner`
+run of its own for one event, started by `Transcriptions` in the container's scope, so leaving
+the screen does not stop it; the event shows that it is recognised meanwhile. Its open transcript
+then lists every model's result with the model's name, the active model's first, and the
+correction dialog lets the user take one into their text or delete one while another remains.
+Once the user writes their own text, only that is shown.
 
 The user corrects a speech event's text in a dialog, or says it is not speech, which a snackbar
 undoes; every event action is in the ⋮ menu of its row. Any event can also be marked as speech:
@@ -374,7 +385,7 @@ run of speech recognition, with whichever model, touches it. `withTranscripts` c
 events with their transcripts in plain Kotlin, so this rule is unit-tested.
 
 A sleep's phone transcripts name the model that made them. When the active model is another than
-the one that made some of them, the sleep screen shows a hint with "Re-run with" the active model,
+the one whose result some events show, the sleep screen shows a hint with "Re-run with" the active model,
 and so does an open transcript the user did not correct; both start the sleep's run.
 
 `TranscriptionRunner` works through events one at a time and stores each result at once, so a run
@@ -392,7 +403,8 @@ When it runs is a setting:
   once events were recognised) starts a job for that sleep in every mode but off, which
   recognises all its events again.
 - **Off**: no job at all, and switching it off cancels every job, also one started for a sleep.
-  The sleep screen offers no run and shows no status; transcripts made before stay.
+  The sleep screen offers no run, not even of one event, and shows no status; transcripts made
+  before stay.
 
 A job runs as a foreground service with a progress notification when Android allows one (from
 the background only for an app exempt from battery optimisation), else as normal work, which

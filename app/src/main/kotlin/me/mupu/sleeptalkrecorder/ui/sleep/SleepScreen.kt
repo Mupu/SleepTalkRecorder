@@ -71,8 +71,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.SleepSummary
+import me.mupu.sleeptalkrecorder.models.TranscriptionModel
 import me.mupu.sleeptalkrecorder.playback.PlaybackKind
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
+import me.mupu.sleeptalkrecorder.playback.Stretch
 import me.mupu.sleeptalkrecorder.share.EventShares
 import me.mupu.sleeptalkrecorder.transcription.ModelChange
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionStatus
@@ -101,16 +103,21 @@ import java.time.ZoneId
  * hidden event has an Unhide button on its row, and the timeline draws it grey like silence. A speech event's text can be
  * corrected, or the event marked as not speech, which a snackbar undoes; when the active model is
  * another than the one that made the sleep's transcripts, a hint offers to recognise them again.
+ * An event can be recognised again on its own with another installed model, whose result its open
+ * transcript then shows beside the others; with only one model installed that leads to the
+ * settings through [onOpenModels].
  * Sharing an event opens [ShareSheet], and the audio file it writes goes to Android's share sheet.
  */
 @Composable
-fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -> Unit) {
+fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -> Unit, onOpenModels: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val sensitivity by viewModel.sensitivity.collectAsStateWithLifecycle()
     val transcription by viewModel.transcription.collectAsStateWithLifecycle()
     val filterKinds by viewModel.filterKinds.collectAsStateWithLifecycle()
     val modelChange by viewModel.modelChange.collectAsStateWithLifecycle()
     val share by viewModel.share.collectAsStateWithLifecycle()
+    val installedModels by viewModel.installedModels.collectAsStateWithLifecycle()
+    val recognising by viewModel.recognising.collectAsStateWithLifecycle()
     // Read only where it is drawn or shown, so the moving playhead recomposes nothing else.
     val positionState = viewModel.position.collectAsStateWithLifecycle()
     val position = remember(positionState) { { positionState.value } }
@@ -160,6 +167,9 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                 context.startActivity(EventShares.chooser(uri, resources.getString(R.string.share_chooser)))
             }
         }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.recognitionFailed.collect { snackbars.showSnackbar(resources.getString(R.string.recognise_again_failed)) }
     }
     LaunchedEffect(viewModel) {
         viewModel.sensitivityApplied.collect { applied ->
@@ -219,6 +229,8 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                 var window by remember(timeline) { mutableStateOf(TimelineWindow.whole(timeline.clockDuration)) }
                 var autoZoom by remember { mutableStateOf(true) }
                 var correcting by remember { mutableStateOf<SleepEvent?>(null) }
+                var choosingModel by remember { mutableStateOf<SleepEvent?>(null) }
+                var expanded by remember { mutableStateOf(emptySet<Long>()) }
                 var naming by remember { mutableStateOf<SleepEvent?>(null) }
 
                 val current = state.currentEvent
@@ -289,6 +301,11 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     onCorrect = { correcting = it },
                     onMarkSpeech = viewModel::markSpeech,
                     onRerun = viewModel::runSpeechRecognition,
+                    expanded = expanded,
+                    onToggleTranscript = { id -> expanded = if (id in expanded) expanded - id else expanded + id },
+                    recognising = recognising,
+                    onRecogniseAgain = if (transcription == TranscriptionStatus.Off) null else { event -> choosingModel = event },
+                    canRecogniseAgain = transcription.canRun,
                 )
                 naming?.let { event ->
                     NameEventDialog(
@@ -300,8 +317,20 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                 correcting?.let { event ->
                     CorrectTranscriptDialog(
                         event,
-                        onSave = { text -> viewModel.correctTranscript(event, text) },
+                        onSave = { text, deleted -> viewModel.correctTranscript(event, text, deleted) },
                         onDismiss = { correcting = null },
+                    )
+                }
+                choosingModel?.let { event ->
+                    RecogniseAgainDialog(
+                        installedModels,
+                        onRecognise = { model ->
+                            // Opened, so the new result is seen beside the others once it is there.
+                            expanded = expanded + event.id
+                            viewModel.recogniseAgain(event, model)
+                        },
+                        onOpenSettings = onOpenModels,
+                        onDismiss = { choosingModel = null },
                     )
                 }
 
@@ -505,6 +534,11 @@ private fun EventList(
     onCorrect: (SleepEvent) -> Unit,
     onMarkSpeech: (SleepEvent, Boolean) -> Unit,
     onRerun: () -> Unit,
+    expanded: Set<Long>,
+    onToggleTranscript: (Long) -> Unit,
+    recognising: Map<Stretch, TranscriptionModel>,
+    onRecogniseAgain: ((SleepEvent) -> Unit)?,
+    canRecogniseAgain: Boolean,
 ) {
     val listState = rememberLazyListState()
     LaunchedEffect(currentEventId) {
@@ -521,7 +555,6 @@ private fun EventList(
         }
     }
 
-    var expanded by remember { mutableStateOf(emptySet<Long>()) }
     LazyColumn(Modifier.fillMaxSize(), state = listState) {
         items(events, key = { it.id }) { event ->
             EventRow(
@@ -530,7 +563,7 @@ private fun EventList(
                 current = event.id == currentEventId,
                 playing = event.id == playingEventId,
                 transcriptExpanded = event.id in expanded,
-                onToggleTranscript = { expanded = if (event.id in expanded) expanded - event.id else expanded + event.id },
+                onToggleTranscript = { onToggleTranscript(event.id) },
                 onSelect = onSelect,
                 onTogglePlay = onTogglePlay,
                 onHide = onHide,
@@ -542,6 +575,9 @@ private fun EventList(
                 onCorrect = onCorrect,
                 onMarkSpeech = onMarkSpeech,
                 onRerun = onRerun,
+                recognisingWith = recognising[event.stretch],
+                onRecogniseAgain = onRecogniseAgain,
+                canRecogniseAgain = canRecogniseAgain,
             )
         }
         if (sleep != null && events.isEmpty()) {
@@ -584,6 +620,9 @@ private fun EventRow(
     onCorrect: (SleepEvent) -> Unit,
     onMarkSpeech: (SleepEvent, Boolean) -> Unit,
     onRerun: () -> Unit,
+    recognisingWith: TranscriptionModel?,
+    onRecogniseAgain: ((SleepEvent) -> Unit)?,
+    canRecogniseAgain: Boolean,
 ) {
     val clock = LocalClockFormatter.current
     val resources = LocalResources.current
@@ -637,6 +676,7 @@ private fun EventRow(
                 modelChange,
                 onRerun = onRerun,
             )
+            recognisingWith?.let { RecognisingLine(it) }
         }
         if (event.hidden) {
             TextButton(onClick = { onHide(event, false) }) {
@@ -659,6 +699,9 @@ private fun EventRow(
                 MenuEntry(R.string.share_event, R.drawable.ic_share) { onShare(event) },
                 MenuEntry(R.string.hide_event, R.drawable.ic_visibility_off) { onHide(event, true) }.takeUnless { event.hidden },
                 onSensitivity?.let { MenuEntry(R.string.sensitivity_here, R.drawable.ic_tune) { it(event) } },
+                onRecogniseAgain?.let {
+                    MenuEntry(R.string.recognise_again, R.drawable.ic_subtitles, enabled = canRecogniseAgain && recognisingWith == null) { it(event) }
+                },
                 MenuEntry(R.string.correct_text, R.drawable.ic_edit) { onCorrect(event) }.takeIf { event.isSpeech },
                 MenuEntry(R.string.not_speech_plain_event, R.drawable.ic_voice_over_off) { onMarkSpeech(event, false) }.takeIf { event.isSpeech },
                 MenuEntry(R.string.mark_speech, R.drawable.ic_record_voice) { onMarkSpeech(event, true) }.takeUnless { event.isSpeech },

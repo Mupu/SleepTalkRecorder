@@ -3,11 +3,13 @@ package me.mupu.sleeptalkrecorder.ui.sleep
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import me.mupu.sleeptalkrecorder.data.AnnotationOrigin
 import me.mupu.sleeptalkrecorder.data.EventKindEntity
 import me.mupu.sleeptalkrecorder.data.EventKinds
 import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.SleepRepository
 import me.mupu.sleeptalkrecorder.data.SleepSummary
+import me.mupu.sleeptalkrecorder.data.TranscriptResult
 import me.mupu.sleeptalkrecorder.detection.Detection
 import me.mupu.sleeptalkrecorder.detection.EventDetector
 import me.mupu.sleeptalkrecorder.detection.SleepTrack
@@ -17,11 +19,15 @@ import me.mupu.sleeptalkrecorder.playback.PlaybackState
 import me.mupu.sleeptalkrecorder.playback.SleepPlayer
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
+import me.mupu.sleeptalkrecorder.models.ModelStatus
+import me.mupu.sleeptalkrecorder.models.TranscriptionModel
 import me.mupu.sleeptalkrecorder.settings.Settings
 import me.mupu.sleeptalkrecorder.settings.SettingsStore
 import me.mupu.sleeptalkrecorder.share.EventShares
 import me.mupu.sleeptalkrecorder.share.ShareStretch
+import me.mupu.sleeptalkrecorder.transcription.EventRecognition
 import me.mupu.sleeptalkrecorder.transcription.ModelChange
+import me.mupu.sleeptalkrecorder.transcription.TranscriptionRunner
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionStatus
 import me.mupu.sleeptalkrecorder.transcription.Transcriptions
 import java.time.Duration
@@ -34,6 +40,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -160,10 +167,30 @@ class SleepViewModel(
      * offer a re-run with it; null while speech recognition runs on the sleep.
      */
     val modelChange: StateFlow<ModelChange?> = combine(
-        transcriptions.modelChange(repository.transcriptModels(sleepId)),
+        transcriptions.modelChange(
+            sleepAndEvents.map { (_, events, _) ->
+                // Each event counts for the model whose result it shows, which is the active one's where it has one.
+                events.mapNotNull { event -> event.results.firstOrNull { it.origin == AnnotationOrigin.DEVICE }?.producer }
+                    .groupingBy { it }.eachCount()
+            }.distinctUntilChanged(),
+        ),
         transcription,
     ) { change, status -> change.takeIf { status.canRun } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** The installed transcription models an event can be recognised again with. */
+    val installedModels: StateFlow<List<ModelStatus>> =
+        transcriptions.installedModels.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** The events of this sleep being recognised again on their own, by their stretch, with the model each is recognised with. */
+    val recognising: StateFlow<Map<Stretch, TranscriptionModel>> = transcriptions.eventRecognitions
+        .map { runs -> runs.filter { it.sleepId == sleepId }.associate { it.event to it.model } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** Each event of this sleep that could not be recognised again. */
+    val recognitionFailed: Flow<EventRecognition> = transcriptions.eventRecognised
+        .filter { (run, outcome) -> run.sleepId == sleepId && outcome != TranscriptionRunner.Outcome.FINISHED }
+        .map { (run, _) -> run }
 
     /** The event kinds the event list can be filtered by. */
     val filterKinds: StateFlow<List<EventKindEntity>> =
@@ -379,11 +406,15 @@ class SleepViewModel(
     val speechMarked: Flow<SpeechMarked> = speechMarkedChannel.receiveAsFlow()
 
     /**
-     * Replaces the words of speech event [event] with the user's [text]; blank text leaves a
-     * murmur. The correction wins over speech recognition, also when it runs again.
+     * Deletes the models' [deleted] results of [event] and, unless [text] is null, replaces the
+     * words of the speech event with the user's [text]; blank text leaves a murmur. The correction
+     * wins over speech recognition, also when it runs again.
      */
-    fun correctTranscript(event: SleepEvent, text: String) {
-        viewModelScope.launch { repository.setUserTranscript(sleepId, event, EventKinds.SPEECH, text.trim().ifBlank { null }) }
+    fun correctTranscript(event: SleepEvent, text: String?, deleted: List<TranscriptResult> = emptyList()) {
+        viewModelScope.launch {
+            for (result in deleted) repository.deleteResult(sleepId, result)
+            if (text != null) repository.setUserTranscript(sleepId, event, EventKinds.SPEECH, text.trim().ifBlank { null })
+        }
     }
 
     /**
@@ -408,6 +439,9 @@ class SleepViewModel(
 
     /** Recognises speech in every event of the sleep again, now, whatever the settings say. */
     fun runSpeechRecognition() = transcriptions.runNow(sleepId)
+
+    /** Recognises speech in [event] alone again with [model], beside the results of other models. */
+    fun recogniseAgain(event: SleepEvent, model: TranscriptionModel) = transcriptions.recogniseEvent(sleepId, event.stretch, model)
 
     /**
      * Switches what plays now, a single event or the sleep, to its next speed, after the fastest
@@ -573,9 +607,6 @@ enum class OpenEventAction {
     /** Playback stands at the event and its share step is open. */
     SHARE,
 }
-
-/** The stretch of the sleep's audio the event covers. */
-private val SleepEvent.stretch: Stretch get() = Stretch(start, end)
 
 /** The [PlaybackState] of the player without its position; [playsStretch] while a stretch plays on its own. */
 private data class PlaybackControls(

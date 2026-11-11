@@ -99,6 +99,16 @@
     <string name="transcript_corrected">von dir korrigiert</string>
     <string name="correct_text">Text korrigieren</string>
     <string name="correct_text_hint">Bleibt erhalten, auch wenn die Sprache neu erkannt wird. Leer lassen für ein Murmeln ohne Wörter.</string>
+    <string name="recognise_again">Neu erkennen mit …</string>
+    <string name="recognise_again_title">Neu erkennen mit</string>
+    <string name="recognise_again_text">Das Ergebnis des Modells bleibt neben denen der anderen erhalten, so kannst du sie im geöffneten Transkript vergleichen.</string>
+    <string name="recognise_again_one_model">Nur %1$s ist installiert. Lade in den Einstellungen ein weiteres Modell herunter, um sein Ergebnis mit diesem zu vergleichen.</string>
+    <string name="recognising_with">Wird mit %1$s erkannt …</string>
+    <string name="recognise_again_failed">Das Ereignis konnte nicht neu erkannt werden.</string>
+    <string name="no_speech">keine Sprache erkannt</string>
+    <string name="model_results">Ergebnisse der Modelle</string>
+    <string name="use_result">Übernehmen</string>
+    <string name="delete_result">Ergebnis löschen</string>
     <string name="not_speech_plain_event">Keine Sprache – normales Ereignis</string>
     <string name="marked_not_speech">Als normales Ereignis markiert</string>
     <string name="mark_speech">Als Sprache markieren</string>

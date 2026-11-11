@@ -2,13 +2,24 @@ package me.mupu.sleeptalkrecorder.transcription
 
 import me.mupu.sleeptalkrecorder.data.TranscriptionCount
 import me.mupu.sleeptalkrecorder.models.ModelLibrary
+import me.mupu.sleeptalkrecorder.models.ModelState
+import me.mupu.sleeptalkrecorder.models.ModelStatus
 import me.mupu.sleeptalkrecorder.models.TranscriptionModel
 import me.mupu.sleeptalkrecorder.settings.Settings
 import me.mupu.sleeptalkrecorder.settings.SettingsStore
 import me.mupu.sleeptalkrecorder.settings.TranscriptionMode
+import me.mupu.sleeptalkrecorder.playback.Stretch
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 /** Where speech recognition stands for one sleep, as the sleep screen shows it. */
 sealed interface TranscriptionStatus {
@@ -99,13 +110,35 @@ data class ModelChange(val previous: String, val active: TranscriptionModel) {
     }
 }
 
-/** Speech recognition as the screens see it: the status of a sleep, and starting it by hand. */
+/** One event being recognised again with [model], or waiting for the run in progress to end. */
+data class EventRecognition(val sleepId: Long, val event: Stretch, val model: TranscriptionModel)
+
+/**
+ * Speech recognition as the screens see it: the status of a sleep, and starting it by hand for a
+ * sleep or for one event.
+ */
 class Transcriptions(
     private val runner: TranscriptionRunner,
     private val scheduler: TranscriptionScheduler,
     private val settings: SettingsStore,
     private val models: ModelLibrary,
+    /** Where single events are recognised, so leaving the screen does not stop them. */
+    private val scope: CoroutineScope,
+    /** Loads the speech recognition of a model; null if it is not installed or cannot be loaded. */
+    private val open: suspend (TranscriptionModel) -> EventAnalysis?,
 ) {
+    private val recognising = MutableStateFlow(emptyList<EventRecognition>())
+    private val recognised = MutableSharedFlow<Pair<EventRecognition, TranscriptionRunner.Outcome>>(extraBufferCapacity = 8)
+
+    /** The single events being recognised again, in the order they were asked for. */
+    val eventRecognitions: StateFlow<List<EventRecognition>> = recognising.asStateFlow()
+
+    /** Each single event once it was recognised again, with how that ended. */
+    val eventRecognised: Flow<Pair<EventRecognition, TranscriptionRunner.Outcome>> = recognised.asSharedFlow()
+
+    /** The installed models, in catalogue order. */
+    val installedModels: Flow<List<ModelStatus>> = models.models.map { list -> list.filter { it.state == ModelState.Installed } }
+
     /** Where speech recognition stands for [sleepId], whose events are counted in [count]. */
     fun status(sleepId: Long, count: Flow<TranscriptionCount>): Flow<TranscriptionStatus> = combine(
         count,
@@ -119,7 +152,7 @@ class Transcriptions(
 
     /**
      * Whether the active model is another than the one that made the transcripts of a sleep,
-     * whose phone transcripts per model are [transcriptsByModel].
+     * whose events per model that made the result they show are [transcriptsByModel].
      */
     fun modelChange(transcriptsByModel: Flow<Map<String, Int>>): Flow<ModelChange?> = combine(
         transcriptsByModel,
@@ -128,4 +161,23 @@ class Transcriptions(
 
     /** Recognises speech in every event of [sleepId] again, now. */
     fun runNow(sleepId: Long) = scheduler.runNow(sleepId)
+
+    /**
+     * Recognises speech in [event] of [sleepId] again with [model], which keeps its own result
+     * beside those of other models. It takes seconds, but waits while a run is in progress, since
+     * runs never overlap.
+     */
+    fun recogniseEvent(sleepId: Long, event: Stretch, model: TranscriptionModel) {
+        val recognition = EventRecognition(sleepId, event, model)
+        if (recognition in recognising.value) return
+        recognising.update { it + recognition }
+        scope.launch {
+            try {
+                val outcome = runner.run(TranscriptionRequest.Event(sleepId, event)) { open(model) }
+                recognised.emit(recognition to outcome)
+            } finally {
+                recognising.update { it - recognition }
+            }
+        }
+    }
 }

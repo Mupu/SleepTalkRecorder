@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.7.0] - 2026-11-11
+
+### Added
+
+- “Recognise again with …” in an event’s ⋮ menu recognises just that event again with another installed model, in seconds instead of a whole night. The open transcript then shows each model’s result with its name, the active model’s first. When correcting the text you can take over a model’s result or delete it; once you write your own text, only that is shown.
+
 ## [0.6.1] - 2026-11-11
 
 ### Fixed

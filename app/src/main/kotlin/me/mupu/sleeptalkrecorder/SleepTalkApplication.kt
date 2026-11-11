@@ -12,6 +12,7 @@ import me.mupu.sleeptalkrecorder.data.SleepTranscripts
 import me.mupu.sleeptalkrecorder.models.HttpByteSource
 import me.mupu.sleeptalkrecorder.models.ModelInstaller
 import me.mupu.sleeptalkrecorder.models.ModelLibrary
+import me.mupu.sleeptalkrecorder.models.TranscriptionModel
 import me.mupu.sleeptalkrecorder.models.WorkManagerDownloads
 import me.mupu.sleeptalkrecorder.readiness.PhoneReadiness
 import me.mupu.sleeptalkrecorder.recording.Recorder
@@ -49,6 +50,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -78,9 +80,6 @@ class AppContainer(context: Context) {
     /** The recordings' audio, in `noBackupFilesDir`, which backups never include. */
     val recordingFiles = RecordingFiles(File(context.noBackupFilesDir, "recordings"))
 
-    /** Sleeps, their recordings and their events, as the screens read and change them. */
-    val sleepRepository = SleepRepository(database, recordingFiles)
-
     /** Copies every sleep onto the app's folder of shared storage, where a PC reads it with adb. */
     val analysisExport = AnalysisExport(
         database,
@@ -91,6 +90,9 @@ class AppContainer(context: Context) {
 
     /** The user's settings. */
     val settings = SettingsStore.open(context)
+
+    /** Sleeps, their recordings and their events, as the screens read and change them. */
+    val sleepRepository = SleepRepository(database, recordingFiles, settings.flow(Settings.transcriptionModel).map { it.id })
 
     /** The version of the installed app; the build takes it from the newest release of the changelog. */
     val installedVersion: Version = checkNotNull(Version.parse(BuildConfig.VERSION_NAME))
@@ -124,7 +126,7 @@ class AppContainer(context: Context) {
     )
 
     /** Speech recognition as the screens see it. */
-    val transcriptions = Transcriptions(transcriptionRunner, transcriptionScheduler, settings, modelLibrary)
+    val transcriptions = Transcriptions(transcriptionRunner, transcriptionScheduler, settings, modelLibrary, scope) { openSpeechRecognition(it) }
 
     private val appContext = context.applicationContext
 
@@ -221,11 +223,11 @@ class AppContainer(context: Context) {
     }
 
     /**
-     * The phone's speech recognition with the active model, loaded; null if no model is
-     * installed or its files cannot be loaded.
+     * The phone's speech recognition with the [chosen] model or else the active one, loaded; null
+     * if the model is not installed or its files cannot be loaded.
      */
-    suspend fun openSpeechRecognition(): EventAnalysis? {
-        val model = settings.flow(Settings.transcriptionModel).first()
+    suspend fun openSpeechRecognition(chosen: TranscriptionModel? = null): EventAnalysis? {
+        val model = chosen ?: settings.flow(Settings.transcriptionModel).first()
         val language = settings.flow(Settings.transcriptLanguage).first().code ?: AppLanguages.current(appContext).tag
         return withContext(Dispatchers.IO) {
             if (!modelInstaller.isInstalled(model.id, model.files)) return@withContext null

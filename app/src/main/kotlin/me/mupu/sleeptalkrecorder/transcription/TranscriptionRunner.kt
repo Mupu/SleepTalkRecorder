@@ -40,6 +40,9 @@ sealed interface TranscriptionRequest {
 
     /** All events of one sleep, again, also those with a result: the user asked for it. */
     data class Sleep(val sleepId: Long) : TranscriptionRequest
+
+    /** One event of a sleep, again: the user asked for it, to compare the result of another model. */
+    data class Event(val sleepId: Long, val event: Stretch) : TranscriptionRequest
 }
 
 /** How far a run is: the sleep it works on and its events done in this run, of [total]. */
@@ -69,6 +72,9 @@ class TranscriptionRunner(
 
         /** A recording runs; the events wait until it ends. */
         RECORDING,
+
+        /** The analysis failed on the one event it was asked for. */
+        FAILED,
     }
 
     private val running = Mutex()
@@ -98,6 +104,9 @@ class TranscriptionRunner(
         while (true) {
             val (sleepId, events) = when (request) {
                 is TranscriptionRequest.Sleep -> request.sleepId to store.eventsOf(request.sleepId, onlyPending = false)
+                // Events found anew meanwhile may no longer hold the stretch; then nothing is left to do.
+                is TranscriptionRequest.Event ->
+                    request.sleepId to store.eventsOf(request.sleepId, onlyPending = false).filter { it == request.event }
                 is TranscriptionRequest.Waiting -> {
                     if (store.isRecording()) return Outcome.RECORDING
                     nextWaiting(failed) ?: return Outcome.FINISHED
@@ -112,10 +121,13 @@ class TranscriptionRunner(
                     if (request.pauseOnLowBattery && batteryLow()) return Outcome.LOW_BATTERY
                     if (store.isRecording()) return Outcome.RECORDING
                 }
-                if (!analyse(opened, sleepId, event)) failed += sleepId to event
+                if (!analyse(opened, sleepId, event)) {
+                    if (request is TranscriptionRequest.Event) return Outcome.FAILED
+                    failed += sleepId to event
+                }
                 current.value = TranscriptionProgress(sleepId, index + 1, events.size)
             }
-            if (request is TranscriptionRequest.Sleep) return Outcome.FINISHED
+            if (request !is TranscriptionRequest.Waiting) return Outcome.FINISHED
         }
     }
 

@@ -38,7 +38,8 @@ import me.mupu.sleeptalkrecorder.ui.whatsnew.WhatsNewViewModel
 private object Routes {
     const val HOME = "home"
     const val LIBRARY = "library"
-    const val SETTINGS = "settings"
+    const val MODELS = "models"
+    const val SETTINGS = "settings?$MODELS={$MODELS}"
     const val PERMISSIONS = "permissions"
     const val WHATS_NEW = "whats_new"
     const val SLEEP_ID = "sleepId"
@@ -56,6 +57,9 @@ private object Routes {
     /** The sleep [id], opened at the start or, given [eventId], at that event, with which it then does [action]. */
     fun sleep(id: Long, eventId: Long? = null, action: OpenEventAction = OpenEventAction.SHOW) =
         if (eventId == null) "sleep/$id" else "sleep/$id?$EVENT_ID=$eventId&$ACTION=${action.name}"
+
+    /** The settings, scrolled to the speech recognition models if [models]. */
+    fun settings(models: Boolean = false) = if (models) "settings?$MODELS=true" else "settings"
 
     fun stats(sleepId: Long? = null) = if (sleepId == null) "stats" else "stats?$SLEEP_ID=$sleepId"
 }
@@ -80,7 +84,7 @@ fun SleepTalkNavHost(container: AppContainer) {
             HomeScreen(
                 viewModel = viewModel { HomeViewModel(container.recorder, container.sleepRepository, container.readiness, container.updater) },
                 onOpenLibrary = { navController.navigate(Routes.LIBRARY) },
-                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                onOpenSettings = { navController.navigate(Routes.settings()) },
                 onOpenSleep = { navController.navigate(Routes.sleep(it)) },
                 onFixReadiness = { navController.navigate(Routes.PERMISSIONS) },
             )
@@ -103,8 +107,17 @@ fun SleepTalkNavHost(container: AppContainer) {
                 onOpenStats = { navController.navigate(Routes.stats()) },
             )
         }
-        composable(Routes.SETTINGS) {
+        composable(
+            Routes.SETTINGS,
+            arguments = listOf(
+                navArgument(Routes.MODELS) {
+                    type = NavType.BoolType
+                    defaultValue = false
+                },
+            ),
+        ) { entry ->
             SettingsScreen(
+                showModels = entry.arguments?.getBoolean(Routes.MODELS) == true,
                 viewModel = viewModel { SettingsViewModel(container.settings, container.modelLibrary, container.updater, container.analysisExport) },
                 onBack = dropUnlessResumed { navController.popBackStack() },
                 onOpenWhatsNew = { navController.navigate(Routes.WHATS_NEW) },
@@ -137,6 +150,7 @@ fun SleepTalkNavHost(container: AppContainer) {
                 },
                 onBack = dropUnlessResumed { navController.popBackStack() },
                 onOpenStats = { navController.navigate(Routes.stats(sleepId)) },
+                onOpenModels = { navController.navigate(Routes.settings(models = true)) },
             )
         }
         composable(

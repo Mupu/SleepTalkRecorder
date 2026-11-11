@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Ignore
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import me.mupu.sleeptalkrecorder.playback.Stretch
@@ -244,15 +245,59 @@ data class SleepEvent(
     val favourite: Boolean = false,
     /** The name the user gave the favourite; null without one or when it is no favourite. */
     val name: String? = null,
+    /**
+     * What each analysis made of the event, one result per model, the one that wins first; also
+     * when the user's own transcript wins over all of them.
+     */
+    @Ignore val results: List<TranscriptResult> = emptyList(),
 ) {
+    /** The event as the database reads it, before [withTranscripts] adds the results of the analyses. */
+    constructor(
+        id: Long,
+        start: Duration,
+        end: Duration,
+        kindId: String,
+        kindName: String?,
+        kindColor: KindColor,
+        transcript: String?,
+        transcriptOrigin: AnnotationOrigin?,
+        transcriptProducer: String?,
+        hidden: Boolean,
+        favourite: Boolean,
+        name: String?,
+    ) : this(id, start, end, kindId, kindName, kindColor, transcript, transcriptOrigin, transcriptProducer, hidden, favourite, name, emptyList())
+
     /** Whether the user corrected the transcript or said the event is not speech. */
     val corrected: Boolean get() = transcriptOrigin == AnnotationOrigin.USER
+
+    /**
+     * The results the open transcript shows beside each other, each with its model: those of
+     * every analysis when more than one recognised the event, none once the user wrote their own
+     * text or said what the event is, because only that is shown then.
+     */
+    val comparedResults: List<TranscriptResult> get() = if (corrected || results.size < 2) emptyList() else results
 
     /** Whether this is a speech event: one with words, or a murmur without them. */
     val isSpeech: Boolean get() = kindId == EventKinds.SPEECH
 
     /** The stretch of the sleep's audio the event takes. */
     val stretch: Stretch get() = Stretch(start, end)
+}
+
+/** What one analysis, such as a speech recognition model, made of an event: its transcript annotation. */
+data class TranscriptResult(
+    /** The id of the transcript annotation, which deleting the result removes. */
+    val annotationId: Long,
+    val origin: AnnotationOrigin,
+    /** The id of the model that made it, such as `parakeet-ultra`. */
+    val producer: String?,
+    /** The kind it gives the event: the speech kind, or the plain event kind when it found no speech. */
+    val kindId: String,
+    /** The words recognised; null for a murmur or no speech. */
+    val text: String?,
+) {
+    /** Whether it makes the event a speech event, with words or as a murmur. */
+    val isSpeech: Boolean get() = kindId == EventKinds.SPEECH
 }
 
 /** A finished sleep with its recordings in order and all its events, hidden ones included. */

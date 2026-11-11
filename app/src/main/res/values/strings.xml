@@ -118,6 +118,18 @@
     <string name="transcript_corrected">corrected by you</string>
     <string name="correct_text">Correct text</string>
     <string name="correct_text_hint">Kept even when speech recognition runs again. Leave it empty for a murmur without words.</string>
+    <string name="recognise_again">Recognise again with …</string>
+    <string name="recognise_again_title">Recognise again with</string>
+    <string name="recognise_again_text">The model\'s result is kept beside those of the others, so you can compare them in the open transcript.</string>
+    <!-- %1$s is the name of the only installed model. -->
+    <string name="recognise_again_one_model">Only %1$s is installed. Download another model in the settings to compare its result with this one.</string>
+    <!-- %1$s is the model's name. -->
+    <string name="recognising_with">Recognising with %1$s …</string>
+    <string name="recognise_again_failed">The event could not be recognised again.</string>
+    <string name="no_speech">no speech recognised</string>
+    <string name="model_results">Results of the models</string>
+    <string name="use_result">Use</string>
+    <string name="delete_result">Delete result</string>
     <!-- The event menu entry that turns a speech event into a plain event. -->
     <string name="not_speech_plain_event">Not speech – plain event</string>
     <string name="marked_not_speech">Marked as a plain event</string>

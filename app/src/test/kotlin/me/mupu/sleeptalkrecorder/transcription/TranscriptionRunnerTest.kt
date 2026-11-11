@@ -119,6 +119,22 @@ class TranscriptionRunnerTest {
     }
 
     @Test
+    fun `a run for one event analyses only that event, also when it is done`() = runTest {
+        runner.run(TranscriptionRequest.Waiting(pauseOnLowBattery = false)) { FakeAnalysis() }
+        store.stored.clear()
+        val analysis = FakeAnalysis()
+
+        assertEquals(Outcome.FINISHED, runner.run(TranscriptionRequest.Event(1, event(20))) { analysis })
+        assertEquals(listOf(1L to event(20)), store.stored)
+        assertEquals(true, analysis.closed)
+    }
+
+    @Test
+    fun `a run for an event that is no longer found loads no model`() = runTest {
+        assertEquals(Outcome.FINISHED, runner.run(TranscriptionRequest.Event(1, event(30))) { error("loaded") })
+    }
+
+    @Test
     fun `an event the analysis fails on is skipped and waits for the next run`() = runTest {
         val analysis = FakeAnalysis()
         val failing = object : EventAnalysis by analysis {

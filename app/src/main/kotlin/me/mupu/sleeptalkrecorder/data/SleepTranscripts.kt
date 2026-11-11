@@ -59,8 +59,9 @@ class SleepTranscripts(
         database.withTransaction {
             // Events found anew meanwhile no longer hold this stretch; the result has no event left.
             if (!dao.hasEvent(sleepId, event.start, event.end)) return@withTransaction
-            for (origin in annotations.map { it.origin }.distinct()) {
-                dao.deleteTranscripts(sleepId, event.start, event.end, origin)
+            // Each model keeps its own result, so the results of models can be compared.
+            for ((origin, producer) in annotations.map { it.origin to it.producer?.id }.distinct()) {
+                dao.deleteTranscripts(sleepId, event.start, event.end, origin, producer)
             }
             dao.insertAnnotations(annotations)
         }

@@ -1,5 +1,6 @@
 package me.mupu.sleeptalkrecorder.ui.settings
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -11,10 +12,16 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -30,14 +37,16 @@ import me.mupu.sleeptalkrecorder.settings.TimeFormat
 import me.mupu.sleeptalkrecorder.settings.TranscriptionMode
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 /**
  * The settings screen: appearance (theme, language, time format), recording, cut playback, the
- * speech recognition models and the updates with the way to what changed in each.
+ * speech recognition models and the updates with the way to what changed in each. With
+ * [showModels] it opens scrolled to speech recognition, where more models are downloaded.
  */
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenWhatsNew: () -> Unit) {
+fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenWhatsNew: () -> Unit, showModels: Boolean = false) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val updates by viewModel.updates.collectAsStateWithLifecycle()
     val language = AppLanguages.shown(LocalConfiguration.current)
@@ -58,11 +67,22 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenWhats
         snackbarHost = { SnackbarHost(snackbars) },
     ) { padding ->
         val settings = state ?: return@Scaffold
+        val scroll = rememberScrollState()
+        // Where speech recognition starts in the scrolled column, once it is laid out.
+        var modelsAt by remember { mutableStateOf<Int?>(null) }
+        var scrolledToModels by rememberSaveable { mutableStateOf(false) }
+        LaunchedEffect(modelsAt) {
+            val at = modelsAt ?: return@LaunchedEffect
+            if (showModels && !scrolledToModels) {
+                scroll.scrollTo(at)
+                scrolledToModels = true
+            }
+        }
         Column(
             Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scroll)
                 .padding(bottom = 24.dp),
         ) {
             SettingsSection(stringResource(R.string.settings_appearance))
@@ -149,7 +169,9 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenWhats
                 onChange = { viewModel.set(Settings.tail, it) },
             )
 
-            SettingsSection(stringResource(R.string.settings_transcription))
+            Box(Modifier.onPlaced { modelsAt = it.positionInParent().y.roundToInt() }) {
+                SettingsSection(stringResource(R.string.settings_transcription))
+            }
             Text(
                 stringResource(R.string.settings_models_hint),
                 style = MaterialTheme.typography.bodySmall,

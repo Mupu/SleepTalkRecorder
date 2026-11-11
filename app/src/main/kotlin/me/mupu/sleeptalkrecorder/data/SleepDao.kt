@@ -203,16 +203,6 @@ interface SleepDao {
     )
     suspend fun transcripts(sleepId: Long, start: Duration, end: Duration): List<AnnotationEntity>
 
-    /** How many of a sleep's events each model gave a transcript of the phone, by the model's id. */
-    @Query(
-        """
-        SELECT producer, COUNT(*) AS events FROM annotation
-        WHERE sleep_id = :sleepId AND type = 'TRANSCRIPT' AND origin = 'DEVICE' AND producer IS NOT NULL
-        GROUP BY producer
-        """,
-    )
-    fun transcriptModels(sleepId: Long): Flow<List<ModelTranscripts>>
-
     /**
      * The favourite events of all sleeps, like [events] gives those of one: the newest sleep
      * first, its favourites in order. Hidden events are none, as hiding removes the favourite.
@@ -303,14 +293,21 @@ interface SleepDao {
     @Query("SELECT EXISTS (SELECT 1 FROM annotation WHERE sleep_id = :sleepId AND type = 'EVENT' AND start_ms = :start AND end_ms = :end)")
     suspend fun hasEvent(sleepId: Long, start: Duration, end: Duration): Boolean
 
-    /** Removes the transcripts of [origin] over one stretch, before the new one is stored. */
+    /**
+     * Removes the transcripts of [origin] by the producer [producerId], in any version, over one
+     * stretch, before its new one is stored; other models' transcripts of it stay.
+     */
     @Query(
         """
         DELETE FROM annotation WHERE sleep_id = :sleepId AND type = 'TRANSCRIPT' AND origin = :origin
-            AND start_ms = :start AND end_ms = :end
+            AND producer IS :producerId AND start_ms = :start AND end_ms = :end
         """,
     )
-    suspend fun deleteTranscripts(sleepId: Long, start: Duration, end: Duration, origin: AnnotationOrigin)
+    suspend fun deleteTranscripts(sleepId: Long, start: Duration, end: Duration, origin: AnnotationOrigin, producerId: String?)
+
+    /** Removes one transcript of an analysis, never one of the user. */
+    @Query("DELETE FROM annotation WHERE sleep_id = :sleepId AND id = :id AND type = 'TRANSCRIPT' AND origin != 'USER'")
+    suspend fun deleteAnalysisTranscript(sleepId: Long, id: Long)
 
     /** Removes the phone's transcripts of stretches that are no longer an event, after the events were found anew. */
     @Query(
@@ -357,9 +354,6 @@ private const val FAVOURITE_NAME = """
 
 /** An event of the sleep [sleepId]. */
 data class SleepEventOf(@ColumnInfo(name = "sleep_id") val sleepId: Long, @Embedded val event: SleepEvent)
-
-/** How many events of a sleep the model [producer] gave a transcript. */
-data class ModelTranscripts(val producer: String, val events: Int)
 
 /**
  * A sleep with its recordings and the events that are not hidden. Only the events of a finished

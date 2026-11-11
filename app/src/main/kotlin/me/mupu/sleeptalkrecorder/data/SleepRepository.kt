@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
@@ -39,6 +40,8 @@ import kotlinx.coroutines.withContext
 class SleepRepository(
     private val database: SleepDatabase,
     private val files: RecordingFiles,
+    /** The id of the active transcription model, whose results win over those of other models. */
+    private val activeModel: Flow<String?>,
 ) {
 
     private val dao = database.sleepDao()
@@ -68,14 +71,11 @@ class SleepRepository(
         dao.events(sleepId),
         dao.annotations(sleepId, AnnotationType.TRANSCRIPT),
         dao.kinds(),
-    ) { events, transcripts, kinds -> withTranscripts(events, transcripts, kinds.associateBy { it.id }) }
+        activeModel,
+    ) { events, transcripts, kinds, active -> withTranscripts(events, transcripts, kinds.associateBy { it.id }, active) }
         .conflate()
         .flowOn(Dispatchers.Default)
         .distinctUntilChanged()
-
-    /** How many of a sleep's events each model gave a transcript of the phone, by the model's id. */
-    fun transcriptModels(sleepId: Long): Flow<Map<String, Int>> =
-        dao.transcriptModels(sleepId).map { models -> models.associate { it.producer to it.events } }
 
     /**
      * Every finished sleep whose events are found, the most recently started first, with its
@@ -84,9 +84,9 @@ class SleepRepository(
      * each, however many sleeps there are.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun storedSleeps(): Flow<List<StoredSleep>> = sleeps().mapLatest { summaries ->
+    fun storedSleeps(): Flow<List<StoredSleep>> = combine(sleeps(), activeModel, ::Pair).mapLatest { (summaries, active) ->
         database.withTransaction {
-            storedSleeps(summaries, dao.allRecordings(), dao.allEvents(), dao.allAnnotations(AnnotationType.TRANSCRIPT), dao.allKinds())
+            storedSleeps(summaries, dao.allRecordings(), dao.allEvents(), dao.allAnnotations(AnnotationType.TRANSCRIPT), dao.allKinds(), active)
         }
     }
 
@@ -297,11 +297,12 @@ class SleepRepository(
         dao.favouriteEvents(),
         dao.favouriteTranscripts(),
         dao.kinds(),
-    ) { events, transcripts, kinds ->
+        activeModel,
+    ) { events, transcripts, kinds, active ->
         val byKind = kinds.associateBy { it.id }
         val bySleep = transcripts.groupBy { it.sleepId }
         events.groupBy { it.sleepId }.flatMap { (sleepId, of) ->
-            withTranscripts(of.map { it.event }, bySleep[sleepId].orEmpty(), byKind).map { SleepEventOf(sleepId, it) }
+            withTranscripts(of.map { it.event }, bySleep[sleepId].orEmpty(), byKind, active).map { SleepEventOf(sleepId, it) }
         }
     }
         .conflate()
@@ -348,7 +349,7 @@ class SleepRepository(
             val replaced = dao.userTranscripts(sleepId, event.start, event.end)
             dao.deleteAnnotations(replaced.map { it.id })
             val kinds = dao.allKinds().associateBy { it.id }
-            if (needsUserSpeechMark(event, dao.transcripts(sleepId, event.start, event.end), kinds)) {
+            if (needsUserSpeechMark(event, dao.transcripts(sleepId, event.start, event.end), kinds, activeModel.first())) {
                 dao.insertAnnotations(
                     listOf(
                         AnnotationEntity(
@@ -372,6 +373,14 @@ class SleepRepository(
             dao.deleteAnnotations(dao.userTranscripts(sleepId, event.start, event.end).map { it.id })
             dao.insertAnnotations(previous.map { it.copy(id = 0) })
         }
+    }
+
+    /**
+     * Deletes one model's [result] of an event, so the event shows the others; deleting the only
+     * result lets speech recognition find the event waiting again.
+     */
+    suspend fun deleteResult(sleepId: Long, result: TranscriptResult) {
+        dao.deleteAnalysisTranscript(sleepId, result.annotationId)
     }
 
     private fun result(sleepId: Long, type: AnnotationType, start: Duration, end: Duration) = AnnotationEntity(

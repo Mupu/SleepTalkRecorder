@@ -7,10 +7,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -19,6 +21,8 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -32,6 +36,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -43,6 +48,8 @@ import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.data.EventKindEntity
 import me.mupu.sleeptalkrecorder.data.EventKinds
 import me.mupu.sleeptalkrecorder.data.SleepEvent
+import me.mupu.sleeptalkrecorder.data.TranscriptResult
+import me.mupu.sleeptalkrecorder.models.ModelStatus
 import me.mupu.sleeptalkrecorder.models.TranscriptionModel
 import me.mupu.sleeptalkrecorder.transcription.ModelChange
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionStatus
@@ -193,10 +200,12 @@ internal fun EventFilterChips(
 }
 
 /**
- * What speech recognition found in a speech event: for a murmur that no words were recognised;
- * else its transcript, one line until tapped, then whole, marked as automatic or as corrected by
- * the user; correcting it and saying it is not speech are in the event's menu. After a
- * [modelChange] an automatic transcript also offers the re-run with the active model.
+ * What speech recognition found in an event: its transcript, one line until tapped, then whole,
+ * marked as automatic or as corrected by the user; for a murmur that no words were recognised.
+ * When several models recognised the event, the line shows the active model's result and, once
+ * tapped, every model's result with its name, until the user writes their own text. Correcting it
+ * and saying it is not speech are in the event's menu. After a [modelChange] an automatic
+ * transcript also offers the re-run with the active model.
  */
 @Composable
 internal fun TranscriptLine(
@@ -206,37 +215,34 @@ internal fun TranscriptLine(
     modelChange: ModelChange?,
     onRerun: () -> Unit,
 ) {
-    if (!event.isSpeech) return
+    val compared = event.comparedResults
+    if (!event.isSpeech && compared.none { it.isSpeech }) return
     val colors = MaterialTheme.colorScheme
     val transcript = event.transcript
-    if (transcript == null) {
-        Text(
-            stringResource(R.string.murmur),
-            style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
-            color = colors.onSurfaceVariant,
-        )
+    if (transcript == null && compared.isEmpty()) {
+        ResultText(null, speech = true)
         return
     }
 
     Row(verticalAlignment = Alignment.Top, modifier = Modifier.clickable(onClick = onToggle).padding(vertical = 2.dp)) {
         Column(Modifier.weight(1f)) {
-            Text(
-                stringResource(R.string.transcript_quoted, transcript),
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.tertiary,
-                maxLines = if (expanded) Int.MAX_VALUE else 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (expanded) {
-                Text(
-                    if (event.corrected) {
-                        stringResource(R.string.transcript_corrected)
-                    } else {
-                        stringResource(R.string.transcript_automatic, event.transcriptProducer?.let(::modelName).orEmpty())
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.onSurfaceVariant,
-                )
+            if (expanded && compared.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (result in compared) ModelResult(result)
+                }
+            } else {
+                ResultText(transcript, event.isSpeech, maxLines = if (expanded) Int.MAX_VALUE else 1)
+                if (expanded) {
+                    Text(
+                        if (event.corrected) {
+                            stringResource(R.string.transcript_corrected)
+                        } else {
+                            stringResource(R.string.transcript_automatic, event.transcriptProducer?.let(::modelName).orEmpty())
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.onSurfaceVariant,
+                    )
+                }
             }
         }
         Icon(
@@ -257,33 +263,162 @@ internal fun TranscriptLine(
     }
 }
 
+/** One model's [result] of an event, with the model's name below. */
+@Composable
+private fun ModelResult(result: TranscriptResult, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        ResultText(result.text, result.isSpeech)
+        Text(
+            result.producer?.let(::modelName).orEmpty(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** The words of a result in quotation marks; without them a murmur for a [speech] result, else no speech. */
+@Composable
+private fun ResultText(text: String?, speech: Boolean, maxLines: Int = Int.MAX_VALUE) {
+    val colors = MaterialTheme.colorScheme
+    if (text != null) {
+        Text(
+            stringResource(R.string.transcript_quoted, text),
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.tertiary,
+            maxLines = maxLines,
+            overflow = TextOverflow.Ellipsis,
+        )
+    } else {
+        Text(
+            stringResource(if (speech) R.string.murmur else R.string.no_speech),
+            style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
+            color = colors.onSurfaceVariant,
+        )
+    }
+}
+
+/** That [model] recognises the event again, or waits to, with a spinner. */
+@Composable
+internal fun RecognisingLine(model: TranscriptionModel) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+        CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            stringResource(R.string.recognising_with, model.displayName),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 /**
- * Asks for the words said in speech event [event], filled with its transcript; [onSave] gets the
- * text as written, blank for a murmur without words.
+ * Asks which of the [installed] models recognises an event again. With only one installed it says
+ * so and leads to the settings, where more can be downloaded, because the same model would give
+ * the same result again.
  */
 @Composable
-internal fun CorrectTranscriptDialog(event: SleepEvent, onSave: (String) -> Unit, onDismiss: () -> Unit) {
-    var text by rememberSaveable(event.id) { mutableStateOf(event.transcript.orEmpty()) }
+internal fun RecogniseAgainDialog(
+    installed: List<ModelStatus>,
+    onRecognise: (TranscriptionModel) -> Unit,
+    onOpenSettings: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.correct_text)) },
+        icon = { Icon(painterResource(R.drawable.ic_subtitles), contentDescription = null) },
+        title = { Text(stringResource(R.string.recognise_again_title)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    minLines = 2,
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text(stringResource(R.string.correct_text_hint), style = MaterialTheme.typography.bodySmall)
+            if (installed.size < 2) {
+                Text(stringResource(R.string.recognise_again_one_model, installed.firstOrNull()?.model?.displayName.orEmpty()))
+            } else {
+                Column {
+                    Text(stringResource(R.string.recognise_again_text), style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(8.dp))
+                    for (status in installed) {
+                        ListItem(
+                            headlineContent = { Text(status.model.displayName) },
+                            supportingContent = if (status.active) {
+                                { Text(stringResource(R.string.model_active)) }
+                            } else {
+                                null
+                            },
+                            leadingContent = { Icon(painterResource(R.drawable.ic_record_voice), contentDescription = null) },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                            modifier = Modifier.clickable {
+                                onDismiss()
+                                onRecognise(status.model)
+                            },
+                        )
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
                     onDismiss()
-                    onSave(text)
+                    onOpenSettings()
+                },
+            ) { Text(stringResource(R.string.settings)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
+}
+
+/**
+ * Asks for the words said in speech event [event], filled with its transcript. Below it lists the
+ * result of each model when several recognised the event: one can be taken into the text or,
+ * while another is left, deleted. [onSave] gets the text as written, blank for a murmur without
+ * words, or null when only results were deleted and the text was not touched, so that no text of
+ * the user's own replaces the models' results; and the results to delete.
+ */
+@Composable
+internal fun CorrectTranscriptDialog(event: SleepEvent, onSave: (String?, List<TranscriptResult>) -> Unit, onDismiss: () -> Unit) {
+    var written by rememberSaveable(event.id) { mutableStateOf<String?>(null) }
+    var deleted by remember(event.id) { mutableStateOf(emptySet<Long>()) }
+    val results = event.results.takeIf { it.size > 1 }.orEmpty().filter { it.annotationId !in deleted }
+    // Until the user writes, the field shows the transcript the event would show, which deleting a result can change.
+    val shown = if (event.corrected) event.transcript else results.firstOrNull()?.text ?: event.transcript
+    val text = written ?: shown.orEmpty()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.correct_text)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { written = it },
+                    minLines = 2,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(stringResource(R.string.correct_text_hint), style = MaterialTheme.typography.bodySmall)
+                if (results.isNotEmpty()) {
+                    Text(stringResource(R.string.model_results), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+                    for (result in results) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            ModelResult(result, Modifier.weight(1f))
+                            if (result.text != null) {
+                                TextButton(onClick = { written = result.text }) { Text(stringResource(R.string.use_result)) }
+                            }
+                            // The last result stays, or the event would wait for speech recognition again.
+                            if (results.size > 1) {
+                                IconButton(onClick = { deleted = deleted + result.annotationId }) {
+                                    Icon(painterResource(R.drawable.ic_delete), contentDescription = stringResource(R.string.delete_result))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onDismiss()
+                    val keepsText = written != null || deleted.isEmpty() || event.corrected
+                    onSave(text.takeIf { keepsText }, event.results.filter { it.annotationId in deleted })
                 },
             ) { Text(stringResource(R.string.save)) }
         },

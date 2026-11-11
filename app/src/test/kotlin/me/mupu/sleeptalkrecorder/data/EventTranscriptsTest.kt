@@ -46,7 +46,7 @@ class EventTranscriptsTest {
     private data class Shown(val kind: String, val text: String?, val origin: AnnotationOrigin?, val producer: String?)
 
     private fun shown(events: List<SleepEvent>, transcripts: List<AnnotationEntity>) =
-        withTranscripts(events, transcripts, kinds).map { Shown(it.kindId, it.transcript, it.transcriptOrigin, it.transcriptProducer) }
+        withTranscripts(events, transcripts, kinds, activeModel = "parakeet-ultra").map { Shown(it.kindId, it.transcript, it.transcriptOrigin, it.transcriptProducer) }
 
     @Test
     fun `an event shows the kind and words of the phone's transcript over its stretch`() {
@@ -158,6 +158,7 @@ class EventTranscriptsTest {
             events = (1L..3L).map { SleepEventOf(it, event(it, 1_000, 2_000)) },
             transcripts = listOf(transcript(1_000, 2_000, EventKinds.SPEECH, "hello").copy(sleepId = 2)),
             kinds = kinds.values.toList(),
+            activeModel = null,
         )
 
         assertEquals(listOf(2L, 1L), stored.map { it.summary.id })
@@ -170,14 +171,42 @@ class EventTranscriptsTest {
         val event = event(1, 1_000, 2_000)
         val transcripts = listOf(transcript(1_000, 2_000, EventKinds.SPEECH, "hello"), notSpeech(1_000, 2_000))
 
-        assertEquals(false, needsUserSpeechMark(event, transcripts, kinds))
+        assertEquals(false, needsUserSpeechMark(event, transcripts, kinds, activeModel = null))
     }
 
     @Test
     fun `marking a plain event as speech needs a mark of the user's own`() {
         val transcripts = listOf(transcript(1_000, 2_000, EventKinds.EVENT, null))
 
-        assertEquals(true, needsUserSpeechMark(event(1, 1_000, 2_000), transcripts, kinds))
-        assertEquals(true, needsUserSpeechMark(event(2, 5_000, 6_000), emptyList(), kinds))
+        assertEquals(true, needsUserSpeechMark(event(1, 1_000, 2_000), transcripts, kinds, activeModel = null))
+        assertEquals(true, needsUserSpeechMark(event(2, 5_000, 6_000), emptyList(), kinds, activeModel = null))
+    }
+
+    @Test
+    fun `of the results of several models the active model's is shown, else the latest`() {
+        val events = listOf(event(1, 1_000, 2_000))
+        val transcripts = listOf(
+            transcript(1_000, 2_000, EventKinds.SPEECH, "good night", producer = "parakeet-ultra"),
+            transcript(1_000, 2_000, EventKinds.SPEECH, "gute Nacht", producer = "whisper-small"),
+        )
+
+        fun shownWith(active: String?) = withTranscripts(events, transcripts, kinds, active).single()
+        assertEquals("good night", shownWith("parakeet-ultra").transcript)
+        assertEquals(listOf("parakeet-ultra", "whisper-small"), shownWith("parakeet-ultra").results.map { it.producer })
+        assertEquals("gute Nacht", shownWith("whisper-small").transcript)
+        assertEquals("gute Nacht", shownWith(null).transcript)
+    }
+
+    @Test
+    fun `the open transcript compares the models' results only while the user wrote none`() {
+        val event = event(1, 1_000, 2_000)
+        val parakeet = transcript(1_000, 2_000, EventKinds.EVENT, null, producer = "parakeet-ultra")
+        val whisper = transcript(1_000, 2_000, EventKinds.SPEECH, "gute Nacht", producer = "whisper-small")
+
+        fun compared(vararg transcripts: AnnotationEntity) =
+            withTranscripts(listOf(event), transcripts.toList(), kinds, "parakeet-ultra").single().comparedResults.map { it.text }
+        assertEquals(emptyList<String?>(), compared(parakeet))
+        assertEquals(listOf(null, "gute Nacht"), compared(parakeet, whisper))
+        assertEquals(emptyList<String?>(), compared(parakeet, whisper, correction(1_000, 2_000, "Gute Nacht!")))
     }
 }
