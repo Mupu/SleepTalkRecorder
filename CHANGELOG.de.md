@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.9.0] - 2026-11-11
+
+### Geändert
+
+- Mehrere zusammen geteilte Ereignisse sind nummeriert: Jede Zeile des mit Videos mitgeschickten Texts beginnt mit ihrer Nummer, und die Karte jedes Videos und der Name jeder Datei tragen dieselbe Nummer, sodass du siehst, welche Zeile zu welchem Video gehört. Die Karten der Videos haben außerdem die Form der Kacheln, in denen WhatsApp sie als Album zeigt, sodass Name, Uhrzeit und Transkript nicht mehr abgeschnitten werden. Ein einzeln geteiltes Ereignis sieht aus wie bisher.
+
 ## [0.8.0] - 2026-11-11
 
 ### Hinzugefügt

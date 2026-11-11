@@ -80,15 +80,18 @@ data class ShareStretches(val events: List<EventAudio>, val leadIn: Duration, va
 }
 
 /**
- * The name of the file shared of an event that began at [start]: its local date and clock time in
- * [zone], with the extension of [format].
+ * The name of the file shared of an event that began at [start], the one at [index] of [count]
+ * shared together: its [shareNumber] of [count], if any, then its local date and clock time in
+ * [zone], with the extension of [format]. Numbered, the files of one share never share a name,
+ * even of events that began in the same second.
  */
-fun shareFileName(start: Instant, zone: ZoneId, format: ShareFormat): String {
+fun shareFileName(start: Instant, zone: ZoneId, format: ShareFormat, index: Int, count: Int): String {
     val extension = when (format) {
         ShareFormat.VIDEO -> "mp4"
         ShareFormat.AUDIO -> "m4a"
     }
-    return "SleepTalk ${FILE_TIME.format(start.atZone(zone))}.$extension"
+    val number = shareNumber(index, count)?.let { "$it of $count - " } ?: ""
+    return "SleepTalk $number${FILE_TIME.format(start.atZone(zone))}.$extension"
 }
 
 /** Dashes instead of colons, which some file systems and apps refuse in a name. */

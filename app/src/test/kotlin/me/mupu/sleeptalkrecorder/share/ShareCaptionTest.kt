@@ -17,9 +17,9 @@ class ShareCaptionTest {
     }
 
     @Test
-    fun `several events take a line each, and a caption that names nothing is none`() {
-        assertEquals("First words · 8 Nov, 22:55:41\n8 Nov, 23:10:05", caption(listOf(named, plain), setOf(CaptionItem.NAME, CaptionItem.TIME)))
-        assertEquals("First words", caption(listOf(named, plain), setOf(CaptionItem.NAME)))
+    fun `several events take a numbered line each, and a caption that names nothing is none`() {
+        assertEquals("1. First words · 8 Nov, 22:55:41\n2. 8 Nov, 23:10:05", caption(listOf(named, plain), setOf(CaptionItem.NAME, CaptionItem.TIME)))
+        assertEquals("2. First words", caption(listOf(plain, named), setOf(CaptionItem.NAME)))
         assertNull(caption(listOf(named), emptySet()))
     }
 }

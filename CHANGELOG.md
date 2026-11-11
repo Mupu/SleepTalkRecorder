@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.9.0] - 2026-11-11
+
+### Changed
+
+- Several events shared together are numbered: each line of the text sent along with videos starts with its number, and each video’s card and each file’s name carry the same number, so you can tell which line belongs to which video. The videos’ cards also take the shape of the tiles WhatsApp shows them in as an album, so the name, the time and the transcript are no longer cut off. A single shared event looks as before.
+
 ## [0.8.0] - 2026-11-11
 
 ### Added

@@ -55,10 +55,22 @@ data class EventLabels(
 
 /**
  * The text sent along with shared events: one line per event naming the chosen [items] that it
- * has, in the order of [CaptionItem]; null when no line names anything.
+ * has, in the order of [CaptionItem], each starting with the event's [shareNumber] when several
+ * are shared; null when no line names anything. A line that names nothing is left out, and the
+ * others keep the numbers of their events.
  */
 fun caption(events: List<EventLabels>, items: Set<CaptionItem>): String? =
-    events.map { captionLine(it, items) }.filter { it.isNotEmpty() }.joinToString("\n").ifEmpty { null }
+    events.mapIndexedNotNull { index, event ->
+        captionLine(event, items).takeIf { it.isNotEmpty() }?.let { line ->
+            shareNumber(index, events.size)?.let { "$it. $line" } ?: line
+        }
+    }.joinToString("\n").ifEmpty { null }
+
+/**
+ * The number of the event at [index] of [count] shared together, from 1, which its caption line,
+ * its card and its file name carry so that they can be matched; null for an event shared alone.
+ */
+fun shareNumber(index: Int, count: Int): Int? = if (count > 1) index + 1 else null
 
 /** One event's line of a [caption], its parts separated by a middle dot. */
 internal fun captionLine(event: EventLabels, items: Set<CaptionItem>): String =

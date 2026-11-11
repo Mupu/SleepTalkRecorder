@@ -35,9 +35,10 @@ class EventShares(private val context: Context) {
 
     /**
      * Writes one file of [format] for each of [events], each from the audio of its own sleep, named
-     * after the event's clock time, its card drawn in [colors], and returns their content URIs in
-     * the same order; null when the audio cannot be read or encoded. The files shared before are
-     * deleted first: a receiving app has read them by the time the user shares again.
+     * after the event's clock time and, of several, its number, its card drawn in [colors] in the
+     * shape that a messenger's album of that many videos shows whole, and returns their content
+     * URIs in the same order; null when the audio cannot be read or encoded. The files shared
+     * before are deleted first: a receiving app has read them by the time the user shares again.
      */
     suspend fun write(events: List<SharedEvent>, format: ShareFormat, colors: CardColors): List<Uri>? =
         withContext(Dispatchers.IO) {
@@ -45,17 +46,19 @@ class EventShares(private val context: Context) {
                 directory.listFiles()?.forEach { it.delete() }
                 if (!directory.isDirectory && !directory.mkdirs()) throw IOException("cannot create $directory")
 
-                events.map { event ->
+                val shapes = cardShapes(events.size)
+                events.mapIndexed { index, event ->
                     val timeline = event.timeline
                     val sampleRate = SleepAudio.sampleRateOf(timeline)
-                    val file = uniqueFile(shareFileName(timeline.instantAt(event.eventStart), ZoneId.systemDefault(), format))
+                    val name = shareFileName(timeline.instantAt(event.eventStart), ZoneId.systemDefault(), format, index, events.size)
+                    val file = File(directory, name)
                     val pcm = SleepAudio(timeline).use { it.pcm(event.stretch) }
                     fadeEdges(pcm, CutPlan.fadeFrames(sampleRate).toInt())
                     val audio = Mp4Encoder.audio(pcm, sampleRate)
                     val tracks = when (format) {
                         ShareFormat.AUDIO -> listOf(audio)
                         ShareFormat.VIDEO -> {
-                            val card = ShareCard.draw(event.labels, colors)
+                            val card = ShareCard.draw(event.labels, colors, shapes[index], shareNumber(index, events.size))
                             val lengthUs = pcm.size * MICROS_PER_SECOND / sampleRate
                             listOf(Mp4Encoder.still(card, lengthUs).also { card.recycle() }, audio)
                         }
@@ -75,15 +78,6 @@ class EventShares(private val context: Context) {
                 null
             }
         }
-
-    /** [name] in the share folder, numbered when two events of one share began in the same second. */
-    private fun uniqueFile(name: String): File {
-        val file = File(directory, name)
-        if (!file.exists()) return file
-        val base = name.substringBeforeLast('.')
-        val extension = name.substringAfterLast('.')
-        return generateSequence(2) { it + 1 }.map { File(directory, "$base ($it).$extension") }.first { !it.exists() }
-    }
 
     companion object {
         /** The folder of the cache that holds the shared files; `res/xml/shared_files.xml` names it too. */

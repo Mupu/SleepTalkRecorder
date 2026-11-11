@@ -533,10 +533,11 @@ playback, and encodes them with Android's own `MediaCodec` and `MediaMuxer`, so 
 needed: the audio as AAC-LC at the recording's rate, alone in an M4A file or with a still picture
 as H.264 video in an MP4 file, formats messengers and mail apps take everywhere. Each track is
 encoded into memory first, because the muxer needs every track's format before it writes. The
-picture is a `ShareCard` of 1200 × 300 pixels in the app's dark colours, drawn on an Android
-`Canvas`: WhatsApp shows a video preview up to 4:1 whole and crops a wider one, draws its play
-button in the middle and the length at the bottom left, so the name (the event's kind for an
-event without one) stands top left and ends before the middle, and the date, time and transcript stand bottom right. The video has one frame a
+picture is a `ShareCard` in the app's dark colours, drawn on an Android `Canvas`: WhatsApp shows a
+single video preview up to 4:1 whole and crops a wider one, draws its play button in the middle and
+the length at the bottom left, so the name (the event's kind for an event without one) stands top
+left, and the date, time and transcript stand bottom right. A single event's card is 1200 × 300
+pixels, its name ending before the middle. The video has one frame a
 second, all the same picture, so it takes a few kB beyond the audio; its frames are converted to
 YUV in plain Kotlin and handed to the encoder as images, which fits any encoder's memory layout,
 and the encoder is one the phone names for that size.
@@ -545,7 +546,17 @@ Several selected events are shared together, but always as one file each, never 
 offers one lead-in and one tail for all of them (`ShareStretches`, from none up to 10 s, starting
 with the settings') instead of the single event's range slider, and each file gets the card of
 its event. Android's `ACTION_SEND_MULTIPLE` carries one text for all files, so the caption has
-one line per event.
+one line per event, and every line, card and file name carries the event's number (`shareNumber`,
+from 1; a single event has none), so lines and videos can be matched.
+
+WhatsApp shows videos sent together as an album whose tiles crop each video to the tile's shape:
+two are stacked as tiles of about 2:1, three as a 2:1 tile over two squares when the first video
+is landscape, four or more as a grid of four squares whose fourth is covered by the count of the
+rest, which are seen only once the album is opened; there the numbered caption is the only
+mapping. `cardShapes` therefore gives two events cards of 1200 × 600, three a 1200 × 600 card and
+two of 720 × 720, and four or more squares only. Shown that small, these cards set their text
+larger, let the name and transcript wrap onto more lines, and show the number large in a disc top
+right.
 
 The step lives in the package `ui.share`, apart from the screens that open it. `EventSharing`
 holds it and takes the events with their sleeps (`ShareItem`), so favourites selected in the
@@ -559,7 +570,8 @@ one event the movable stretch and several one lead-in and tail. The sleep screen
 `LibraryViewModel` holds one without a player, for several favourites, and its step offers no
 listening.
 
-Each file is named after its event's local date and time (`SleepTalk 2026-11-08 22-55-41.mp4`) and
+Each file is named after its event's local date and time (`SleepTalk 2026-11-08 22-55-41.mp4`), of
+several events after its number too (`SleepTalk 1 of 3 - 2026-11-08 22-55-41.mp4`), and
 lies in the cache folder `shared/`, which holds only the latest share; a `FileProvider` hands the
 files out, granting the receiving app read access to them alone. The audio encoder puts 1 024 samples
 of priming silence before the audio and fills the last AAC frame, so a file plays up to about
