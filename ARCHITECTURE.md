@@ -14,7 +14,7 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 | `detection` | The feature track (extraction and file format) and the `EventDetector` with its baseline | none |
 | `data` | Room database, entities, the `SleepRepository` through which screens read and change sleeps, `SleepRecordings` (the recording session's `RecordingStore`), `SleepTranscripts` (speech recognition's `TranscriptStore`), the `RecordingFiles` of each recording, loading feature tracks for a sleep, and the `AnalysisExport` of every sleep | Room |
 | `playback` | The `SleepTimeline` of a sleep's chunk files, the `SleepAudio` stream made of them, the `CutPlan` of cut playback and the `SleepPlayer` that plays it | only in `SleepPlayer` (Media3) |
-| `share` | Sharing an event as an audio file: the stretch that is shared (`ShareStretch`), the `M4aEncoder` and `EventShares`, which writes the file and hands it to Android's share sheet | only in `M4aEncoder` (`MediaCodec`, `MediaMuxer`) and `EventShares` (`FileProvider`, intents) |
+| `share` | Sharing events as a short video or an audio file: the stretch that is shared (`ShareStretch`), the caption sent along (`caption`), the video's still `ShareCard`, the `Mp4Encoder` and `EventShares`, which writes the files and hands them to Android's share sheet | only in `ShareCard` (`Bitmap`, `Canvas`), `Mp4Encoder` (`MediaCodec`, `MediaMuxer`) and `EventShares` (`FileProvider`, intents) |
 | `retention` | Automatic deletion: which sleeps are old enough (`SleepRetention`) and the WorkManager job that deletes them | only in `AutoDeletion` (WorkManager) |
 | `settings` | The user's settings and the `SettingsStore` that keeps them; the app language | DataStore; AppCompat only in `AppLanguages` |
 | `models` | The transcription models: the catalogue of downloadable models (`TranscriptionModel`), the `ModelInstaller` that downloads and checks their files, the `ModelLibrary` with their states and the active one, and the WorkManager job that downloads them | only in `ModelDownloadWorker` (WorkManager) |
@@ -31,7 +31,7 @@ The root package holds `MainActivity`, the only activity, and `SleepTalkApplicat
 automatic deletion scheduled, starts the search for events of finished sleeps, schedules their
 speech recognition and owns the `Updater`. Logic that can be tested without a device
 (`time`, `detection`, the WAV writer, the recording session, level computation, the sleep
-timeline and its audio stream, the cut plan, the stretch an event is shared with, the timeline view and the event filter of the sleep screen, the
+timeline and its audio stream, the cut plan, the stretch an event is shared with and its caption, the timeline view and the event filter of the sleep screen, the
 sensitivity sheet's re-scan, the numbers of the stats screen, the settings,
 which sleeps automatic deletion removes, the model downloads and states, the transcript filter,
 the speech recognition run, which transcript each event shows and which results of models it compares, reading the changelogs, and finding,
@@ -496,14 +496,30 @@ least 0.5 s long), as far as the audio reaches without a gap or a taken micropho
 as the lead-in's. The step draws the loudness of that range with the shared stretch coloured, and
 plays the stretch on the sleep's player to listen to it.
 
+The step shares the stretch as a video by default, or as an audio file. WhatsApp, the main
+target, drops a text sent along with an audio file but shows it as the caption of a video, so a
+video carries a caption (`EXTRA_TEXT`) and an audio file none. The step's checkboxes choose what
+the caption names: the favourite's name, the date and time, the transcript, the sleep and the
+length, each where the event has it; the choice is a setting, so the next share starts with it.
+
 `EventShares` reads the stretch's samples from the chunk files, fades them in and out like cut
-playback, and encodes them with Android's own `MediaCodec` and `MediaMuxer` as AAC-LC at the
-recording's rate in an M4A file, the format messengers and mail apps take everywhere, so no
-library is needed. The file is named after the event's local date and time (`SleepTalk 2026-11-08
-22-55-41.m4a`) and lies in the cache folder `shared/`, which holds only the latest shared file; a
-`FileProvider` hands it out, granting the receiving app read access to that one file. The encoder
-puts 1 024 samples of priming silence before the audio and fills the last AAC frame, so a file
-plays up to about 0.2 s longer than its stretch.
+playback, and encodes them with Android's own `MediaCodec` and `MediaMuxer`, so no library is
+needed: the audio as AAC-LC at the recording's rate, alone in an M4A file or with a still picture
+as H.264 video in an MP4 file, formats messengers and mail apps take everywhere. Each track is
+encoded into memory first, because the muxer needs every track's format before it writes. The
+picture is a `ShareCard` of 1200 × 300 pixels in the app's dark colours, drawn on an Android
+`Canvas`: WhatsApp shows a video preview up to 4:1 whole and crops a wider one, draws its play
+button in the middle and the length at the bottom left, so the name (the event's kind for an
+event without one) stands top left and ends before the middle, and the date, time and transcript stand bottom right. The video has one frame a
+second, all the same picture, so it takes a few kB beyond the audio; its frames are converted to
+YUV in plain Kotlin and handed to the encoder as images, which fits any encoder's memory layout,
+and the encoder is one the phone names for that size.
+
+The file is named after the event's local date and time (`SleepTalk 2026-11-08 22-55-41.mp4`) and
+lies in the cache folder `shared/`, which holds only the latest share; a `FileProvider` hands it
+out, granting the receiving app read access to that one file. The audio encoder puts 1 024 samples
+of priming silence before the audio and fills the last AAC frame, so a file plays up to about
+0.2 s longer than its stretch, and the video lasts the stretch rounded up to whole seconds.
 
 ## Stats
 

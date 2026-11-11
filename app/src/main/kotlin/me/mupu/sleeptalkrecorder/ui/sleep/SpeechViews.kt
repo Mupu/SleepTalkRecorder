@@ -1,5 +1,6 @@
 package me.mupu.sleeptalkrecorder.ui.sleep
 
+import android.content.res.Resources
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -462,8 +464,11 @@ internal fun modelName(producer: String): String =
 
 /** The name of an event kind: the user's [name], or the app's for the kinds it ships. */
 @Composable
-internal fun kindName(id: String, name: String?): String = name ?: when (id) {
-    EventKinds.EVENT -> stringResource(R.string.kind_event)
-    EventKinds.SPEECH -> stringResource(R.string.kind_speech)
+internal fun kindName(id: String, name: String?): String = kindName(LocalResources.current, id, name)
+
+/** The name of an event kind in the app language of [resources]: the user's [name], or the app's for the kinds it ships. */
+internal fun kindName(resources: Resources, id: String, name: String?): String = name ?: when (id) {
+    EventKinds.EVENT -> resources.getString(R.string.kind_event)
+    EventKinds.SPEECH -> resources.getString(R.string.kind_speech)
     else -> id
 }

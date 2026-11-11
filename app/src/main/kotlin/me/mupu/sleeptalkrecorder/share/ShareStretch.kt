@@ -52,8 +52,17 @@ data class ShareStretch(val event: Stretch, val bounds: Stretch, val default: St
     }
 }
 
-/** The name of the file shared of an event that began at [start]: its local date and clock time in [zone]. */
-fun shareFileName(start: Instant, zone: ZoneId): String = "SleepTalk ${FILE_TIME.format(start.atZone(zone))}.m4a"
+/**
+ * The name of the file shared of an event that began at [start]: its local date and clock time in
+ * [zone], with the extension of [format].
+ */
+fun shareFileName(start: Instant, zone: ZoneId, format: ShareFormat): String {
+    val extension = when (format) {
+        ShareFormat.VIDEO -> "mp4"
+        ShareFormat.AUDIO -> "m4a"
+    }
+    return "SleepTalk ${FILE_TIME.format(start.atZone(zone))}.$extension"
+}
 
 /** Dashes instead of colons, which some file systems and apps refuse in a name. */
 private val FILE_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm-ss")

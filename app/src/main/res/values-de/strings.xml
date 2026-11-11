@@ -421,5 +421,17 @@
     <string name="share_range">Abschnitt, der geteilt wird</string>
     <string name="share_hint">Ziehe die Enden, um festzulegen, was geteilt wird. Zu Beginn ist es das Ereignis mit Vorlauf und Nachlauf, wie beim geschnittenen Abspielen.</string>
     <string name="share_chooser">Ereignis teilen</string>
-    <string name="share_failed">Der Ton konnte nicht zum Teilen vorbereitet werden.</string>
+    <string name="share_failed">Die Datei konnte nicht zum Teilen vorbereitet werden.</string>
+    <string name="share_format_video">Video</string>
+    <string name="share_format_audio">Audio</string>
+    <string name="share_audio_hint">Audio geht ohne Text, weil die meisten Apps Text zu einer Audiodatei verwerfen.</string>
+    <string name="share_caption">Text zum Video</string>
+    <string name="share_no_caption">Kein Text</string>
+    <string name="caption_name">Name</string>
+    <string name="caption_time">Datum und Uhrzeit</string>
+    <string name="caption_sleep">Schlaf</string>
+    <string name="caption_length">Länge</string>
+    <string name="caption_transcript">Transkript</string>
+    <string name="date_pattern_share">d. MMM</string>
+    <string name="share_time">%1$s, %2$s</string>
 </resources>

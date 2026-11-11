@@ -160,11 +160,11 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
         }
     }
     LaunchedEffect(viewModel) {
-        viewModel.shared.collect { uri ->
-            if (uri == null) {
+        viewModel.shared.collect { files ->
+            if (files == null) {
                 snackbars.showSnackbar(resources.getString(R.string.share_failed))
             } else {
-                context.startActivity(EventShares.chooser(uri, resources.getString(R.string.share_chooser)))
+                context.startActivity(EventShares.chooser(files.uris, files.format, files.caption, resources.getString(R.string.share_chooser)))
             }
         }
     }
@@ -335,15 +335,20 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                 }
 
                 share?.let { step ->
+                    val clock = LocalClockFormatter.current
+                    val labels = remember(step.event, sleep, clock, resources) { shareLabels(resources, clock, timeline, sleep, step.event) }
                     ShareSheet(
                         state = step,
+                        labels = labels,
                         timeline = timeline,
                         loudness = state.loudness,
                         position = position,
                         onSelect = viewModel::selectShare,
                         onReset = viewModel::resetShare,
+                        onFormat = viewModel::setShareFormat,
+                        onCaptionItem = viewModel::setCaptionItem,
                         onListen = viewModel::listenToShare,
-                        onShare = viewModel::share,
+                        onShare = { viewModel.share(labels, cardColors(context)) },
                         onDismiss = viewModel::closeShare,
                     )
                 }

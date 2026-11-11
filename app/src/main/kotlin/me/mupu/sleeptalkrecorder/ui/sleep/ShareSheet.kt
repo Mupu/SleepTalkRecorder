@@ -1,6 +1,8 @@
 package me.mupu.sleeptalkrecorder.ui.sleep
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -12,9 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -23,6 +27,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RangeSlider
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -37,6 +44,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -46,6 +54,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
+import me.mupu.sleeptalkrecorder.share.CaptionItem
+import me.mupu.sleeptalkrecorder.share.EventLabels
+import me.mupu.sleeptalkrecorder.share.ShareFormat
+import me.mupu.sleeptalkrecorder.share.caption
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.formatEventLength
 import java.time.Duration
@@ -53,8 +65,9 @@ import kotlin.math.roundToLong
 
 /**
  * The step before an event is shared: the loudness around it with the stretch that is shared, a
- * range slider that moves the stretch's ends, a button that listens to it and one that shares it.
- * It opens with the event as cut playback plays it, with the settings' lead-in and tail.
+ * range slider that moves the stretch's ends, the format with the items the caption names, a
+ * button that listens to it and one that shares it. It opens with the event as cut playback plays
+ * it, with the settings' lead-in and tail.
  *
  * Like the sensitivity sheet's chart, the chart runs along the sleep's audio, so a gap between
  * recordings takes no room in it; the stretch never reaches over one anyway.
@@ -63,11 +76,15 @@ import kotlin.math.roundToLong
 @Composable
 fun ShareSheet(
     state: ShareUiState,
+    /** What the card and caption say about the event. */
+    labels: EventLabels,
     timeline: SleepTimeline,
     loudness: SleepLoudness?,
     position: () -> Duration,
     onSelect: (start: Duration, end: Duration) -> Unit,
     onReset: () -> Unit,
+    onFormat: (ShareFormat) -> Unit,
+    onCaptionItem: (CaptionItem, Boolean) -> Unit,
     onListen: () -> Unit,
     onShare: () -> Unit,
     onDismiss: () -> Unit,
@@ -108,6 +125,8 @@ fun ShareSheet(
                 color = colors.onSurfaceVariant,
             )
 
+            ShareOptions(state, listOf(labels), onFormat, onCaptionItem, Modifier.padding(top = 16.dp))
+
             // Listening on the left, resetting and sharing on the right; when the three do not fit in
             // one line (long labels, a large font), the two on the right move to a line of their own.
             FlowRow(
@@ -142,6 +161,94 @@ fun ShareSheet(
         }
     }
 }
+
+/**
+ * The format the events are shared in and, for a video, the items its caption names, each
+ * checked while chosen, with the caption that results. An item none of [events] has (a name, a
+ * transcript) cannot be chosen.
+ */
+@Composable
+fun ShareOptions(
+    state: ShareUiState,
+    events: List<EventLabels>,
+    onFormat: (ShareFormat) -> Unit,
+    onCaptionItem: (CaptionItem, Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.colorScheme
+    Column(modifier) {
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            for ((index, format) in ShareFormat.entries.withIndex()) {
+                SegmentedButton(
+                    selected = state.format == format,
+                    onClick = { onFormat(format) },
+                    shape = SegmentedButtonDefaults.itemShape(index, ShareFormat.entries.size),
+                    enabled = !state.preparing,
+                ) {
+                    Text(stringResource(if (format == ShareFormat.VIDEO) R.string.share_format_video else R.string.share_format_audio))
+                }
+            }
+        }
+
+        if (state.format == ShareFormat.AUDIO) {
+            Text(
+                stringResource(R.string.share_audio_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            return@Column
+        }
+
+        Text(stringResource(R.string.share_caption), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
+        FlowRow {
+            for (item in CHECKBOX_ORDER) {
+                val available = when (item) {
+                    CaptionItem.NAME -> events.any { it.name != null }
+                    CaptionItem.TRANSCRIPT -> events.any { it.transcript != null }
+                    else -> true
+                }
+                val checked = available && item in state.caption
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .toggleable(checked, enabled = available && !state.preparing, role = Role.Checkbox) { onCaptionItem(item, it) }
+                        .padding(end = 12.dp),
+                ) {
+                    Checkbox(checked = checked, onCheckedChange = null, enabled = available, modifier = Modifier.padding(12.dp))
+                    Text(
+                        stringResource(item.label),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (available) colors.onSurface else colors.onSurface.copy(alpha = 0.38f),
+                    )
+                }
+            }
+        }
+        Text(
+            caption(events, state.caption) ?: stringResource(R.string.share_no_caption),
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(colors.surfaceContainerHigh)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        )
+    }
+}
+
+/** The caption items in the order of their checkboxes: those on by default first. */
+private val CHECKBOX_ORDER = listOf(CaptionItem.NAME, CaptionItem.TIME, CaptionItem.TRANSCRIPT, CaptionItem.SLEEP, CaptionItem.LENGTH)
+
+/** The label of a caption item's checkbox. */
+private val CaptionItem.label: Int
+    @StringRes get() = when (this) {
+        CaptionItem.NAME -> R.string.caption_name
+        CaptionItem.TIME -> R.string.caption_time
+        CaptionItem.SLEEP -> R.string.caption_sleep
+        CaptionItem.LENGTH -> R.string.caption_length
+        CaptionItem.TRANSCRIPT -> R.string.caption_transcript
+    }
 
 /**
  * The loudness across the stretch's bounds as bars, coloured where they are shared and grey

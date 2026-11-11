@@ -58,6 +58,8 @@ class ShareStretchTest {
 
     @Test
     fun `the file is named after the event's local date and time`() {
-        assertEquals("SleepTalk 2026-11-08 22-55-41.m4a", shareFileName(Instant.parse("2026-11-08T21:55:41Z"), ZoneId.of("Europe/Berlin")))
+        val start = Instant.parse("2026-11-08T21:55:41Z")
+        assertEquals("SleepTalk 2026-11-08 22-55-41.mp4", shareFileName(start, ZoneId.of("Europe/Berlin"), ShareFormat.VIDEO))
+        assertEquals("SleepTalk 2026-11-08 22-55-41.m4a", shareFileName(start, ZoneId.of("Europe/Berlin"), ShareFormat.AUDIO))
     }
 }

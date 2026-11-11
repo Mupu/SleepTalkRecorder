@@ -472,5 +472,20 @@
     <string name="share_range">Stretch that is shared</string>
     <string name="share_hint">Drag the ends to choose what is shared. It starts as cut playback plays the event, with its lead-in and tail.</string>
     <string name="share_chooser">Share event</string>
-    <string name="share_failed">The audio could not be prepared for sharing.</string>
+    <string name="share_failed">The file could not be prepared for sharing.</string>
+    <string name="share_format_video">Video</string>
+    <string name="share_format_audio">Audio</string>
+    <string name="share_audio_hint">Audio is sent without text, because most apps drop text that comes with an audio file.</string>
+    <!-- Above the checkboxes for what the text sent along with a video names. -->
+    <string name="share_caption">Text with the video</string>
+    <string name="share_no_caption">No text</string>
+    <string name="caption_name">Name</string>
+    <string name="caption_time">Date and time</string>
+    <string name="caption_sleep">Sleep</string>
+    <string name="caption_length">Length</string>
+    <string name="caption_transcript">Transcript</string>
+    <!-- The date of a shared event, as in "8 Nov, 22:55:41". -->
+    <string name="date_pattern_share">d MMM</string>
+    <!-- When a shared event began: its date and clock time, "8 Nov, 22:55:41". -->
+    <string name="share_time">%1$s, %2$s</string>
 </resources>

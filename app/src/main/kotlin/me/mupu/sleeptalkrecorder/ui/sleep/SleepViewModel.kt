@@ -1,6 +1,5 @@
 package me.mupu.sleeptalkrecorder.ui.sleep
 
-import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import me.mupu.sleeptalkrecorder.data.AnnotationOrigin
@@ -23,8 +22,14 @@ import me.mupu.sleeptalkrecorder.models.ModelStatus
 import me.mupu.sleeptalkrecorder.models.TranscriptionModel
 import me.mupu.sleeptalkrecorder.settings.Settings
 import me.mupu.sleeptalkrecorder.settings.SettingsStore
+import me.mupu.sleeptalkrecorder.share.CaptionItem
+import me.mupu.sleeptalkrecorder.share.CardColors
+import me.mupu.sleeptalkrecorder.share.EventLabels
 import me.mupu.sleeptalkrecorder.share.EventShares
+import me.mupu.sleeptalkrecorder.share.ShareFormat
 import me.mupu.sleeptalkrecorder.share.ShareStretch
+import me.mupu.sleeptalkrecorder.share.SharedEvent
+import me.mupu.sleeptalkrecorder.share.caption
 import me.mupu.sleeptalkrecorder.transcription.EventRecognition
 import me.mupu.sleeptalkrecorder.transcription.ModelChange
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionRunner
@@ -55,7 +60,7 @@ import kotlinx.coroutines.withContext
 class SleepViewModel(
     private val sleepId: Long,
     private val repository: SleepRepository,
-    settings: SettingsStore,
+    private val settings: SettingsStore,
     private val player: SleepPlayer,
     private val transcriptions: Transcriptions,
     private val shares: EventShares,
@@ -511,21 +516,37 @@ class SleepViewModel(
     /** The open share step; null while it is closed. */
     private val shareStep = MutableStateFlow<ShareStep?>(null)
 
+    /** What the caption of a shared event names, as the user last chose it. */
+    private val captionItems = settings.flow(Settings.shareCaption).stateIn(viewModelScope, SharingStarted.Eagerly, Settings.shareCaption.default)
+
     /** The share step, with whether its stretch is being listened to; null while it is closed. */
-    val share: StateFlow<ShareUiState?> = combine(shareStep, playback) { step, playback ->
-        step?.let { ShareUiState(it.event, it.stretch, playing = playback.playing, preparing = it.preparing) }
+    val share: StateFlow<ShareUiState?> = combine(shareStep, playback, captionItems) { step, playback, captionItems ->
+        step?.let { ShareUiState(it.event, it.stretch, it.format, captionItems, playing = playback.playing, preparing = it.preparing) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    private val sharedChannel = Channel<Uri?>(Channel.BUFFERED)
+    private val sharedChannel = Channel<SharedFiles?>(Channel.BUFFERED)
 
-    /** Each audio file ready for Android's share sheet, or null when it could not be written. */
-    val shared: Flow<Uri?> = sharedChannel.receiveAsFlow()
+    /** Each share's files ready for Android's share sheet, or null when they could not be written. */
+    val shared: Flow<SharedFiles?> = sharedChannel.receiveAsFlow()
 
     /** Opens the share step for [event], with its lead-in and tail as cut playback plays it. */
     fun openShare(event: SleepEvent) {
         val timeline = timeline.value ?: return
         player.pause()
-        shareStep.value = ShareStep(event, ShareStretch.of(event.stretch, timeline, leadIn.value, tail.value, unavailable.value), preparing = false)
+        val stretch = ShareStretch.of(event.stretch, timeline, leadIn.value, tail.value, unavailable.value)
+        shareStep.value = ShareStep(event, stretch, ShareFormat.VIDEO, preparing = false)
+    }
+
+    /** Shares the events as [format]. */
+    fun setShareFormat(format: ShareFormat) {
+        val step = shareStep.value?.takeUnless { it.preparing } ?: return
+        shareStep.value = step.copy(format = format)
+    }
+
+    /** Names [item] in the caption ([on] true) or not, in this share and the next ones. */
+    fun setCaptionItem(item: CaptionItem, on: Boolean) {
+        val items = if (on) captionItems.value + item else captionItems.value - item
+        viewModelScope.launch { settings.set(Settings.shareCaption, items) }
     }
 
     /** Moves the shared stretch to run from [start] until [end], as far as it may reach. */
@@ -551,16 +572,22 @@ class SleepViewModel(
         player.playRange(selected.start, selected.end)
     }
 
-    /** Writes the shared stretch as an audio file, closes the step and reports it through [shared]. */
-    fun share() {
+    /**
+     * Writes the shared stretch as a file of the chosen format, closes the step and reports it
+     * through [shared]. [labels] say what the card and the caption say about the event, and the
+     * card is drawn in [colors].
+     */
+    fun share(labels: EventLabels, colors: CardColors) {
         val step = shareStep.value?.takeUnless { it.preparing } ?: return
         val timeline = timeline.value ?: return
         shareStep.value = step.copy(preparing = true)
         player.pause()
         viewModelScope.launch {
-            val uri = shares.write(timeline, step.stretch.selected, step.event.start)
+            val uris = shares.write(timeline, listOf(SharedEvent(step.stretch.selected, step.event.start, labels)), step.format, colors)
             shareStep.value = null
-            sharedChannel.send(uri)
+            // Apps drop a text sent along with audio, so only a video gets a caption.
+            val text = if (step.format == ShareFormat.VIDEO) caption(listOf(labels), captionItems.value) else null
+            sharedChannel.send(uris?.let { SharedFiles(it, step.format, text) })
         }
     }
 
@@ -583,8 +610,8 @@ class SleepViewModel(
         const val CHART_COLUMNS = 400
     }
 
-    /** The open share step: its event, the stretch chosen so far and whether its file is being written. */
-    private data class ShareStep(val event: SleepEvent, val stretch: ShareStretch, val preparing: Boolean)
+    /** The open share step: its event, the stretch and format chosen so far and whether its file is being written. */
+    private data class ShareStep(val event: SleepEvent, val stretch: ShareStretch, val format: ShareFormat, val preparing: Boolean)
 
     /** The open sensitivity sheet: what it was opened for and the setting the user made so far. */
     private data class Sheet(

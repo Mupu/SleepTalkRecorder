@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import me.mupu.sleeptalkrecorder.time.SleepWindows
 import me.mupu.sleeptalkrecorder.whatsnew.Version
 import java.time.Duration
@@ -51,6 +52,22 @@ fun <E : Enum<E>> enumSetting(key: String, default: E, values: List<E>): Setting
 
     override fun write(preferences: MutablePreferences, value: E) {
         preferences[preferencesKey] = value.name
+    }
+}
+
+/** A choice of any of the constants of [E], stored by constant names; names no longer known are left out. */
+inline fun <reified E : Enum<E>> enumSetSetting(key: String, default: Set<E>): Setting<Set<E>> =
+    enumSetSetting(key, default, enumValues<E>().toList())
+
+/** A choice of any of [values], stored by constant names. */
+fun <E : Enum<E>> enumSetSetting(key: String, default: Set<E>, values: List<E>): Setting<Set<E>> = object : Setting<Set<E>>(default) {
+    private val preferencesKey = stringSetPreferencesKey(key)
+
+    override fun read(preferences: Preferences) =
+        preferences[preferencesKey]?.let { names -> values.filter { it.name in names }.toSet() } ?: default
+
+    override fun write(preferences: MutablePreferences, value: Set<E>) {
+        preferences[preferencesKey] = value.map { it.name }.toSet()
     }
 }
 

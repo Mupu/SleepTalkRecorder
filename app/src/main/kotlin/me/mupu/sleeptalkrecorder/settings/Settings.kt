@@ -1,6 +1,7 @@
 package me.mupu.sleeptalkrecorder.settings
 
 import me.mupu.sleeptalkrecorder.models.TranscriptionModel
+import me.mupu.sleeptalkrecorder.share.CaptionItem
 import me.mupu.sleeptalkrecorder.time.SleepWindows
 import java.time.Duration
 import java.time.LocalTime
@@ -58,6 +59,9 @@ object Settings {
 
     /** How much of the sound after an event cut playback plays. */
     val tail = durationSetting("tail_ms", Duration.ofMillis(500), Duration.ZERO..Duration.ofSeconds(3))
+
+    /** What the caption of a shared event names; the share step changes it for the next share too. */
+    val shareCaption = enumSetSetting("share_caption", CaptionItem.DEFAULT)
 
     /** Whether a recording stops on its own at [stopAt], in case nobody stops it in the morning. */
     val stopAtEnabled = booleanSetting("stop_at_enabled", true)

@@ -9,6 +9,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [Se
 
 - „Neu erkennen mit …“ im ⋮-Menü eines Ereignisses erkennt nur dieses Ereignis mit einem anderen installierten Modell neu, in Sekunden statt einer ganzen Nacht. Das geöffnete Transkript zeigt dann das Ergebnis jedes Modells mit seinem Namen, das des aktiven Modells zuerst. Beim Korrigieren des Texts kannst du das Ergebnis eines Modells übernehmen oder löschen; sobald du eigenen Text schreibst, wird nur noch dieser gezeigt.
 
+### Geändert
+
+- Ein Ereignis zu teilen schickt jetzt standardmäßig ein kurzes Video: eine Karte mit dem Namen des Favoriten oder sonst der Art des Ereignisses, Datum, Uhrzeit und Transkript, dazu der Ton des Ereignisses. WhatsApp und andere Messenger zeigen den Text, der mit einem Video kommt, verwerfen ihn aber bei einer Audiodatei. Häkchen legen fest, was dieser Text nennt: Name, Datum und Uhrzeit, Transkript, Schlaf und Länge; die App merkt sich deine Wahl fürs nächste Teilen. „Audio“ schickt weiterhin nur den Ton.
+
 ## [0.6.1] - 2026-11-11
 
 ### Behoben

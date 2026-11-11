@@ -9,6 +9,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [Sem
 
 - “Recognise again with …” in an event’s ⋮ menu recognises just that event again with another installed model, in seconds instead of a whole night. The open transcript then shows each model’s result with its name, the active model’s first. When correcting the text you can take over a model’s result or delete it; once you write your own text, only that is shown.
 
+### Changed
+
+- Sharing an event sends a short video by default: a card with the favourite’s name or else the kind of event, the date, the time and the transcript, with the event’s sound. WhatsApp and other messengers show the text sent along with a video, which they drop with an audio file. Checkboxes choose what that text names: the name, the date and time, the transcript, the sleep and the length; the app remembers your choice for the next share. “Audio” still sends the sound alone.
+
 ## [0.6.1] - 2026-11-11
 
 ### Fixed

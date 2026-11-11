@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.preferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
+import me.mupu.sleeptalkrecorder.share.CaptionItem
 import me.mupu.sleeptalkrecorder.time.SleepWindows
 import java.time.Duration
 import java.time.LocalTime
@@ -35,6 +37,7 @@ class SettingsStoreTest {
         assertEquals(false, store.flow(Settings.languageChosen).first())
         assertEquals(true, store.flow(Settings.stopAtEnabled).first())
         assertEquals(LocalTime.NOON, store.flow(Settings.stopAt).first())
+        assertEquals(setOf(CaptionItem.NAME, CaptionItem.TIME, CaptionItem.TRANSCRIPT), store.flow(Settings.shareCaption).first())
     }
 
     @Test
@@ -45,11 +48,13 @@ class SettingsStoreTest {
         store.set(Settings.leadIn, Duration.ofMillis(2300))
         store.set(Settings.languageChosen, true)
         store.set(Settings.stopAt, LocalTime.of(7, 45))
+        store.set(Settings.shareCaption, emptySet())
 
         assertEquals(ThemeMode.DARK, store.flow(Settings.theme).first())
         assertEquals(Duration.ofMillis(2300), store.flow(Settings.leadIn).first())
         assertEquals(true, store.flow(Settings.languageChosen).first())
         assertEquals(LocalTime.of(7, 45), store.flow(Settings.stopAt).first())
+        assertEquals(emptySet<CaptionItem>(), store.flow(Settings.shareCaption).first())
     }
 
     @Test
@@ -59,6 +64,7 @@ class SettingsStoreTest {
             longPreferencesKey("lead_in_ms") to 60_000L,
             longPreferencesKey("tail_ms") to -200L,
             intPreferencesKey("stop_at_minute") to 24 * 60,
+            stringSetPreferencesKey("share_caption") to setOf("TIME", "MOOD"),
         )
         val store = SettingsStore(InMemoryDataStore(stored))
 
@@ -66,6 +72,7 @@ class SettingsStoreTest {
         assertEquals(Duration.ofSeconds(3), store.flow(Settings.leadIn).first())
         assertEquals(Duration.ZERO, store.flow(Settings.tail).first())
         assertEquals(LocalTime.of(23, 59), store.flow(Settings.stopAt).first())
+        assertEquals(setOf(CaptionItem.TIME), store.flow(Settings.shareCaption).first())
     }
 
     @Test
