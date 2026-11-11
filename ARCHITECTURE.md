@@ -357,12 +357,19 @@ analysis on a server would be another beside it.
 offline recognizer, four threads at background priority, so the screen keeps the cores it needs),
 in pieces of at most 30 s; clips under 0.3 s are not sent,
 because sherpa-onnx fails on input without frames. `TranscriptFilter` then decides from the text:
-tags are removed, short outputs with phrases models write on silence and repetition loops are
-dropped, and output of fillers only ("mhm", "uh") makes a *murmur*. The result is one `TRANSCRIPT`
+tags are removed (also one whose bracket the model never closed, such as "(door"), short outputs
+with phrases models write on silence and repetition loops are dropped, and output of fillers only
+("mhm", "uh") makes a *murmur*. The result is one `TRANSCRIPT`
 annotation over the event's stretch: the speech kind with the words, the speech kind without words
 for a murmur, or the plain event kind, so that every event analysed counts as done. Whisper is
 told the transcript language: it first detects the language itself and is asked again with the
 user's language when it detected neither that nor English.
+
+The filter has a version, stored as the producer version of the phone's transcripts. When it
+changes, the app judges the stored transcripts of older versions again from their words at its
+next start, so new rules reach nights recognised before without running the model again; a
+transcript without words keeps its verdict, because the model's output is not stored. The
+model-change hint compares only models, so a new filter version does not ask for a re-run.
 
 Transcripts follow their events by stretch: the sleep screen shows an event with the kind and
 text of the transcript over the same stretch, a server's before the phone's. Each model is a

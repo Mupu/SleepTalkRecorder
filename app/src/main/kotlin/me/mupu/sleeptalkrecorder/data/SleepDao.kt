@@ -6,6 +6,7 @@ import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import me.mupu.sleeptalkrecorder.playback.Stretch
 import java.time.Duration
 import java.time.Instant
@@ -105,6 +106,14 @@ interface SleepDao {
     /** Stores new annotations. */
     @Insert
     suspend fun insertAnnotations(annotations: List<AnnotationEntity>)
+
+    /** Stores changed annotations under their ids. */
+    @Update
+    suspend fun updateAnnotations(annotations: List<AnnotationEntity>)
+
+    /** The phone's transcripts that another version than [version] of its speech recognition made. */
+    @Query("SELECT * FROM annotation WHERE type = 'TRANSCRIPT' AND origin = 'DEVICE' AND producer_version IS NOT :version")
+    suspend fun deviceTranscriptsNotOf(version: String): List<AnnotationEntity>
 
     /** Removes the [type] annotation of the producer [producerId] that starts at [start], before it is stored anew. */
     @Query(

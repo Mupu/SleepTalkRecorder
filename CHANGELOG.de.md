@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.10.1] - 2026-11-11
+
+### Behoben
+
+- Ein Ereignis, dessen Transkript nur eine Geräuschmarke ohne schließende Klammer ist, etwa „(door“ oder „(engine“, zählt nicht mehr als Sprache und erscheint nicht mehr unter „Nur Sprache“. Schon erkannte Nächte werden nach dem Update von selbst korrigiert, ohne sie neu zu erkennen.
+
 ## [0.10.0] - 2026-11-11
 
 ### Hinzugefügt

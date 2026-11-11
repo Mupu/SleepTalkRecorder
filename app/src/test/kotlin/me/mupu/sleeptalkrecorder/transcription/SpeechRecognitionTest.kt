@@ -4,6 +4,7 @@ import me.mupu.sleeptalkrecorder.data.AnnotationEntity
 import me.mupu.sleeptalkrecorder.data.AnnotationOrigin
 import me.mupu.sleeptalkrecorder.data.AnnotationType
 import me.mupu.sleeptalkrecorder.data.EventKinds
+import me.mupu.sleeptalkrecorder.data.Producer
 import me.mupu.sleeptalkrecorder.models.TranscriptionModel
 import me.mupu.sleeptalkrecorder.playback.Stretch
 import java.time.Duration
@@ -57,6 +58,13 @@ class SpeechRecognitionTest {
     @Test
     fun `invented text leaves it a plain event`() = runTest {
         assertEquals(transcript(EventKinds.EVENT, null), analyse(FakeTranscriber("Thank you for watching.")))
+    }
+
+    @Test
+    fun `a stored transcript is judged again by the current filter`() {
+        fun stored(text: String) = transcript(EventKinds.SPEECH, text).copy(producer = Producer(TranscriptionModel.PARAKEET_ULTRA.id, "1"))
+        assertEquals(transcript(EventKinds.EVENT, null), SpeechRecognition.judgedAgain(stored("(door")))
+        assertEquals(transcript(EventKinds.SPEECH, "I said no"), SpeechRecognition.judgedAgain(stored("I said no")))
     }
 
     @Test

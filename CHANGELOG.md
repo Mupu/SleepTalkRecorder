@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.10.1] - 2026-11-11
+
+### Fixed
+
+- An event whose transcript is only a sound tag with a missing closing bracket, such as “(door” or “(engine”, no longer counts as speech or shows under “Speech only”. Nights recognised before are corrected on their own after the update, without recognising them again.
+
 ## [0.10.0] - 2026-11-11
 
 ### Added

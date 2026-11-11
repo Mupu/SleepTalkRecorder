@@ -16,7 +16,9 @@ sealed interface Verdict {
  * Decides from a model's raw output whether an event is a speech event. The rules are the ones the
  * models were measured with on the test nights, applied in this order:
  *
- * 1. Tags such as `[music]`, `(laughs)`, `*lacht*`, `<|nospeech|>` and music notes are removed.
+ * 1. Tags such as `[music]`, `(laughs)`, `*lacht*`, `<|nospeech|>` and music notes are removed, and
+ *    so is a tag whose bracket the model never closed: from an opening `(`, `[` or `*` left over to
+ *    the end of the output ("(door"), and from the start to a closing `)` or `]` never opened.
  * 2. Outputs of six words or fewer that contain a phrase models write on silence or noise
  *    ("thank you for watching", "Untertitel", ...) are dropped.
  * 3. Repetition loops (six words or more, fewer than 35 % of them different) are dropped.
@@ -29,10 +31,10 @@ sealed interface Verdict {
 object TranscriptFilter {
 
     /** Changes with the rules, so the results can be told apart from those of other rules. */
-    const val VERSION = 1
+    const val VERSION = 2
 
     fun judge(output: String): Verdict {
-        val text = TAG.replace(output, " ").replace(SPACE, " ").trim()
+        val text = UNCLOSED_TAG.replace(TAG.replace(output, " "), " ").replace(SPACE, " ").trim()
         val words = WORD.findAll(text).map { it.value.lowercase() }.toList()
         if (words.isEmpty()) return Verdict.NoSpeech
 
@@ -47,6 +49,13 @@ object TranscriptFilter {
 
     /** `[…]`, `(…)`, `*…*`, music notes and Whisper's special tokens. */
     private val TAG = Regex("""\[[^\]]*]|\([^)]*\)|\*[^*]*\*|[♪♫]+|<\|[^|]*\|>""")
+
+    /**
+     * What is left of a tag once the complete ones are gone: a closing `)` or `]` with everything
+     * before it, or an opening `(`, `[` or `*` with everything after it.
+     */
+    private val UNCLOSED_TAG = Regex("""^.*[)\]]|[(\[*].*$""", RegexOption.DOT_MATCHES_ALL)
+
     private val SPACE = Regex("""\s+""")
 
     /** A word: letters and digits, with inner hyphens and apostrophes ("mm-hmm", "don't"). */

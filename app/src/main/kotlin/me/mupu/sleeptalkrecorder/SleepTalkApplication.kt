@@ -2,6 +2,7 @@ package me.mupu.sleeptalkrecorder
 
 import android.app.Application
 import android.content.Context
+import android.database.sqlite.SQLiteException
 import android.util.Log
 import me.mupu.sleeptalkrecorder.data.AnalysisExport
 import me.mupu.sleeptalkrecorder.data.RecordingFiles
@@ -123,9 +124,11 @@ class AppContainer(context: Context) {
     /** The sleeps whose speech recognition the user paused. */
     val transcriptionPauses = TranscriptionPauses(settings)
 
+    private val transcriptStore = SleepTranscripts(database, recordingFiles)
+
     /** Runs speech recognition over the events of sleeps; jobs of [transcriptionScheduler] call it. */
     val transcriptionRunner = TranscriptionRunner(
-        SleepTranscripts(database, recordingFiles),
+        transcriptStore,
         transcriptionPauses,
         battery = { batteryState(context) },
         onFailure = { message, error -> Log.w("Transcription", message, error) },
@@ -228,6 +231,14 @@ class AppContainer(context: Context) {
     init {
         scope.launch { AutoDeletion.followSettings(context, settings) }
         scope.launch { settings.flow(Settings.transcriptionMode).collect(transcriptions::follow) }
+        scope.launch {
+            try {
+                transcriptStore.judgeStoredAgain()
+            } catch (error: SQLiteException) {
+                // The transcripts keep their verdict until the next start tries again.
+                Log.w("Transcription", "Could not judge the stored transcripts again", error)
+            }
+        }
         findMissingEvents()
     }
 

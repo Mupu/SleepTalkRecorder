@@ -8,6 +8,7 @@ import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
 import me.mupu.sleeptalkrecorder.transcription.EventClip
 import me.mupu.sleeptalkrecorder.transcription.SpeechRecognition
+import me.mupu.sleeptalkrecorder.transcription.TranscriptFilter
 import me.mupu.sleeptalkrecorder.transcription.TranscriptStore
 import java.io.IOException
 import java.time.Duration
@@ -68,6 +69,17 @@ class SleepTranscripts(
     }
 
     override suspend fun isRecording(): Boolean = dao.isRecording()
+
+    /**
+     * Judges the phone's stored transcripts that an older [TranscriptFilter] judged again with the
+     * current one, so its rules also reach sleeps recognised before, without recognising them again.
+     * Each keeps its model, so a sleep's model stays the same.
+     */
+    suspend fun judgeStoredAgain() {
+        database.withTransaction {
+            dao.updateAnnotations(dao.deviceTranscriptsNotOf("${TranscriptFilter.VERSION}").map(SpeechRecognition::judgedAgain))
+        }
+    }
 
     private companion object {
         const val TAG = "SleepTranscripts"

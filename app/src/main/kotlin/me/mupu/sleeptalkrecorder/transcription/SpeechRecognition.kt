@@ -42,7 +42,7 @@ class SpeechRecognition(model: TranscriptionModel, private val transcriber: Tran
                 type = AnnotationType.TRANSCRIPT,
                 start = clip.event.start,
                 end = clip.event.end,
-                kindId = if (verdict == Verdict.NoSpeech) EventKinds.EVENT else EventKinds.SPEECH,
+                kindId = kindOf(verdict),
                 text = (verdict as? Verdict.Speech)?.text,
                 origin = origin,
                 producer = producer,
@@ -68,6 +68,22 @@ class SpeechRecognition(model: TranscriptionModel, private val transcriber: Tran
     }
 
     companion object {
+        /**
+         * [transcript], a stored result of the phone's speech recognition, judged again from its
+         * words by the current [TranscriptFilter], whose rules may remove words older ones kept. A
+         * result without words keeps its verdict, because the model's output is not stored.
+         */
+        fun judgedAgain(transcript: AnnotationEntity): AnnotationEntity {
+            val verdict = transcript.text?.let(TranscriptFilter::judge)
+            return transcript.copy(
+                kindId = verdict?.let(::kindOf) ?: transcript.kindId,
+                text = (verdict as? Verdict.Speech)?.text,
+                producer = transcript.producer?.copy(version = "${TranscriptFilter.VERSION}"),
+            )
+        }
+
+        private fun kindOf(verdict: Verdict) = if (verdict == Verdict.NoSpeech) EventKinds.EVENT else EventKinds.SPEECH
+
         /** How much of the sound before and after an event its clip holds, as the models were measured with. */
         val PADDING: Duration = Duration.ofMillis(500)
 

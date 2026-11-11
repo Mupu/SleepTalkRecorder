@@ -28,6 +28,20 @@ class TranscriptFilterTest {
     }
 
     @Test
+    fun `a tag whose bracket is never closed is removed`() {
+        assertEquals(NoSpeech, judge("(door"))
+        assertEquals(NoSpeech, judge("(engine"))
+        assertEquals(NoSpeech, judge("[music"))
+        assertEquals(NoSpeech, judge("door)"))
+        assertEquals(Speech("Where is it"), judge("Where is it (door"))
+    }
+
+    @Test
+    fun `speech around a complete tag keeps its words`() {
+        assertEquals(Speech("Leave the door open, please"), judge("Leave the door (knocking) open, please"))
+    }
+
+    @Test
     fun `only fillers make a murmur`() {
         assertEquals(Murmur, judge("Mm-hmm."))
         assertEquals(Murmur, judge("Hmm, uh, oh."))
