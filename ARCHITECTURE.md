@@ -31,7 +31,7 @@ The root package holds `MainActivity`, the only activity, and `SleepTalkApplicat
 automatic deletion scheduled, starts the search for events of finished sleeps, schedules their
 speech recognition and owns the `Updater`. Logic that can be tested without a device
 (`time`, `detection`, the WAV writer, the recording session, level computation, the sleep
-timeline and its audio stream, the cut plan, the stretch an event is shared with and its caption, the timeline view and the event filter of the sleep screen, the
+timeline and its audio stream, the cut plan, the stretches events are shared with and their caption, the selection of events, the timeline view and the event filter of the sleep screen, the
 sensitivity sheet's re-scan, the numbers of the stats screen, the settings,
 which sleeps automatic deletion removes, the model downloads and states, the transcript filter,
 the speech recognition run, which transcript each event shows and which results of models it compares, reading the changelogs, and finding,
@@ -481,6 +481,12 @@ opens, frames that event on the timeline with four times its length (30 s to 2 m
 playhead in view while playing; panning or zooming by hand, also with the overview, switches it
 off, its button on again.
 
+A long press on an event row starts selection mode: while any event is selected, a tap selects
+an event or takes it out, and an app bar of its own names how many are selected and how long they
+last together, with buttons that share, keep as favourites or hide them all; Back ends it.
+`EventSelection` keeps the selected ids, so a selection survives a change of filter, and an event
+that a new search no longer finds leaves it.
+
 The buttons left and right of the play button step to the previous and the next listed event, in
 full and in cut playback, to the start of its lead-in as cut playback plays it; playback plays on
 or stays paused. They go from the last event whose stretch has begun at the playhead
@@ -515,9 +521,15 @@ second, all the same picture, so it takes a few kB beyond the audio; its frames 
 YUV in plain Kotlin and handed to the encoder as images, which fits any encoder's memory layout,
 and the encoder is one the phone names for that size.
 
-The file is named after the event's local date and time (`SleepTalk 2026-11-08 22-55-41.mp4`) and
-lies in the cache folder `shared/`, which holds only the latest share; a `FileProvider` hands it
-out, granting the receiving app read access to that one file. The audio encoder puts 1 024 samples
+Several selected events are shared together, but always as one file each, never joined: the step
+offers one lead-in and one tail for all of them (`ShareStretches`, from none up to 10 s, starting
+with the settings') instead of the single event's range slider, and each file gets the card of
+its event. Android's `ACTION_SEND_MULTIPLE` carries one text for all files, so the caption has one
+line per event.
+
+Each file is named after its event's local date and time (`SleepTalk 2026-11-08 22-55-41.mp4`) and
+lies in the cache folder `shared/`, which holds only the latest share; a `FileProvider` hands the
+files out, granting the receiving app read access to them alone. The audio encoder puts 1 024 samples
 of priming silence before the audio and fills the last AAC frame, so a file plays up to about
 0.2 s longer than its stretch, and the video lasts the stretch rounded up to whole seconds.
 

@@ -57,6 +57,15 @@ class ShareStretchTest {
     }
 
     @Test
+    fun `several events share one lead-in and tail, each held at the sleep's edges and within ten seconds`() {
+        val share = ShareStretches.of(listOf(stretch(1.0, 2.0), stretch(60.0, 62.0)), timeline(5), leadIn = s(3.0), tail = s(12.0), unavailable = emptyList())
+
+        assertEquals(s(10.0), share.tail)
+        assertEquals(listOf(stretch(0.0, 12.0), stretch(57.0, 72.0)), share.selected)
+        assertEquals(s(27.0), share.length)
+    }
+
+    @Test
     fun `the file is named after the event's local date and time`() {
         val start = Instant.parse("2026-11-08T21:55:41Z")
         assertEquals("SleepTalk 2026-11-08 22-55-41.mp4", shareFileName(start, ZoneId.of("Europe/Berlin"), ShareFormat.VIDEO))

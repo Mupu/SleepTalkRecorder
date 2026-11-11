@@ -28,6 +28,7 @@ import me.mupu.sleeptalkrecorder.share.EventLabels
 import me.mupu.sleeptalkrecorder.share.EventShares
 import me.mupu.sleeptalkrecorder.share.ShareFormat
 import me.mupu.sleeptalkrecorder.share.ShareStretch
+import me.mupu.sleeptalkrecorder.share.ShareStretches
 import me.mupu.sleeptalkrecorder.share.SharedEvent
 import me.mupu.sleeptalkrecorder.share.caption
 import me.mupu.sleeptalkrecorder.transcription.EventRecognition
@@ -84,6 +85,9 @@ class SleepViewModel(
 
     /** The event last played on its own; it is playing while the player plays a stretch. */
     private val eventPlayed = MutableStateFlow<Long?>(null)
+
+    /** The events selected for sharing, keeping or hiding together; selection mode while any is. */
+    private val selection = MutableStateFlow(EventSelection())
 
     /** Whether cut playback is chosen; it is the default, because it is what the app is for. */
     private val cut = MutableStateFlow(true)
@@ -224,12 +228,13 @@ class SleepViewModel(
         .flowOn(Dispatchers.Default)
 
     val state: StateFlow<SleepUiState> = combine(
-        sleepAndEvents,
+        combine(sleepAndEvents, selection, ::Pair),
         combine(timeline, loudness, ::Pair),
         combine(playback, current, neighbours, ::Triple),
         combine(eventPlayed, cut, cutPlan, ::Triple),
         listed,
-    ) { (sleep, events, unavailable), (timeline, loudness), (playback, current, neighbours), (played, cut, plan), listed ->
+    ) { (sleepAndEvents, selection), (timeline, loudness), (playback, current, neighbours), (played, cut, plan), listed ->
+        val (sleep, events, unavailable) = sleepAndEvents
         val player = timeline?.let {
             PlayerUiState(
                 duration = it.duration,
@@ -256,6 +261,7 @@ class SleepViewModel(
             previousEvent = neighbours.previous,
             nextEvent = neighbours.next,
             sensitivityAvailable = loudness != null && sleep?.eventsFound == true && !sleep.isRunning,
+            selected = selection.of(events),
         )
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SleepUiState())
 
@@ -292,10 +298,10 @@ class SleepViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    private val hiddenChannel = Channel<SleepEvent>(Channel.BUFFERED)
+    private val hiddenChannel = Channel<List<SleepEvent>>(Channel.BUFFERED)
 
-    /** Each event the user hid, once it is stored, so the hiding can be undone. */
-    val eventHidden: Flow<SleepEvent> = hiddenChannel.receiveAsFlow()
+    /** The events the user hid at once, once they are stored, so the hiding can be undone. */
+    val eventsHidden: Flow<List<SleepEvent>> = hiddenChannel.receiveAsFlow()
 
     private val applied = Channel<SensitivityApplied>(Channel.BUFFERED)
 
@@ -375,12 +381,67 @@ class SleepViewModel(
 
     /**
      * Hides [event] ([hidden] true) or shows it again. It stays hidden after a restart and when
-     * its events are found again; each event hidden is reported once through [eventHidden].
+     * its events are found again; each event hidden is reported once through [eventsHidden].
      */
     fun setHidden(event: SleepEvent, hidden: Boolean) {
+        if (hidden) hide(listOf(event)) else unhide(listOf(event))
+    }
+
+    /** Hides [events], reported together through [eventsHidden]. */
+    private fun hide(events: List<SleepEvent>) {
         viewModelScope.launch {
-            repository.setHidden(sleepId, event, hidden)
-            if (hidden) hiddenChannel.send(event)
+            for (event in events) repository.setHidden(sleepId, event, true)
+            hiddenChannel.send(events)
+        }
+    }
+
+    /** Shows [events] again, as when their hiding is undone. */
+    fun unhide(events: List<SleepEvent>) {
+        viewModelScope.launch { for (event in events) repository.setHidden(sleepId, event, false) }
+    }
+
+    /** Adds [event] to the selection, which starts selection mode, or takes it out again. */
+    fun toggleSelection(event: SleepEvent) {
+        selection.value = selection.value.toggle(event)
+    }
+
+    /** Ends selection mode. */
+    fun clearSelection() {
+        selection.value = EventSelection()
+    }
+
+    /** The selected events of the sleep, in order. */
+    private fun selectedEvents(): List<SleepEvent> = selection.value.of(sleepAndEvents.value.second)
+
+    /** Keeps the selected events as favourites, each with the name it has, and ends selection mode. */
+    fun favouriteSelected() {
+        val events = selectedEvents().filterNot { it.favourite }
+        clearSelection()
+        viewModelScope.launch { for (event in events) repository.setFavourite(sleepId, event, true, event.name) }
+    }
+
+    /** Hides the selected events, which a snackbar undoes, and ends selection mode. */
+    fun hideSelected() {
+        val events = selectedEvents().filterNot { it.hidden }
+        clearSelection()
+        if (events.isNotEmpty()) hide(events)
+    }
+
+    /**
+     * Opens the share step for the selected events: that of a single event for one, else one with
+     * a lead-in and tail for all of them. Selection mode ends once they are shared.
+     */
+    fun shareSelected() {
+        val events = selectedEvents()
+        val timeline = timeline.value ?: return
+        when (events.size) {
+            0 -> return
+            1 -> openShare(events.single())
+            else -> {
+                player.pause()
+                val stretches = ShareStretches.of(events.map { it.stretch }, timeline, leadIn.value, tail.value, unavailable.value)
+                shareStep.value = ShareStep(events, stretch = null, stretches, ShareFormat.VIDEO, preparing = false)
+            }
         }
     }
 
@@ -520,8 +581,13 @@ class SleepViewModel(
     private val captionItems = settings.flow(Settings.shareCaption).stateIn(viewModelScope, SharingStarted.Eagerly, Settings.shareCaption.default)
 
     /** The share step, with whether its stretch is being listened to; null while it is closed. */
-    val share: StateFlow<ShareUiState?> = combine(shareStep, playback, captionItems) { step, playback, captionItems ->
-        step?.let { ShareUiState(it.event, it.stretch, it.format, captionItems, playing = playback.playing, preparing = it.preparing) }
+    val share: StateFlow<ShareUiState?> = combine(shareStep, playback, captionItems, leadIn, tail) { step, playback, captionItems, leadIn, tail ->
+        step?.let {
+            val changed = it.stretch?.let { stretch -> stretch.selected != stretch.default }
+                ?: it.stretches?.let { stretches -> stretches.leadIn != leadIn || stretches.tail != tail }
+                ?: false
+            ShareUiState(it.events, it.stretch, it.stretches, it.format, captionItems, changed, playing = playback.playing, preparing = it.preparing)
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val sharedChannel = Channel<SharedFiles?>(Channel.BUFFERED)
@@ -534,7 +600,7 @@ class SleepViewModel(
         val timeline = timeline.value ?: return
         player.pause()
         val stretch = ShareStretch.of(event.stretch, timeline, leadIn.value, tail.value, unavailable.value)
-        shareStep.value = ShareStep(event, stretch, ShareFormat.VIDEO, preparing = false)
+        shareStep.value = ShareStep(listOf(event), stretch, stretches = null, ShareFormat.VIDEO, preparing = false)
     }
 
     /** Shares the events as [format]. */
@@ -549,16 +615,26 @@ class SleepViewModel(
         viewModelScope.launch { settings.set(Settings.shareCaption, items) }
     }
 
-    /** Moves the shared stretch to run from [start] until [end], as far as it may reach. */
+    /** Moves the shared stretch of a single event to run from [start] until [end], as far as it may reach. */
     fun selectShare(start: Duration, end: Duration) {
         val step = shareStep.value?.takeUnless { it.preparing } ?: return
-        shareStep.value = step.copy(stretch = step.stretch.select(start, end))
+        val stretch = step.stretch ?: return
+        shareStep.value = step.copy(stretch = stretch.select(start, end))
     }
 
-    /** Takes the shared stretch back to the event with its lead-in and tail. */
+    /** Shares several events each with [leadIn] before and [tail] after it. */
+    fun setShareMargins(leadIn: Duration, tail: Duration) {
+        val step = shareStep.value?.takeUnless { it.preparing } ?: return
+        val stretches = step.stretches ?: return
+        val timeline = timeline.value ?: return
+        shareStep.value = step.copy(stretches = ShareStretches.of(stretches.events, timeline, leadIn, tail, unavailable.value))
+    }
+
+    /** Takes the shared stretches back to the events with the settings' lead-in and tail. */
     fun resetShare() {
         val step = shareStep.value?.takeUnless { it.preparing } ?: return
-        shareStep.value = step.copy(stretch = step.stretch.copy(selected = step.stretch.default))
+        step.stretch?.let { shareStep.value = step.copy(stretch = it.copy(selected = it.default)) }
+        if (step.stretches != null) setShareMargins(leadIn.value, tail.value)
     }
 
     /** Plays the shared stretch, or pauses it while it plays. */
@@ -573,20 +649,24 @@ class SleepViewModel(
     }
 
     /**
-     * Writes the shared stretch as a file of the chosen format, closes the step and reports it
-     * through [shared]. [labels] say what the card and the caption say about the event, and the
-     * card is drawn in [colors].
+     * Writes the shared stretches as files of the chosen format, one per event, closes the step and
+     * reports them through [shared]; once they are written, selection mode ends. [labels] say what
+     * the card and the caption say about each event, in the step's order, and the cards are drawn in
+     * [colors].
      */
-    fun share(labels: EventLabels, colors: CardColors) {
+    fun share(labels: List<EventLabels>, colors: CardColors) {
         val step = shareStep.value?.takeUnless { it.preparing } ?: return
         val timeline = timeline.value ?: return
+        val stretches = step.stretch?.let { listOf(it.selected) } ?: step.stretches?.selected ?: return
         shareStep.value = step.copy(preparing = true)
         player.pause()
         viewModelScope.launch {
-            val uris = shares.write(timeline, listOf(SharedEvent(step.stretch.selected, step.event.start, labels)), step.format, colors)
+            val events = step.events.indices.map { SharedEvent(stretches[it], step.events[it].start, labels[it]) }
+            val uris = shares.write(timeline, events, step.format, colors)
             shareStep.value = null
+            if (uris != null) clearSelection()
             // Apps drop a text sent along with audio, so only a video gets a caption.
-            val text = if (step.format == ShareFormat.VIDEO) caption(listOf(labels), captionItems.value) else null
+            val text = if (step.format == ShareFormat.VIDEO) caption(labels, captionItems.value) else null
             sharedChannel.send(uris?.let { SharedFiles(it, step.format, text) })
         }
     }
@@ -610,8 +690,17 @@ class SleepViewModel(
         const val CHART_COLUMNS = 400
     }
 
-    /** The open share step: its event, the stretch and format chosen so far and whether its file is being written. */
-    private data class ShareStep(val event: SleepEvent, val stretch: ShareStretch, val format: ShareFormat, val preparing: Boolean)
+    /**
+     * The open share step: its events, the stretch of a single event or the stretches of several,
+     * the format chosen so far and whether its files are being written.
+     */
+    private data class ShareStep(
+        val events: List<SleepEvent>,
+        val stretch: ShareStretch?,
+        val stretches: ShareStretches?,
+        val format: ShareFormat,
+        val preparing: Boolean,
+    )
 
     /** The open sensitivity sheet: what it was opened for and the setting the user made so far. */
     private data class Sheet(

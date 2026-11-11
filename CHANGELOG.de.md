@@ -8,6 +8,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [Se
 ### Hinzugefügt
 
 - „Neu erkennen mit …“ im ⋮-Menü eines Ereignisses erkennt nur dieses Ereignis mit einem anderen installierten Modell neu, in Sekunden statt einer ganzen Nacht. Das geöffnete Transkript zeigt dann das Ergebnis jedes Modells mit seinem Namen, das des aktiven Modells zuerst. Beim Korrigieren des Texts kannst du das Ergebnis eines Modells übernehmen oder löschen; sobald du eigenen Text schreibst, wird nur noch dieser gezeigt.
+- Halte ein Ereignis in der Liste eines Schlafs gedrückt, um es auszuwählen, und tippe weitere an, um sie dazuzunehmen. Die Leiste oben zeigt, wie viele du ausgewählt hast und wie lange sie zusammen dauern, und teilt sie, macht sie zu Favoriten oder blendet sie alle auf einmal aus; Zurück beendet die Auswahl. Zusammen geteilt kommt jedes Ereignis in eine eigene Video- oder Audiodatei, mit einem Vorlauf und Nachlauf, den du für alle wählst, und der mitgeschickte Text hat für jedes eine Zeile.
 
 ### Geändert
 

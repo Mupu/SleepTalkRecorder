@@ -8,6 +8,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [Sem
 ### Added
 
 - “Recognise again with …” in an event’s ⋮ menu recognises just that event again with another installed model, in seconds instead of a whole night. The open transcript then shows each model’s result with its name, the active model’s first. When correcting the text you can take over a model’s result or delete it; once you write your own text, only that is shown.
+- Hold an event in a sleep’s list to select it, then tap more events to add them. The bar on top shows how many you selected and how long they last together, and shares them, keeps them as favourites or hides them all at once; Back ends the selection. Shared together, every event goes into a video or audio file of its own, with one lead-in and tail you choose for all of them, and the text sent along has a line for each.
 
 ### Changed
 

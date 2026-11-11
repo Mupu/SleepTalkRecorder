@@ -53,6 +53,26 @@ data class ShareStretch(val event: Stretch, val bounds: Stretch, val default: St
 }
 
 /**
+ * The stretches shared of several [events] at once, one file each: every event with one [leadIn]
+ * before and one [tail] after it, from none up to [ShareStretch.MARGIN], as far as the sleep's
+ * audio reaches without a gap or a taken microphone, as cut playback plays them.
+ */
+data class ShareStretches(val events: List<Stretch>, val leadIn: Duration, val tail: Duration, val selected: List<Stretch>) {
+
+    /** How long the shared stretches last together. */
+    val length: Duration get() = selected.fold(Duration.ZERO) { sum, stretch -> sum + (stretch.end - stretch.start) }
+
+    companion object {
+        /** The stretches of [events] of the sleep [timeline] with [leadIn] and [tail], held between none and [ShareStretch.MARGIN]. */
+        fun of(events: List<Stretch>, timeline: SleepTimeline, leadIn: Duration, tail: Duration, unavailable: List<Stretch>): ShareStretches {
+            val before = leadIn.coerceIn(Duration.ZERO, ShareStretch.MARGIN)
+            val after = tail.coerceIn(Duration.ZERO, ShareStretch.MARGIN)
+            return ShareStretches(events, before, after, events.map { timeline.withLeadInAndTail(it, before, after, unavailable) })
+        }
+    }
+}
+
+/**
  * The name of the file shared of an event that began at [start]: its local date and clock time in
  * [zone], with the extension of [format].
  */

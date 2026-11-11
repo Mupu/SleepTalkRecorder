@@ -10,6 +10,7 @@ import me.mupu.sleeptalkrecorder.playback.Stretch
 import me.mupu.sleeptalkrecorder.share.CaptionItem
 import me.mupu.sleeptalkrecorder.share.ShareFormat
 import me.mupu.sleeptalkrecorder.share.ShareStretch
+import me.mupu.sleeptalkrecorder.share.ShareStretches
 import java.time.Duration
 
 /** The player of the sleep screen, once the sleep's audio is known; its position is [SleepViewModel.position]. */
@@ -61,16 +62,22 @@ data class SleepUiState(
     val nextEvent: SleepEvent? = null,
     /** Whether the sensitivity can be set: the sleep is finished, its events found and its loudness read. */
     val sensitivityAvailable: Boolean = false,
+    /** The events selected together, in order; selection mode while there are any. */
+    val selected: List<SleepEvent> = emptyList(),
 )
 
-/** The share step of [event] while it is open. */
+/** The share step of [events] while it is open: of a single event, or of several at once. */
 data class ShareUiState(
-    val event: SleepEvent,
-    /** The stretch shared and how far it can be moved. */
-    val stretch: ShareStretch,
+    val events: List<SleepEvent>,
+    /** For a single event, the stretch shared and how far it can be moved; null for several. */
+    val stretch: ShareStretch?,
+    /** For several events, the stretch shared of each with one lead-in and tail; null for one. */
+    val stretches: ShareStretches?,
     val format: ShareFormat,
     /** What the caption names, which only a video gets. */
     val caption: Set<CaptionItem>,
+    /** Whether the stretches differ from the events with the settings' lead-in and tail, so they can be reset. */
+    val changed: Boolean,
     /** Whether the player plays, which only listening to the stretch can while the step is open. */
     val playing: Boolean,
     /** Whether the audio file is being written. */

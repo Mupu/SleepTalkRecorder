@@ -3,7 +3,8 @@ package me.mupu.sleeptalkrecorder.ui.sleep
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -22,8 +23,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -39,6 +42,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -130,13 +135,13 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.pause() }
 
     LaunchedEffect(viewModel) {
-        viewModel.eventHidden.collect { event ->
+        viewModel.eventsHidden.collect { events ->
             val result = snackbars.showSnackbar(
-                resources.getString(R.string.event_hidden),
+                resources.getQuantityString(R.plurals.events_hidden, events.size, events.size),
                 actionLabel = resources.getString(R.string.undo),
                 duration = SnackbarDuration.Long,
             )
-            if (result == SnackbarResult.ActionPerformed) viewModel.setHidden(event, hidden = false)
+            if (result == SnackbarResult.ActionPerformed) viewModel.unhide(events)
         }
     }
     LaunchedEffect(viewModel) {
@@ -178,30 +183,24 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
         }
     }
 
+    // Back ends selection mode before it leaves the screen.
+    BackHandler(enabled = state.selected.isNotEmpty(), onBack = viewModel::clearSelection)
+
     val sleep = state.sleep
     val title = sleep?.let { sleepTitle(resources, it.date) }.orEmpty()
     Scaffold(
         topBar = {
-            AppBar(
-                title,
-                navigationIcon = { BackIcon(onBack) },
-                actions = {
-                    SpeechRecognitionStatus(transcription, state.events, modelChange, onRun = viewModel::runSpeechRecognition)
-                    AppBarIcon(R.drawable.ic_bar_chart, stringResource(R.string.stats_of_sleep), onOpenStats)
-                    MoreMenu(
-                        listOfNotNull(
-                            MenuEntry(R.string.sensitivity_sleep, R.drawable.ic_tune) { viewModel.openSensitivity(null) }
-                                .takeIf { state.sensitivityAvailable },
-                            MenuEntry(
-                                if (transcription.nothingRecognised) R.string.run_speech_recognition else R.string.run_speech_recognition_again,
-                                R.drawable.ic_subtitles,
-                                enabled = transcription.canRun,
-                                onClick = viewModel::runSpeechRecognition,
-                            ).takeUnless { transcription == TranscriptionStatus.Off },
-                        ),
-                    )
-                },
-            )
+            if (state.selected.isNotEmpty()) {
+                SelectionBar(
+                    state.selected,
+                    onClose = viewModel::clearSelection,
+                    onShare = viewModel::shareSelected,
+                    onFavourite = viewModel::favouriteSelected,
+                    onHide = viewModel::hideSelected,
+                )
+            } else {
+                SleepAppBar(title, state, transcription, modelChange, viewModel, onBack, onOpenStats)
+            }
         },
         snackbarHost = { SnackbarHost(snackbars) },
     ) { padding ->
@@ -287,6 +286,8 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     timeline = timeline,
                     currentEventId = current?.id,
                     playingEventId = state.playingEventId,
+                    selectedIds = state.selected.mapTo(HashSet()) { it.id },
+                    onToggleSelection = viewModel::toggleSelection,
                     onSelect = { event ->
                         if (!autoZoom) window = window.showing(timeline.clockOf(event.start), timeline.clockOf(event.end))
                         viewModel.seekToEvent(event)
@@ -336,7 +337,9 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
 
                 share?.let { step ->
                     val clock = LocalClockFormatter.current
-                    val labels = remember(step.event, sleep, clock, resources) { shareLabels(resources, clock, timeline, sleep, step.event) }
+                    val labels = remember(step.events, sleep, clock, resources) {
+                        step.events.map { shareLabels(resources, clock, timeline, sleep, it) }
+                    }
                     ShareSheet(
                         state = step,
                         labels = labels,
@@ -344,6 +347,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                         loudness = state.loudness,
                         position = position,
                         onSelect = viewModel::selectShare,
+                        onMargins = viewModel::setShareMargins,
                         onReset = viewModel::resetShare,
                         onFormat = viewModel::setShareFormat,
                         onCaptionItem = viewModel::setCaptionItem,
@@ -367,6 +371,71 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
             }
         }
     }
+}
+
+/** The sleep screen's app bar outside selection mode: back, speech recognition, stats and the sleep's menu. */
+@Composable
+private fun SleepAppBar(
+    title: String,
+    state: SleepUiState,
+    transcription: TranscriptionStatus,
+    modelChange: ModelChange?,
+    viewModel: SleepViewModel,
+    onBack: () -> Unit,
+    onOpenStats: () -> Unit,
+) {
+    AppBar(
+        title,
+        navigationIcon = { BackIcon(onBack) },
+        actions = {
+            SpeechRecognitionStatus(transcription, state.events, modelChange, onRun = viewModel::runSpeechRecognition)
+            AppBarIcon(R.drawable.ic_bar_chart, stringResource(R.string.stats_of_sleep), onOpenStats)
+            MoreMenu(
+                listOfNotNull(
+                    MenuEntry(R.string.sensitivity_sleep, R.drawable.ic_tune) { viewModel.openSensitivity(null) }
+                        .takeIf { state.sensitivityAvailable },
+                    MenuEntry(
+                        if (transcription.nothingRecognised) R.string.run_speech_recognition else R.string.run_speech_recognition_again,
+                        R.drawable.ic_subtitles,
+                        enabled = transcription.canRun,
+                        onClick = viewModel::runSpeechRecognition,
+                    ).takeUnless { transcription == TranscriptionStatus.Off },
+                ),
+            )
+        },
+    )
+}
+
+/**
+ * The app bar of selection mode: how many events are selected and how long they last together,
+ * with buttons that end the selection, share the events, keep them as favourites or hide them.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SelectionBar(selected: List<SleepEvent>, onClose: () -> Unit, onShare: () -> Unit, onFavourite: () -> Unit, onHide: () -> Unit) {
+    val resources = LocalResources.current
+    TopAppBar(
+        title = {
+            Text(
+                stringResource(R.string.selection_title, selected.size, formatEventLength(resources, totalLength(selected))),
+                // Smaller than a screen's title, so the count and length fit beside three buttons.
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        navigationIcon = { AppBarIcon(R.drawable.ic_close, stringResource(R.string.selection_end), onClose) },
+        actions = {
+            AppBarIcon(R.drawable.ic_share, stringResource(R.string.share_event), onShare)
+            IconButton(onClick = onFavourite, enabled = selected.any { !it.favourite }) {
+                Icon(painterResource(R.drawable.ic_star_border), contentDescription = stringResource(R.string.add_favourite))
+            }
+            IconButton(onClick = onHide, enabled = selected.any { !it.hidden }) {
+                Icon(painterResource(R.drawable.ic_visibility_off), contentDescription = stringResource(R.string.hide_event))
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+    )
 }
 
 /** An entry of a [MoreMenu]; its [label] is a string resource, read only while the menu is open. */
@@ -519,6 +588,9 @@ private fun PlaybackMode(cut: Boolean, enabled: Boolean, onCutChange: (Boolean) 
  * alone, a hidden one has a button that unhides it, and its menu shares it, hides it, opens the sensitivity around it while [onSensitivity]
  * is given, and for a speech event corrects its text or marks it as not speech. The event at the
  * playhead is highlighted and scrolled into view.
+ *
+ * A long press selects an event, which starts selection mode: while any is selected, a tap selects
+ * an event or takes it out of the selection, and each row shows a checkbox instead of its buttons.
  */
 @Composable
 private fun EventList(
@@ -528,6 +600,8 @@ private fun EventList(
     timeline: SleepTimeline,
     currentEventId: Long?,
     playingEventId: Long?,
+    selectedIds: Set<Long>,
+    onToggleSelection: (SleepEvent) -> Unit,
     onSelect: (SleepEvent) -> Unit,
     onTogglePlay: (SleepEvent) -> Unit,
     onHide: (SleepEvent, Boolean) -> Unit,
@@ -567,6 +641,11 @@ private fun EventList(
                 timeline,
                 current = event.id == currentEventId,
                 playing = event.id == playingEventId,
+                selection = when {
+                    selectedIds.isEmpty() -> null
+                    else -> event.id in selectedIds
+                },
+                onToggleSelection = onToggleSelection,
                 transcriptExpanded = event.id in expanded,
                 onToggleTranscript = { onToggleTranscript(event.id) },
                 onSelect = onSelect,
@@ -612,6 +691,9 @@ private fun EventRow(
     timeline: SleepTimeline,
     current: Boolean,
     playing: Boolean,
+    /** Whether the event is selected while selection mode lasts; null outside it. */
+    selection: Boolean?,
+    onToggleSelection: (SleepEvent) -> Unit,
     transcriptExpanded: Boolean,
     onToggleTranscript: () -> Unit,
     onSelect: (SleepEvent) -> Unit,
@@ -641,8 +723,17 @@ private fun EventRow(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 64.dp)
-            .clickable { onSelect(event) }
-            .background(if (current || playing) colors.primary.copy(alpha = 0.1f) else colors.surface)
+            .combinedClickable(
+                onLongClick = { onToggleSelection(event) },
+                onClick = { if (selection != null) onToggleSelection(event) else onSelect(event) },
+            )
+            .background(
+                when {
+                    selection == true -> colors.secondaryContainer
+                    current || playing -> colors.primary.copy(alpha = 0.1f)
+                    else -> colors.surface
+                },
+            )
             // The colour bar along the row's height, drawn rather than laid out, which would need
             // the row's intrinsic height and so measure every row twice.
             .drawBehind {
@@ -682,6 +773,10 @@ private fun EventRow(
                 onRerun = onRerun,
             )
             recognisingWith?.let { RecognisingLine(it) }
+        }
+        if (selection != null) {
+            Checkbox(checked = selection, onCheckedChange = { onToggleSelection(event) }, modifier = Modifier.padding(end = 4.dp))
+            return@Row
         }
         if (event.hidden) {
             TextButton(onClick = { onHide(event, false) }) {

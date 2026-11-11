@@ -106,7 +106,10 @@
     <string name="hidden_tag">hidden</string>
     <string name="hide_event">Hide</string>
     <string name="unhide_event">Unhide</string>
-    <string name="event_hidden">Event hidden</string>
+    <plurals name="events_hidden">
+        <item quantity="one">Event hidden</item>
+        <item quantity="other">%d events hidden</item>
+    </plurals>
     <string name="undo">Undo</string>
     <string name="transcript">Transcript</string>
     <!-- Below a transcript; %1$s is the model's name. -->
@@ -485,6 +488,17 @@
     <string name="caption_length">Length</string>
     <string name="caption_transcript">Transcript</string>
     <!-- The date of a shared event, as in "8 Nov, 22:55:41". -->
+    <!-- Title of the share step for several events. -->
+    <plurals name="share_several_title">
+        <item quantity="one">Share %d event</item>
+        <item quantity="other">Share %d events</item>
+    </plurals>
+    <!-- How long the stretches shared of several events last together: "24.6 s in all". -->
+    <string name="share_several_length">%1$s in all</string>
+    <string name="share_several_hint">Each event goes into a file of its own, with this lead-in and tail. They start as cut playback plays the events.</string>
+    <!-- The bar of selection mode on the sleep screen: "3 selected · 24 s", the events' count and summed length. -->
+    <string name="selection_title">%1$d selected · %2$s</string>
+    <string name="selection_end">End selection</string>
     <string name="date_pattern_share">d MMM</string>
     <!-- When a shared event began: its date and clock time, "8 Nov, 22:55:41". -->
     <string name="share_time">%1$s, %2$s</string>
