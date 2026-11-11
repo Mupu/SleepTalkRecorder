@@ -483,7 +483,10 @@ microphone is played around an event.
 The list's filter chips exclude each other: "All" lists every event that is not hidden, "Speech
 only" (one chip per event kind that has a filter) those of the kind that are not hidden, and
 "Favourites" only the favourites, and "Hidden" only the hidden events, so they can be gone
-through by ear and unhidden with the button on their row. Hiding is undone from a snackbar.
+through by ear and unhidden with the button on their row. Hiding is undone from a snackbar. A line
+under the chips names how many events the list shows and how long they last together, without
+lead-in and tail; the line under the app bar names the same for all events of the sleep that are
+not hidden, whatever the filter, as the library does.
 `CutPlan` joins the stretches of events that overlap, so close events play without a jump, and
 keeps stretches apart that only touch where a recording starts. While playing, the player jumps
 from the end of a stretch to 200 ms before the next (ExoPlayer starts a seeked WAV stream at its

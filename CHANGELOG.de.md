@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.10.0] - 2026-11-11
+
+### Hinzugefügt
+
+- Ein Schlaf zeigt, wie lange seine Ereignisse zusammen dauern, wie in der Bibliothek: oben neben seiner Zeit und Dauer für alle seine Ereignisse („630 Ereignisse · 1 h“) und unter den Filterknöpfen für die Ereignisse, die der gewählte Filter listet („In der Liste: 42 Ereignisse · 3 min 10 s“). Beide folgen jedem Ereignis, das du ausblendest, wieder einblendest oder als Favorit behältst.
+
 ## [0.9.0] - 2026-11-11
 
 ### Geändert

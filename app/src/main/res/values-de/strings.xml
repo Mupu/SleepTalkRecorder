@@ -78,6 +78,7 @@
         <item quantity="other">%d Ereignisse</item>
     </plurals>
     <string name="events_total">%1$s · %2$s</string>
+    <string name="events_listed">In der Liste: %1$s · %2$s</string>
     <string name="event_heading">%1$s · %2$s</string>
     <string name="event_details">%1$s · Pos %2$s</string>
     <string name="kind_event">Ereignis</string>

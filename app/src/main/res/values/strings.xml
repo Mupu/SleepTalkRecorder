@@ -89,6 +89,8 @@
     </plurals>
     <!-- The count and total length of a sleep's events: "12 events · 3 min". -->
     <string name="events_total">%1$s · %2$s</string>
+    <!-- Above a sleep's event list: how many events the filter lists and how long they last together, "In the list: 42 events · 3 min 10 s". -->
+    <string name="events_listed">In the list: %1$s · %2$s</string>
     <!-- An event in the list: its clock time and length, "03:14:07 · 1.2 s". -->
     <string name="event_heading">%1$s · %2$s</string>
     <!-- Its kind and its position in the sleep's audio: "Event · Pos 4:02:11". -->

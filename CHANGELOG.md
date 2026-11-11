@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.10.0] - 2026-11-11
+
+### Added
+
+- A sleep shows how long its events last together, as in the library: next to its time and length on top for all its events (“630 events · 1 h”), and under the filter buttons for the events the chosen filter lists (“In the list: 42 events · 3 min 10 s”). Both follow every event you hide, unhide or keep as a favourite.
+
 ## [0.9.0] - 2026-11-11
 
 ### Changed

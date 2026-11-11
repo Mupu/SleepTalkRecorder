@@ -85,6 +85,7 @@ import me.mupu.sleeptalkrecorder.ui.components.BackIcon
 import me.mupu.sleeptalkrecorder.ui.components.SegmentLabel
 import me.mupu.sleeptalkrecorder.ui.components.SelectionBar
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
+import me.mupu.sleeptalkrecorder.ui.format.formatDuration
 import me.mupu.sleeptalkrecorder.ui.format.formatEventLength
 import me.mupu.sleeptalkrecorder.ui.format.formatPosition
 import me.mupu.sleeptalkrecorder.ui.format.sleepTitle
@@ -279,6 +280,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                 if (state.events.isNotEmpty()) {
                     EventFilterChips(filterKinds, state.events, state.filter, onSelect = viewModel::setFilter)
                 }
+                if (state.listedEvents.isNotEmpty()) ListedSummary(state.listedEvents)
                 EventList(
                     sleep = sleep,
                     events = state.listedEvents,
@@ -445,12 +447,41 @@ private fun MoreMenu(entries: List<MenuEntry>) {
     }
 }
 
-/** "12 events", that they are still being found, or null while the sleep is recorded. */
+/**
+ * How many events the sleep has that are not hidden and how long they last together, whatever the
+ * filter lists, as in the library: "12 events · 3 min"; that they are still being found, or null
+ * while the sleep is recorded.
+ */
 @Composable
-private fun eventSummary(sleep: SleepSummary): String? = when {
-    sleep.isRunning -> null
-    !sleep.eventsFound -> stringResource(R.string.finding_events)
-    else -> pluralStringResource(R.plurals.event_count, sleep.eventCount, sleep.eventCount)
+private fun eventSummary(sleep: SleepSummary): String? {
+    val count = pluralStringResource(R.plurals.event_count, sleep.eventCount, sleep.eventCount)
+    return when {
+        sleep.isRunning -> null
+        !sleep.eventsFound -> stringResource(R.string.finding_events)
+        sleep.eventCount == 0 -> count
+        else -> stringResource(R.string.events_total, count, formatDuration(LocalResources.current, Duration.ofMillis(sleep.eventMillis)))
+    }
+}
+
+/**
+ * How many events the list shows with its filter and how long they last together, without lead-in
+ * and tail: "In the list: 42 events · 3 min 10 s".
+ */
+@Composable
+private fun ListedSummary(events: List<SleepEvent>) {
+    val resources = LocalResources.current
+    val length = remember(events) { totalLength(events) }
+    Text(
+        stringResource(
+            R.string.events_listed,
+            pluralStringResource(R.plurals.event_count, events.size, events.size),
+            formatEventLength(resources, length),
+        ),
+        style = MaterialTheme.typography.labelMedium.merge(Numbers),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 4.dp),
+    )
 }
 
 @Composable
