@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.8.0] - 2026-11-11
+
+### Added
+
+- Hold a favourite in the library’s favourites tab to select it, then tap more favourites to add them, also from different sleeps. The bar on top shows how many you selected and how long they last together, and shares them or removes them from the favourites, which you can undo; Back ends the selection. Shared together, every favourite goes into a file of its own, each cut from its own sleep, and you stay in the library.
+
 ## [0.7.1] - 2026-11-11
 
 ### Fixed

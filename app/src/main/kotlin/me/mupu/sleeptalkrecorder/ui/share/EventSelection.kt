@@ -1,11 +1,12 @@
-package me.mupu.sleeptalkrecorder.ui.sleep
+package me.mupu.sleeptalkrecorder.ui.share
 
 import me.mupu.sleeptalkrecorder.data.SleepEvent
 import java.time.Duration
 
 /**
- * The events selected on the sleep screen, by id. Selection mode lasts while any of them is still
- * an event of the sleep; ids of events that are no longer found select nothing.
+ * The events selected together, by id, which is unique across all sleeps: on the sleep screen or
+ * among the library's favourites. Selection mode lasts while any of them is still listed; ids of
+ * events that are no longer listed select nothing.
  */
 data class EventSelection(val ids: Set<Long> = emptySet()) {
 

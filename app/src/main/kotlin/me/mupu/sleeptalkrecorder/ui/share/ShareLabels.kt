@@ -1,4 +1,4 @@
-package me.mupu.sleeptalkrecorder.ui.sleep
+package me.mupu.sleeptalkrecorder.ui.share
 
 import android.content.Context
 import android.content.res.Resources
@@ -13,6 +13,7 @@ import me.mupu.sleeptalkrecorder.share.EventLabels
 import me.mupu.sleeptalkrecorder.ui.format.ClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.formatEventLength
 import me.mupu.sleeptalkrecorder.ui.format.sleepTitle
+import me.mupu.sleeptalkrecorder.ui.sleep.kindName
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 

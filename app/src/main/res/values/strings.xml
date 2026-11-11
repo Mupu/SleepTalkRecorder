@@ -458,6 +458,10 @@
     <string name="add_favourite">Add to favourites</string>
     <string name="remove_favourite">Remove from favourites</string>
     <string name="favourite_removed">Removed from favourites</string>
+    <plurals name="favourites_removed">
+        <item quantity="one">Removed from favourites</item>
+        <item quantity="other">%d removed from favourites</item>
+    </plurals>
     <string name="name_event_menu">Name</string>
     <string name="name_event">Name this event</string>
     <string name="name_event_hint">Naming it keeps it as a favourite. Leave it empty for no name.</string>

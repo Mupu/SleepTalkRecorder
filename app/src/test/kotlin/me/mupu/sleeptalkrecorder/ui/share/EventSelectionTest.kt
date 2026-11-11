@@ -1,4 +1,4 @@
-package me.mupu.sleeptalkrecorder.ui.sleep
+package me.mupu.sleeptalkrecorder.ui.share
 
 import me.mupu.sleeptalkrecorder.data.KindColor
 import me.mupu.sleeptalkrecorder.data.SleepEvent

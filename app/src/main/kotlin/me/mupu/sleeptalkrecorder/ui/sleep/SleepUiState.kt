@@ -1,16 +1,11 @@
 package me.mupu.sleeptalkrecorder.ui.sleep
 
-import android.net.Uri
 import me.mupu.sleeptalkrecorder.data.AnnotationEntity
 import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.playback.PlaybackKind
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
-import me.mupu.sleeptalkrecorder.share.CaptionItem
-import me.mupu.sleeptalkrecorder.share.ShareFormat
-import me.mupu.sleeptalkrecorder.share.ShareStretch
-import me.mupu.sleeptalkrecorder.share.ShareStretches
 import java.time.Duration
 
 /** The player of the sleep screen, once the sleep's audio is known; its position is [SleepViewModel.position]. */
@@ -65,27 +60,6 @@ data class SleepUiState(
     /** The events selected together, in order; selection mode while there are any. */
     val selected: List<SleepEvent> = emptyList(),
 )
-
-/** The share step of [events] while it is open: of a single event, or of several at once. */
-data class ShareUiState(
-    val events: List<SleepEvent>,
-    /** For a single event, the stretch shared and how far it can be moved; null for several. */
-    val stretch: ShareStretch?,
-    /** For several events, the stretch shared of each with one lead-in and tail; null for one. */
-    val stretches: ShareStretches?,
-    val format: ShareFormat,
-    /** What the caption names, which only a video gets. */
-    val caption: Set<CaptionItem>,
-    /** Whether the stretches differ from the events with the settings' lead-in and tail, so they can be reset. */
-    val changed: Boolean,
-    /** Whether the player plays, which only listening to the stretch can while the step is open. */
-    val playing: Boolean,
-    /** Whether the audio file is being written. */
-    val preparing: Boolean,
-)
-
-/** Files written for Android's share sheet, of [format], with the [caption] sent along, if any. */
-class SharedFiles(val uris: List<Uri>, val format: ShareFormat, val caption: String?)
 
 /** The sensitivity sheet while it is open, for the whole sleep or around one event. */
 data class SensitivityUiState(

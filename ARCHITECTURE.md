@@ -23,7 +23,7 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 | `readiness` | Whether the phone lets a whole night be recorded: the `Requirement`s it misses, the `VendorStep`s of its maker, and the `SystemPage`s that fix them | only in `PhoneReadiness` |
 | `whatsnew` | The changelogs bundled into the app: their `Changelog` parser, the `BundledChangelogs` of each app language and `WhatsNew`, which decides whether an update brought news the user has not seen | only in `BundledChangelogs.fromAssets` (assets) |
 | `update` | The app's updates from its releases: which release is an update (`Release`), when one is downloaded and installed (`UpdatePolicy`), and the `Updater` that checks, downloads, verifies and installs it | only in `AndroidUpdates` (HTTP, package manager, `PackageInstaller`) |
-| `ui` | Navigation, one sub-package per screen (`home`, `library`, `sleep`, `stats`, `settings`, `setup`, `whatsnew`), shared `components`, `format` and `theme` | Compose |
+| `ui` | Navigation, one sub-package per screen (`home`, `library`, `sleep`, `stats`, `settings`, `setup`, `whatsnew`), shared `components`, `format`, `share` (the share step and the selection of events both the sleep screen and the library use) and `theme` | Compose |
 
 The root package holds `MainActivity`, the only activity, and `SleepTalkApplication` with the
 `AppContainer`, which wires the shared objects by hand: the database with the repository and stores, the
@@ -228,7 +228,11 @@ the favourites of all sleeps under their sleep, newest first (`SleepRepository.f
 opening one opens its sleep at the event, paused, while its play button also plays the event on its own
 and its share button opens the event's share step over the library, so sharing leaves the user
 there: `FavouriteShare` reads the sleep with a `SleepViewModel` of its own, which it lets go of once
-the step closes (see [Sharing an event](#sharing-an-event)).
+the step closes (see [Sharing an event](#sharing-an-event)). A long press on a favourite starts
+selection mode there as on the sleep screen, and the selection may span several sleeps; its app
+bar shares the selected favourites or removes them from the favourites, which a snackbar undoes.
+`LibraryViewModel.shareSelected` decides how: a single selected favourite gets that same step,
+several the step of several events, which the library holds itself, over the library too.
 
 The schema is exported to `app/schemas/`. Data derived from a sleep or a recording goes into
 tables of its own that reference it by foreign key, so the `sleep` and `recording` tables stay
@@ -500,7 +504,8 @@ A long press on an event row starts selection mode: while any event is selected,
 an event or takes it out, and an app bar of its own names how many are selected and how long they
 last together, with buttons that share, keep as favourites or hide them all; Back ends it.
 `EventSelection` keeps the selected ids, so a selection survives a change of filter, and an event
-that a new search no longer finds leaves it.
+that a new search no longer finds leaves it. Event ids are unique across all sleeps, so the
+library's favourites tab selects with it as well.
 
 The buttons left and right of the play button step to the previous and the next listed event, in
 full and in cut playback, to the start of its lead-in as cut playback plays it; playback plays on
@@ -539,8 +544,20 @@ and the encoder is one the phone names for that size.
 Several selected events are shared together, but always as one file each, never joined: the step
 offers one lead-in and one tail for all of them (`ShareStretches`, from none up to 10 s, starting
 with the settings') instead of the single event's range slider, and each file gets the card of
-its event. Android's `ACTION_SEND_MULTIPLE` carries one text for all files, so the caption has one
-line per event.
+its event. Android's `ACTION_SEND_MULTIPLE` carries one text for all files, so the caption has
+one line per event.
+
+The step lives in the package `ui.share`, apart from the screens that open it. `EventSharing`
+holds it and takes the events with their sleeps (`ShareItem`), so favourites selected in the
+library may come from several sleeps: every event carries its own sleep's audio (`EventAudio`),
+its stretch, lead-in and tail stop at that sleep's edges and gaps, and its file is read from that
+sleep's chunk files, read anew when the step opens. An event that its sleep's readable audio no
+longer reaches (a chunk file went missing) is left out, and a share with none left reports that it
+failed. `EventSharing.open` gives
+one event the movable stretch and several one lead-in and tail. The sleep screen's
+`SleepViewModel` holds one with the sleep's player, which listens to a single stretch; the
+`LibraryViewModel` holds one without a player, for several favourites, and its step offers no
+listening.
 
 Each file is named after its event's local date and time (`SleepTalk 2026-11-08 22-55-41.mp4`) and
 lies in the cache folder `shared/`, which holds only the latest share; a `FileProvider` hands the

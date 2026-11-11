@@ -58,11 +58,24 @@ class ShareStretchTest {
 
     @Test
     fun `several events share one lead-in and tail, each held at the sleep's edges and within ten seconds`() {
-        val share = ShareStretches.of(listOf(stretch(1.0, 2.0), stretch(60.0, 62.0)), timeline(5), leadIn = s(3.0), tail = s(12.0), unavailable = emptyList())
+        val sleep = timeline(5)
+        val events = listOf(EventAudio(stretch(1.0, 2.0), sleep, emptyList()), EventAudio(stretch(60.0, 62.0), sleep, emptyList()))
+        val share = ShareStretches.of(events, leadIn = s(3.0), tail = s(12.0))
 
         assertEquals(s(10.0), share.tail)
         assertEquals(listOf(stretch(0.0, 12.0), stretch(57.0, 72.0)), share.selected)
         assertEquals(s(27.0), share.length)
+    }
+
+    @Test
+    fun `events of different sleeps are each held at the edges of their own sleep's audio`() {
+        // At 4:58 the first sleep's audio ends, the second one's goes on; the second's microphone was taken from 5:05 on.
+        val events = listOf(
+            EventAudio(stretch(297.0, 298.0), timeline(5), emptyList()),
+            EventAudio(stretch(297.0, 298.0), timeline(10), listOf(stretch(305.0, 320.0))),
+        )
+
+        assertEquals(listOf(stretch(294.0, 300.0), stretch(294.0, 305.0)), ShareStretches.of(events, s(3.0), s(10.0)).selected)
     }
 
     @Test

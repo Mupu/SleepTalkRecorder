@@ -100,7 +100,7 @@ fun SleepTalkNavHost(container: AppContainer) {
         composable(Routes.LIBRARY) {
             val context = LocalContext.current.applicationContext
             LibraryScreen(
-                viewModel = viewModel { LibraryViewModel(container.recorder, container.sleepRepository) },
+                viewModel = viewModel { LibraryViewModel(container.recorder, container.sleepRepository, container.settings, container.eventShares) },
                 onBack = dropUnlessResumed { navController.popBackStack() },
                 onOpenRunning = { navController.popBackStack(Routes.HOME, inclusive = false) },
                 onOpenSleep = { navController.navigate(Routes.sleep(it)) },

@@ -1,8 +1,8 @@
 package me.mupu.sleeptalkrecorder.ui.library
 
 import android.text.format.Formatter
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -28,8 +29,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -64,12 +67,16 @@ import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.AppBarIcon
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
 import me.mupu.sleeptalkrecorder.ui.components.SegmentLabel
+import me.mupu.sleeptalkrecorder.ui.components.SelectionBar
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.formatDuration
 import me.mupu.sleeptalkrecorder.ui.format.formatEventLength
 import me.mupu.sleeptalkrecorder.ui.format.formatPosition
 import me.mupu.sleeptalkrecorder.ui.format.groupDate
 import me.mupu.sleeptalkrecorder.ui.format.sleepTitle
+import me.mupu.sleeptalkrecorder.ui.share.EventShareSheet
+import me.mupu.sleeptalkrecorder.ui.share.startShareChooser
+import me.mupu.sleeptalkrecorder.ui.share.totalLength
 import me.mupu.sleeptalkrecorder.ui.sleep.OpenEventAction
 import me.mupu.sleeptalkrecorder.ui.sleep.SleepViewModel
 import me.mupu.sleeptalkrecorder.ui.sleep.kindName
@@ -80,7 +87,9 @@ import java.time.ZoneId
  * Every sleep, grouped by the day it is named after, with the running sleep on top; a long press
  * on a finished sleep deletes it after a confirmation. The second tab lists the favourites of all
  * sleeps under the sleep each belongs to; tapping one opens its sleep there, its play button plays it,
- * and its share button opens its share step over the library, built by [shareViewModel].
+ * and its share button opens its share step over the library, built by [shareViewModel]. A long
+ * press on a favourite starts selection mode, in which taps select favourites of any sleeps to
+ * share them together or remove them from the favourites; Back ends it.
  */
 @Composable
 fun LibraryScreen(
@@ -94,49 +103,90 @@ fun LibraryScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var showFavourites by rememberSaveable { mutableStateOf(false) }
-    // The sleep and event id of the favourite being shared.
-    var sharing by rememberSaveable { mutableStateOf<LongArray?>(null) }
+    val sharedFavourite by viewModel.sharedFavourite.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val deletionFailedMessage = stringResource(R.string.delete_sleep_failed)
     val shareFailedMessage = stringResource(R.string.share_failed)
     val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
+    val context = LocalContext.current
+    val share by viewModel.sharing.state.collectAsStateWithLifecycle()
     LaunchedEffect(state.deletionFailed) {
         if (state.deletionFailed) {
             snackbarHostState.showSnackbar(deletionFailedMessage)
             viewModel.deletionFailureShown()
         }
     }
+    LaunchedEffect(viewModel) {
+        viewModel.favouritesRemoved.collect { removed ->
+            val result = snackbarHostState.showSnackbar(
+                resources.getQuantityString(R.plurals.favourites_removed, removed.size, removed.size),
+                actionLabel = resources.getString(R.string.undo),
+                duration = SnackbarDuration.Long,
+            )
+            if (result == SnackbarResult.ActionPerformed) viewModel.undoRemoval(removed)
+        }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.sharing.shared.collect { files ->
+            if (files == null) snackbarHostState.showSnackbar(shareFailedMessage) else startShareChooser(context, files)
+        }
+    }
+
+    // Back ends selection mode before it leaves the library.
+    BackHandler(enabled = state.selected.isNotEmpty(), onBack = viewModel::clearSelection)
 
     Scaffold(
         topBar = {
-            AppBar(
-                stringResource(R.string.library),
-                navigationIcon = { BackIcon(onBack) },
-                actions = { AppBarIcon(R.drawable.ic_bar_chart, stringResource(R.string.stats), onOpenStats) },
-            )
+            val selected = state.selected
+            if (selected.isNotEmpty()) {
+                SelectionBar(selected.size, totalLength(selected.map { it.event }), onClose = viewModel::clearSelection) {
+                    AppBarIcon(R.drawable.ic_share, stringResource(R.string.share_event), viewModel::shareSelected)
+                    AppBarIcon(R.drawable.ic_star, stringResource(R.string.remove_favourite), viewModel::removeSelected)
+                }
+            } else {
+                AppBar(
+                    stringResource(R.string.library),
+                    navigationIcon = { BackIcon(onBack) },
+                    actions = { AppBarIcon(R.drawable.ic_bar_chart, stringResource(R.string.stats), onOpenStats) },
+                )
+            }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            LibraryTabs(showFavourites, onSelect = { showFavourites = it })
+            LibraryTabs(
+                showFavourites,
+                onSelect = {
+                    showFavourites = it
+                    viewModel.clearSelection()
+                },
+            )
             if (showFavourites) {
-                FavouriteList(state, onOpenFavourite, onShare = { sleepId, eventId -> sharing = longArrayOf(sleepId, eventId) })
+                FavouriteList(
+                    state,
+                    onOpenFavourite,
+                    onShare = viewModel::shareFavourite,
+                    onToggleSelection = viewModel::toggleSelection,
+                )
             } else {
                 SleepList(state, onOpenRunning, onOpenSleep, onDelete = viewModel::askToDelete)
             }
         }
     }
 
-    sharing?.let { (sleepId, eventId) ->
-        key(sleepId, eventId) {
+    sharedFavourite?.let { favourite ->
+        key(favourite.sleepId, favourite.event.id) {
             FavouriteShare(
-                createViewModel = { shareViewModel(sleepId, eventId) },
+                createViewModel = { shareViewModel(favourite.sleepId, favourite.event.id) },
                 onFailed = { scope.launch { snackbarHostState.showSnackbar(shareFailedMessage) } },
-                onClosed = { sharing = null },
+                onShared = viewModel::clearSelection,
+                onClosed = viewModel::favouriteShareClosed,
             )
         }
     }
+    share?.let { step -> EventShareSheet(viewModel.sharing, step) }
     state.deletion?.let { request ->
         DeleteSleepDialog(request, onConfirm = viewModel::confirmDeletion, onDismiss = viewModel::cancelDeletion)
     }
@@ -226,14 +276,19 @@ private fun SleepList(state: LibraryUiState, onOpenRunning: () -> Unit, onOpenSl
 
 /**
  * The favourites of all sleeps under the name of their sleep: each by its name, else its words,
- * else its kind, with the clock time it began and its length.
+ * else its kind, with the clock time it began and its length. A long press selects a favourite,
+ * which starts selection mode: while any is selected, a tap selects a favourite or takes it out of
+ * the selection, and each row shows a checkbox instead of its buttons.
  */
 @Composable
 private fun FavouriteList(
     state: LibraryUiState,
     onOpenFavourite: (sleepId: Long, eventId: Long, action: OpenEventAction) -> Unit,
-    onShare: (sleepId: Long, eventId: Long) -> Unit,
+    onShare: (FavouriteItem) -> Unit,
+    onToggleSelection: (FavouriteItem) -> Unit,
 ) {
+    val selecting = state.selected.isNotEmpty()
+    val selectedIds = remember(state.selected) { state.selected.mapTo(HashSet()) { it.event.id } }
     val resources = LocalResources.current
     val clock = LocalClockFormatter.current
     val zone = ZoneId.systemDefault()
@@ -255,7 +310,11 @@ private fun FavouriteList(
                     favourite.at?.let { clock.format(it, zone, seconds = true) },
                     formatEventLength(resources, event.end - event.start),
                 ).joinToString(" · ")
+                val selected = event.id in selectedIds
                 ListItem(
+                    colors = ListItemDefaults.colors(
+                        containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+                    ),
                     leadingContent = {
                         Icon(painterResource(R.drawable.ic_star), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     },
@@ -269,16 +328,25 @@ private fun FavouriteList(
                         }
                     },
                     trailingContent = {
-                        Row {
-                            IconButton(onClick = { onShare(group.sleep.id, event.id) }) {
-                                Icon(painterResource(R.drawable.ic_share), contentDescription = stringResource(R.string.share_favourite))
-                            }
-                            IconButton(onClick = { onOpenFavourite(group.sleep.id, event.id, OpenEventAction.PLAY) }) {
-                                Icon(painterResource(R.drawable.ic_play), contentDescription = stringResource(R.string.play_event))
+                        if (selecting) {
+                            Checkbox(checked = selected, onCheckedChange = { onToggleSelection(favourite) })
+                        } else {
+                            Row {
+                                IconButton(onClick = { onShare(favourite) }) {
+                                    Icon(painterResource(R.drawable.ic_share), contentDescription = stringResource(R.string.share_favourite))
+                                }
+                                IconButton(onClick = { onOpenFavourite(group.sleep.id, event.id, OpenEventAction.PLAY) }) {
+                                    Icon(painterResource(R.drawable.ic_play), contentDescription = stringResource(R.string.play_event))
+                                }
                             }
                         }
                     },
-                    modifier = Modifier.clickable { onOpenFavourite(group.sleep.id, event.id, OpenEventAction.SHOW) },
+                    modifier = Modifier.combinedClickable(
+                        onLongClick = { onToggleSelection(favourite) },
+                        onClick = {
+                            if (selecting) onToggleSelection(favourite) else onOpenFavourite(group.sleep.id, event.id, OpenEventAction.SHOW)
+                        },
+                    ),
                 )
             }
         }

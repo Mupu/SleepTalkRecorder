@@ -26,7 +26,6 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -42,8 +41,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -86,11 +83,15 @@ import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.AppBarIcon
 import me.mupu.sleeptalkrecorder.ui.components.BackIcon
 import me.mupu.sleeptalkrecorder.ui.components.SegmentLabel
+import me.mupu.sleeptalkrecorder.ui.components.SelectionBar
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.formatEventLength
 import me.mupu.sleeptalkrecorder.ui.format.formatPosition
 import me.mupu.sleeptalkrecorder.ui.format.sleepTitle
 import me.mupu.sleeptalkrecorder.ui.library.sleepSubtitle
+import me.mupu.sleeptalkrecorder.ui.share.EventShareSheet
+import me.mupu.sleeptalkrecorder.ui.share.startShareChooser
+import me.mupu.sleeptalkrecorder.ui.share.totalLength
 import java.text.NumberFormat
 import java.time.Duration
 import java.time.ZoneId
@@ -119,7 +120,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
     val transcription by viewModel.transcription.collectAsStateWithLifecycle()
     val filterKinds by viewModel.filterKinds.collectAsStateWithLifecycle()
     val modelChange by viewModel.modelChange.collectAsStateWithLifecycle()
-    val share by viewModel.share.collectAsStateWithLifecycle()
+    val share by viewModel.sharing.state.collectAsStateWithLifecycle()
     val installedModels by viewModel.installedModels.collectAsStateWithLifecycle()
     val recognising by viewModel.recognising.collectAsStateWithLifecycle()
     // Read only where it is drawn or shown, so the moving playhead recomposes nothing else.
@@ -164,7 +165,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
         }
     }
     LaunchedEffect(viewModel) {
-        viewModel.shared.collect { files ->
+        viewModel.sharing.shared.collect { files ->
             if (files == null) {
                 snackbars.showSnackbar(resources.getString(R.string.share_failed))
             } else {
@@ -190,7 +191,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
     Scaffold(
         topBar = {
             if (state.selected.isNotEmpty()) {
-                SelectionBar(
+                EventSelectionBar(
                     state.selected,
                     onClose = viewModel::clearSelection,
                     onShare = viewModel::shareSelected,
@@ -334,7 +335,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     )
                 }
 
-                share?.let { step -> SleepShareSheet(viewModel, step, sleep, timeline, state.loudness, position) }
+                share?.let { step -> EventShareSheet(viewModel.sharing, step, state.loudness, position) }
                 sensitivity?.let { sheet ->
                     SensitivitySheet(
                         state = sheet,
@@ -400,35 +401,20 @@ private fun SleepAppBar(
 }
 
 /**
- * The app bar of selection mode: how many events are selected and how long they last together,
- * with buttons that end the selection, share the events, keep them as favourites or hide them.
+ * The app bar of selection mode, with buttons that end the selection, share the events, keep them
+ * as favourites or hide them.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SelectionBar(selected: List<SleepEvent>, onClose: () -> Unit, onShare: () -> Unit, onFavourite: () -> Unit, onHide: () -> Unit) {
-    val resources = LocalResources.current
-    TopAppBar(
-        title = {
-            Text(
-                stringResource(R.string.selection_title, selected.size, formatEventLength(resources, totalLength(selected))),
-                // Smaller than a screen's title, so the count and length fit beside three buttons.
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-        navigationIcon = { AppBarIcon(R.drawable.ic_close, stringResource(R.string.selection_end), onClose) },
-        actions = {
-            AppBarIcon(R.drawable.ic_share, stringResource(R.string.share_event), onShare)
-            IconButton(onClick = onFavourite, enabled = selected.any { !it.favourite }) {
-                Icon(painterResource(R.drawable.ic_star_border), contentDescription = stringResource(R.string.add_favourite))
-            }
-            IconButton(onClick = onHide, enabled = selected.any { !it.hidden }) {
-                Icon(painterResource(R.drawable.ic_visibility_off), contentDescription = stringResource(R.string.hide_event))
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-    )
+private fun EventSelectionBar(selected: List<SleepEvent>, onClose: () -> Unit, onShare: () -> Unit, onFavourite: () -> Unit, onHide: () -> Unit) {
+    SelectionBar(selected.size, totalLength(selected), onClose) {
+        AppBarIcon(R.drawable.ic_share, stringResource(R.string.share_event), onShare)
+        IconButton(onClick = onFavourite, enabled = selected.any { !it.favourite }) {
+            Icon(painterResource(R.drawable.ic_star_border), contentDescription = stringResource(R.string.add_favourite))
+        }
+        IconButton(onClick = onHide, enabled = selected.any { !it.hidden }) {
+            Icon(painterResource(R.drawable.ic_visibility_off), contentDescription = stringResource(R.string.hide_event))
+        }
+    }
 }
 
 /** An entry of a [MoreMenu]; its [label] is a string resource, read only while the menu is open. */

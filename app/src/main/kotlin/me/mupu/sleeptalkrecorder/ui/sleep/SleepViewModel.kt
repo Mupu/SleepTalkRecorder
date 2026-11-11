@@ -22,20 +22,15 @@ import me.mupu.sleeptalkrecorder.models.ModelStatus
 import me.mupu.sleeptalkrecorder.models.TranscriptionModel
 import me.mupu.sleeptalkrecorder.settings.Settings
 import me.mupu.sleeptalkrecorder.settings.SettingsStore
-import me.mupu.sleeptalkrecorder.share.CaptionItem
-import me.mupu.sleeptalkrecorder.share.CardColors
-import me.mupu.sleeptalkrecorder.share.EventLabels
 import me.mupu.sleeptalkrecorder.share.EventShares
-import me.mupu.sleeptalkrecorder.share.ShareFormat
-import me.mupu.sleeptalkrecorder.share.ShareStretch
-import me.mupu.sleeptalkrecorder.share.ShareStretches
-import me.mupu.sleeptalkrecorder.share.SharedEvent
-import me.mupu.sleeptalkrecorder.share.caption
 import me.mupu.sleeptalkrecorder.transcription.EventRecognition
 import me.mupu.sleeptalkrecorder.transcription.ModelChange
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionRunner
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionStatus
 import me.mupu.sleeptalkrecorder.transcription.Transcriptions
+import me.mupu.sleeptalkrecorder.ui.share.EventSelection
+import me.mupu.sleeptalkrecorder.ui.share.EventSharing
+import me.mupu.sleeptalkrecorder.ui.share.ShareItem
 import java.time.Duration
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -432,17 +427,8 @@ class SleepViewModel(
      * a lead-in and tail for all of them. Selection mode ends once they are shared.
      */
     fun shareSelected() {
-        val events = selectedEvents()
         val timeline = timeline.value ?: return
-        when (events.size) {
-            0 -> return
-            1 -> openShare(events.single())
-            else -> {
-                player.pause()
-                val stretches = ShareStretches.of(events.map { it.stretch }, timeline, leadIn.value, tail.value, unavailable.value)
-                shareStep.value = ShareStep(events, stretch = null, stretches, ShareFormat.VIDEO, preparing = false)
-            }
-        }
+        sharing.open(selectedEvents().map { shareItem(it, timeline) })
     }
 
     private val favouriteRemovedChannel = Channel<FavouriteRemoved>(Channel.BUFFERED)
@@ -586,108 +572,35 @@ class SleepViewModel(
         if (sheet.value?.applying != true) sheet.value = null
     }
 
-    /** The open share step; null while it is closed. */
-    private val shareStep = MutableStateFlow<ShareStep?>(null)
+    /** The share step of the sleep's events, listened to on its player; sharing them ends selection mode. */
+    val sharing = EventSharing(
+        viewModelScope,
+        settings,
+        shares,
+        playing = playback.map { it.playing },
+        pausePlayback = player::pause,
+        listenTo = ::listenToShare,
+        onShared = ::clearSelection,
+    )
 
-    /** What the caption of a shared event names, as the user last chose it. */
-    private val captionItems = settings.flow(Settings.shareCaption).stateIn(viewModelScope, SharingStarted.Eagerly, Settings.shareCaption.default)
-
-    /** The share step, with whether its stretch is being listened to; null while it is closed. */
-    val share: StateFlow<ShareUiState?> = combine(shareStep, playback, captionItems, leadIn, tail) { step, playback, captionItems, leadIn, tail ->
-        step?.let {
-            val changed = it.stretch?.let { stretch -> stretch.selected != stretch.default }
-                ?: it.stretches?.let { stretches -> stretches.leadIn != leadIn || stretches.tail != tail }
-                ?: false
-            ShareUiState(it.events, it.stretch, it.stretches, it.format, captionItems, changed, playing = playback.playing, preparing = it.preparing)
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
-    private val sharedChannel = Channel<SharedFiles?>(Channel.BUFFERED)
-
-    /** Each share's files ready for Android's share sheet, or null when they could not be written. */
-    val shared: Flow<SharedFiles?> = sharedChannel.receiveAsFlow()
+    /** [event] in a share step, with this sleep's audio as it is read. */
+    private fun shareItem(event: SleepEvent, timeline: SleepTimeline) =
+        ShareItem(event, sleepAndEvents.value.first, timeline, unavailable.value)
 
     /** Opens the share step for [event], with its lead-in and tail as cut playback plays it. */
     fun openShare(event: SleepEvent) {
         val timeline = timeline.value ?: return
-        player.pause()
-        val stretch = ShareStretch.of(event.stretch, timeline, leadIn.value, tail.value, unavailable.value)
-        shareStep.value = ShareStep(listOf(event), stretch, stretches = null, ShareFormat.VIDEO, preparing = false)
+        sharing.open(listOf(shareItem(event, timeline)))
     }
 
-    /** Shares the events as [format]. */
-    fun setShareFormat(format: ShareFormat) {
-        val step = shareStep.value?.takeUnless { it.preparing } ?: return
-        shareStep.value = step.copy(format = format)
-    }
-
-    /** Names [item] in the caption ([on] true) or not, in this share and the next ones. */
-    fun setCaptionItem(item: CaptionItem, on: Boolean) {
-        val items = if (on) captionItems.value + item else captionItems.value - item
-        viewModelScope.launch { settings.set(Settings.shareCaption, items) }
-    }
-
-    /** Moves the shared stretch of a single event to run from [start] until [end], as far as it may reach. */
-    fun selectShare(start: Duration, end: Duration) {
-        val step = shareStep.value?.takeUnless { it.preparing } ?: return
-        val stretch = step.stretch ?: return
-        shareStep.value = step.copy(stretch = stretch.select(start, end))
-    }
-
-    /** Shares several events each with [leadIn] before and [tail] after it. */
-    fun setShareMargins(leadIn: Duration, tail: Duration) {
-        val step = shareStep.value?.takeUnless { it.preparing } ?: return
-        val stretches = step.stretches ?: return
-        val timeline = timeline.value ?: return
-        shareStep.value = step.copy(stretches = ShareStretches.of(stretches.events, timeline, leadIn, tail, unavailable.value))
-    }
-
-    /** Takes the shared stretches back to the events with the settings' lead-in and tail. */
-    fun resetShare() {
-        val step = shareStep.value?.takeUnless { it.preparing } ?: return
-        step.stretch?.let { shareStep.value = step.copy(stretch = it.copy(selected = it.default)) }
-        if (step.stretches != null) setShareMargins(leadIn.value, tail.value)
-    }
-
-    /** Plays the shared stretch, or pauses it while it plays. */
-    fun listenToShare() {
-        val selected = shareStep.value?.stretch?.selected ?: return
+    /** Plays [stretch] of the share step, or pauses it while it plays. */
+    private fun listenToShare(stretch: Stretch) {
         if (player.state.value.playing) {
             player.pause()
             return
         }
         eventPlayed.value = null
-        player.playRange(selected.start, selected.end)
-    }
-
-    /**
-     * Writes the shared stretches as files of the chosen format, one per event, closes the step and
-     * reports them through [shared]; once they are written, selection mode ends. [labels] say what
-     * the card and the caption say about each event, in the step's order, and the cards are drawn in
-     * [colors].
-     */
-    fun share(labels: List<EventLabels>, colors: CardColors) {
-        val step = shareStep.value?.takeUnless { it.preparing } ?: return
-        val timeline = timeline.value ?: return
-        val stretches = step.stretch?.let { listOf(it.selected) } ?: step.stretches?.selected ?: return
-        shareStep.value = step.copy(preparing = true)
-        player.pause()
-        viewModelScope.launch {
-            val events = step.events.indices.map { SharedEvent(stretches[it], step.events[it].start, labels[it]) }
-            val uris = shares.write(timeline, events, step.format, colors)
-            shareStep.value = null
-            if (uris != null) clearSelection()
-            // Apps drop a text sent along with audio, so only a video gets a caption.
-            val text = if (step.format == ShareFormat.VIDEO) caption(labels, captionItems.value) else null
-            sharedChannel.send(uris?.let { SharedFiles(it, step.format, text) })
-        }
-    }
-
-    /** Closes the share step and stops listening to it, unless its file is being written. */
-    fun closeShare() {
-        if (shareStep.value?.preparing == true) return
-        shareStep.value = null
-        player.pause()
+        player.playRange(stretch.start, stretch.end)
     }
 
     override fun onCleared() {
@@ -701,18 +614,6 @@ class SleepViewModel(
         /** The columns the sensitivity chart is computed in, about one per two pixels of a phone. */
         const val CHART_COLUMNS = 400
     }
-
-    /**
-     * The open share step: its events, the stretch of a single event or the stretches of several,
-     * the format chosen so far and whether its files are being written.
-     */
-    private data class ShareStep(
-        val events: List<SleepEvent>,
-        val stretch: ShareStretch?,
-        val stretches: ShareStretches?,
-        val format: ShareFormat,
-        val preparing: Boolean,
-    )
 
     /** The open sensitivity sheet: what it was opened for and the setting the user made so far. */
     private data class Sheet(

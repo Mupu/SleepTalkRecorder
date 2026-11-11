@@ -17,28 +17,30 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
-import me.mupu.sleeptalkrecorder.ui.sleep.SleepShareSheet
+import me.mupu.sleeptalkrecorder.ui.share.EventShareSheet
+import me.mupu.sleeptalkrecorder.ui.share.startShareChooser
 import me.mupu.sleeptalkrecorder.ui.sleep.SleepViewModel
-import me.mupu.sleeptalkrecorder.ui.sleep.startShareChooser
 
 /**
  * The share step of a favourite, shown over the library. [createViewModel] reads the favourite's
  * sleep as the sleep screen would and opens the share step once it is read; [onClosed] follows
- * once the step is closed, or once its files went to Android's share sheet or [onFailed] reported
- * that they could not be written. The sleep is let go of when this leaves the composition.
+ * once the step is closed, or once its files went to Android's share sheet, after [onShared], or
+ * [onFailed] reported that they could not be written. The sleep is let go of when this leaves the
+ * composition.
  */
 @Composable
-fun FavouriteShare(createViewModel: () -> SleepViewModel, onFailed: () -> Unit, onClosed: () -> Unit) {
+fun FavouriteShare(createViewModel: () -> SleepViewModel, onFailed: () -> Unit, onShared: () -> Unit, onClosed: () -> Unit) {
     val owner = remember { object : ViewModelStoreOwner { override val viewModelStore = ViewModelStore() } }
     DisposableEffect(owner) { onDispose { owner.viewModelStore.clear() } }
     CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
         val viewModel = viewModel { createViewModel() }
         val context = LocalContext.current
         val state by viewModel.state.collectAsStateWithLifecycle()
-        val share by viewModel.share.collectAsStateWithLifecycle()
+        val share by viewModel.sharing.state.collectAsStateWithLifecycle()
         val positionState = viewModel.position.collectAsStateWithLifecycle()
         val position = remember(positionState) { { positionState.value } }
         val currentOnFailed by rememberUpdatedState(onFailed)
+        val currentOnShared by rememberUpdatedState(onShared)
         val currentOnClosed by rememberUpdatedState(onClosed)
 
         LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.pause() }
@@ -56,16 +58,17 @@ fun FavouriteShare(createViewModel: () -> SleepViewModel, onFailed: () -> Unit, 
             }
         }
         LaunchedEffect(viewModel) {
-            viewModel.shared.collect { files ->
-                if (files == null) currentOnFailed() else startShareChooser(context, files)
+            viewModel.sharing.shared.collect { files ->
+                if (files == null) {
+                    currentOnFailed()
+                } else {
+                    currentOnShared()
+                    startShareChooser(context, files)
+                }
                 currentOnClosed()
             }
         }
 
-        val timeline = state.timeline
-        val step = share
-        if (timeline != null && step != null) {
-            SleepShareSheet(viewModel, step, state.sleep, timeline, state.loudness, position)
-        }
+        share?.let { step -> EventShareSheet(viewModel.sharing, step, state.loudness, position) }
     }
 }

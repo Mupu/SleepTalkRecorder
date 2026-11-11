@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.8.0] - 2026-11-11
+
+### Hinzugefügt
+
+- Halte in der Bibliothek im Tab Favoriten einen Favoriten gedrückt, um ihn auszuwählen, und tippe weitere Favoriten an, um sie hinzuzufügen, auch aus verschiedenen Schlafzeiten. Die Leiste oben zeigt, wie viele du ausgewählt hast und wie lange sie zusammen dauern, und teilt sie oder entfernt sie aus den Favoriten, was du rückgängig machen kannst; Zurück beendet die Auswahl. Zusammen geteilt kommt jeder Favorit in eine eigene Datei, jeweils aus seinem eigenen Schlaf geschnitten, und du bleibst in der Bibliothek.
+
 ## [0.7.1] - 2026-11-11
 
 ### Behoben

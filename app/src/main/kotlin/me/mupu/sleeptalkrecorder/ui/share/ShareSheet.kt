@@ -1,4 +1,4 @@
-package me.mupu.sleeptalkrecorder.ui.sleep
+package me.mupu.sleeptalkrecorder.ui.share
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
@@ -64,14 +64,16 @@ import me.mupu.sleeptalkrecorder.share.ShareStretches
 import me.mupu.sleeptalkrecorder.share.caption
 import me.mupu.sleeptalkrecorder.ui.format.LocalClockFormatter
 import me.mupu.sleeptalkrecorder.ui.format.formatEventLength
+import me.mupu.sleeptalkrecorder.ui.sleep.SleepLoudness
 import java.time.Duration
 import kotlin.math.roundToLong
 
 /**
  * The step before events are shared. For a single event it shows the loudness around it with the
- * stretch that is shared, a range slider that moves the stretch's ends and a button that listens
- * to it; it opens with the event as cut playback plays it, with the settings' lead-in and tail.
- * For several events, each shared as a file of its own, one lead-in and one tail apply to all.
+ * stretch that is shared, a range slider that moves the stretch's ends and, where a player can,
+ * a button that listens to it; it opens with the event as cut playback plays it, with the settings' lead-in and tail.
+ * For several events, each shared as a file of its own and each perhaps of another sleep, one
+ * lead-in and one tail apply to all.
  * Below follow the format with the items the caption names, and the share button.
  *
  * Like the sensitivity sheet's chart, the chart runs along the sleep's audio, so a gap between
@@ -83,7 +85,6 @@ fun ShareSheet(
     state: ShareUiState,
     /** What the cards and caption say about the events, in the step's order. */
     labels: List<EventLabels>,
-    timeline: SleepTimeline,
     loudness: SleepLoudness?,
     position: () -> Duration,
     onSelect: (start: Duration, end: Duration) -> Unit,
@@ -91,7 +92,8 @@ fun ShareSheet(
     onReset: () -> Unit,
     onFormat: (ShareFormat) -> Unit,
     onCaptionItem: (CaptionItem, Boolean) -> Unit,
-    onListen: () -> Unit,
+    /** Plays or pauses a single event's stretch; null where nothing can play it, which hides the button. */
+    onListen: (() -> Unit)?,
     onShare: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -100,7 +102,7 @@ fun ShareSheet(
             val stretch = state.stretch
             val stretches = state.stretches
             if (stretch != null) {
-                SingleStretch(stretch, state.preparing, timeline, loudness, position, onSelect)
+                SingleStretch(stretch, state.preparing, state.items.single().timeline, loudness, position, onSelect)
             } else if (stretches != null) {
                 SeveralStretches(stretches, state.preparing, onMargins)
             }
@@ -114,7 +116,7 @@ fun ShareSheet(
                 itemVerticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(top = 16.dp),
             ) {
-                if (stretch != null) {
+                if (stretch != null && onListen != null) {
                     OutlinedButton(onClick = onListen, enabled = !state.preparing) {
                         Icon(
                             painterResource(if (state.playing) R.drawable.ic_pause else R.drawable.ic_play),

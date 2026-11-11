@@ -17,8 +17,11 @@ import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** One event to share: the [stretch] of the sleep's audio, where the event starts, and what its card says. */
-class SharedEvent(val stretch: Stretch, val eventStart: Duration, val labels: EventLabels)
+/**
+ * One event to share: the [stretch] of its sleep's audio, read from that sleep's [timeline], where
+ * the event starts, and what its card says.
+ */
+class SharedEvent(val timeline: SleepTimeline, val stretch: Stretch, val eventStart: Duration, val labels: EventLabels)
 
 /**
  * Turns stretches of a sleep into files that other apps receive through Android's share sheet:
@@ -31,19 +34,20 @@ class EventShares(private val context: Context) {
     private val directory = File(context.cacheDir, DIRECTORY)
 
     /**
-     * Writes one file of [format] for each of [events] of the sleep [timeline], named after the
-     * event's clock time, its card drawn in [colors], and returns their content URIs in the same
-     * order; null when the audio cannot be read or encoded. The files shared before are deleted
-     * first: a receiving app has read them by the time the user shares again.
+     * Writes one file of [format] for each of [events], each from the audio of its own sleep, named
+     * after the event's clock time, its card drawn in [colors], and returns their content URIs in
+     * the same order; null when the audio cannot be read or encoded. The files shared before are
+     * deleted first: a receiving app has read them by the time the user shares again.
      */
-    suspend fun write(timeline: SleepTimeline, events: List<SharedEvent>, format: ShareFormat, colors: CardColors): List<Uri>? =
+    suspend fun write(events: List<SharedEvent>, format: ShareFormat, colors: CardColors): List<Uri>? =
         withContext(Dispatchers.IO) {
             try {
                 directory.listFiles()?.forEach { it.delete() }
                 if (!directory.isDirectory && !directory.mkdirs()) throw IOException("cannot create $directory")
 
-                val sampleRate = SleepAudio.sampleRateOf(timeline)
                 events.map { event ->
+                    val timeline = event.timeline
+                    val sampleRate = SleepAudio.sampleRateOf(timeline)
                     val file = uniqueFile(shareFileName(timeline.instantAt(event.eventStart), ZoneId.systemDefault(), format))
                     val pcm = SleepAudio(timeline).use { it.pcm(event.stretch) }
                     fadeEdges(pcm, CutPlan.fadeFrames(sampleRate).toInt())

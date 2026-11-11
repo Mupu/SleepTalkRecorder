@@ -408,6 +408,10 @@
     <string name="add_favourite">Zu Favoriten</string>
     <string name="remove_favourite">Aus Favoriten entfernen</string>
     <string name="favourite_removed">Aus Favoriten entfernt</string>
+    <plurals name="favourites_removed">
+        <item quantity="one">Aus Favoriten entfernt</item>
+        <item quantity="other">%d aus Favoriten entfernt</item>
+    </plurals>
     <string name="name_event_menu">Benennen</string>
     <string name="name_event">Ereignis benennen</string>
     <string name="name_event_hint">Benennen macht es zum Favoriten. Leer lassen für keinen Namen.</string>
