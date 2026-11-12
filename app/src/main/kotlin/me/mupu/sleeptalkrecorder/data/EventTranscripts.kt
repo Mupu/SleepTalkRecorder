@@ -40,7 +40,7 @@ fun withTranscripts(
             transcript = winner.text,
             transcriptOrigin = winner.origin,
             transcriptProducer = winner.producer?.id,
-            results = results.map { TranscriptResult(it.id, it.origin, it.producer?.id, it.kindId ?: EventKinds.EVENT, it.text) },
+            results = results.map { TranscriptResult(it.id, it.origin, it.producer?.id, it.kindId ?: EventKinds.NOISE, it.text) },
         )
     }
 }
@@ -48,7 +48,7 @@ fun withTranscripts(
 /**
  * Whether marking [event] as speech by hand needs a transcript of the user's own: not when the
  * transcripts of analyses among [transcripts] already make it a speech event, because their words
- * show again once the user's own transcripts over it are gone.
+ * show again once the user's own transcripts over it are gone; but when they make it a murmur.
  */
 fun needsUserSpeechMark(
     event: SleepEvent,
@@ -57,7 +57,7 @@ fun needsUserSpeechMark(
     activeModel: String?,
 ): Boolean {
     val analyses = transcripts.filter { it.origin != AnnotationOrigin.USER }
-    return !withTranscripts(listOf(event.copy(kindId = EventKinds.EVENT)), analyses, kinds, activeModel).single().isSpeech
+    return !withTranscripts(listOf(event.copy(kindId = EventKinds.NOISE)), analyses, kinds, activeModel).single().isSpeech
 }
 
 /** The order in which the transcripts of analyses win: a server's before the phone's. */

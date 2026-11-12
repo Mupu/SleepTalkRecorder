@@ -27,9 +27,9 @@ data class TagFilter(val chosen: Set<EventTag> = emptySet()) {
     fun without(tagId: Long): TagFilter = TagFilter(chosen - EventTag.Stored(tagId))
 }
 
-/** The system tags a filter offers: one per event kind of [kinds], then murmur, named and hidden. */
+/** The system tags a filter offers: one per event kind of [kinds], then named and hidden. */
 fun systemTags(kinds: List<EventKindEntity>): List<EventTag.System> =
-    kinds.map { EventTag.System.Kind(it.id) } + listOf(EventTag.System.Murmur, EventTag.System.Named, EventTag.System.Hidden)
+    kinds.map { EventTag.System.Kind(it.id) } + listOf(EventTag.System.Named, EventTag.System.Hidden)
 
 /** Every tag a filter offers in the order it lists them: the user's [tags], then the [systemTags]. */
 fun filterTags(tags: List<TagEntity>, kinds: List<EventKindEntity>): List<EventTag> =

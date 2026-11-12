@@ -186,7 +186,7 @@ class SleepRepository(
         val detection = withContext(Dispatchers.Default) { track.detect(overrides) }
 
         val events = detection.events.map { event ->
-            result(sleepId, AnnotationType.EVENT, track.positionOf(event.start), track.positionOf(event.end)).copy(kindId = EventKinds.EVENT)
+            result(sleepId, AnnotationType.EVENT, track.positionOf(event.start), track.positionOf(event.end)).copy(kindId = EventKinds.NOISE)
         }
         val sensitivity = result(sleepId, AnnotationType.SENSITIVITY, Duration.ZERO, track.positionOf(track.track.size))
             .copy(value = detection.thresholdDb.toDouble())
@@ -340,8 +340,8 @@ class SleepRepository(
 
     /**
      * Sets what [event] is, as the user's transcript over its stretch in place of the user's
-     * earlier ones that overlap it: a speech event with the [text] they wrote, or with null a
-     * murmur; or, with [kindId] the plain event, not speech at all. User transcripts win over
+     * earlier ones that overlap it: of the kind [kindId], speech with the [text] they wrote, a
+     * murmur, or a noise that is not speech at all. User transcripts win over
      * every analysis and neither speech recognition nor a new search for events removes them.
      *
      * Returns the user's transcripts it replaced, which [restoreUserTranscripts] puts back.
@@ -368,8 +368,8 @@ class SleepRepository(
 
     /**
      * Makes [event] a speech event by hand. The user's earlier transcripts over it go, so if speech
-     * recognition found speech there its words show again; otherwise a transcript of the user's
-     * own makes it a speech event without words, a murmur whose words they can write later.
+     * recognition found words there they show again; otherwise, also over a murmur, a transcript of
+     * the user's own makes it a speech event without words, whose words they can write later.
      *
      * Returns the user's transcripts it replaced, which [restoreUserTranscripts] puts back.
      */

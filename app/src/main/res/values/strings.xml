@@ -95,7 +95,8 @@
     <string name="event_heading">%1$s · %2$s</string>
     <!-- Its kind and its position in the sleep's audio: "Event · Pos 4:02:11". -->
     <string name="event_details">%1$s · Pos %2$s</string>
-    <string name="kind_event">Event</string>
+    <string name="kind_noise">Noise</string>
+    <string name="kind_murmur">Murmur</string>
     <string name="kind_speech">Speech</string>
     <string name="no_events_filter">No events for this filter.</string>
     <!-- The tag of a hidden event in the list. -->
@@ -113,6 +114,7 @@
     <!-- A transcript in quotation marks. -->
     <string name="transcript_quoted">“%1$s”</string>
     <string name="murmur">murmur – no words recognised</string>
+    <string name="speech_without_words">speech – no words written yet</string>
     <!-- Below a transcript the user corrected. -->
     <string name="transcript_corrected">corrected by you</string>
     <string name="correct_text">Correct text</string>
@@ -130,8 +132,8 @@
     <string name="use_result">Use</string>
     <string name="delete_result">Delete result</string>
     <!-- The event menu entry that turns a speech event into a plain event. -->
-    <string name="not_speech_plain_event">Not speech – plain event</string>
-    <string name="marked_not_speech">Marked as a plain event</string>
+    <string name="not_speech_noise">Not speech – noise</string>
+    <string name="marked_not_speech">Marked as noise</string>
     <string name="mark_speech">Mark as speech</string>
     <string name="marked_speech">Marked as speech</string>
     <!-- %1$s is the name of the model that made the transcripts, %2$s that of the active model. -->
@@ -467,7 +469,6 @@
     <string name="tag_favourite">Favourite</string>
     <string name="tag_named">Named</string>
     <string name="tag_hidden">Hidden</string>
-    <string name="tag_murmur">Murmur</string>
     <string name="tag_new">New tag</string>
     <string name="tag_name">Name</string>
     <string name="tag_name_taken">There is a tag with this name already.</string>

@@ -462,26 +462,27 @@ class SleepViewModel(
 
     /**
      * Deletes the models' [deleted] results of [event] and, unless [text] is null, replaces the
-     * words of the speech event with the user's [text]; blank text leaves a murmur. The correction
-     * wins over speech recognition, also when it runs again.
+     * words of the event with the user's [text], which makes it speech; blank text makes it a
+     * murmur. The correction wins over speech recognition, also when it runs again.
      */
     fun correctTranscript(event: SleepEvent, text: String?, deleted: List<TranscriptResult> = emptyList()) {
         viewModelScope.launch {
             for (result in deleted) repository.deleteResult(sleepId, result)
-            if (text != null) repository.setUserTranscript(sleepId, event, EventKinds.SPEECH, text.trim().ifBlank { null })
+            val words = text?.trim()?.ifBlank { null }
+            if (text != null) repository.setUserTranscript(sleepId, event, if (words == null) EventKinds.MURMUR else EventKinds.SPEECH, words)
         }
     }
 
     /**
      * Makes [event] a speech event ([speech] true), with the recognised words if speech recognition
-     * found any, or turns it into a plain event; reported once through [speechMarked].
+     * found any, or turns it into a noise; reported once through [speechMarked].
      */
     fun markSpeech(event: SleepEvent, speech: Boolean) {
         viewModelScope.launch {
             val previous = if (speech) {
                 repository.markSpeech(sleepId, event)
             } else {
-                repository.setUserTranscript(sleepId, event, EventKinds.EVENT, null)
+                repository.setUserTranscript(sleepId, event, EventKinds.NOISE, null)
             }
             speechMarkedChannel.send(SpeechMarked(event, speech, previous))
         }

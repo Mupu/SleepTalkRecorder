@@ -45,7 +45,7 @@ The tag the app provides: it works like the user's own tags but cannot be delete
 _Avoid_: Bookmark, starred event
 
 **System tag**:
-A tag the app sets on its own and the filter offers beside the user's: named, hidden, each event kind and murmur. It follows from the event and can be filtered by, but neither given nor taken away.
+A tag the app sets on its own and the filter offers beside the user's: named, hidden and each event kind (noise, murmur, speech). It follows from the event and can be filtered by, but neither given nor taken away.
 _Avoid_: Automatic label, smart tag
 
 **Name**:
@@ -53,12 +53,16 @@ A short title the user gives an event, shown above its words and in what is shar
 _Avoid_: Title, caption
 
 **Speech event**:
-An event in which transcription found words or wordless murmuring; the mark is a guess layered on top of the event and never hides or removes it. The user can turn a speech event back into a plain event, and mark any event as speech.
+An event in which transcription found words, or that the user marked as speech; the mark is a guess layered on top of the event and never hides or removes it. The user can turn a speech event or a murmur into a noise, and mark a noise or a murmur as speech.
 _Avoid_: Voice line, confirmed speech
 
 **Murmur**:
-A speech event in which a voice is heard but no words are recognised.
-_Avoid_: Mumble (in code), noise
+An event in which transcription heard a voice but only fillers ("mhm", "uh"), no words; a kind of its own beside noise and speech.
+_Avoid_: Mumble (in code), wordless speech
+
+**Noise**:
+An event in which transcription heard no voice, or that is not transcribed yet: the kind every event has until transcription finds a murmur or words. Its kind id is `event`.
+_Avoid_: Plain event, sound event
 
 **Transcript**:
 Text of what was said in a speech event, written by a transcription model and correctable by the user; may be incomplete or wrong.

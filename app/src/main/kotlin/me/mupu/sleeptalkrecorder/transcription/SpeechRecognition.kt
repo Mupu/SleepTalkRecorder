@@ -19,8 +19,8 @@ interface Transcriber : AutoCloseable {
  * The phone's speech recognition as an [EventAnalysis]: the clip of every event goes to the
  * [transcriber] as it is, without a voice activity gate or noise suppression in front (both lost
  * whispers and gained nothing), and the [TranscriptFilter] decides from the text whether the event
- * is a speech event. Each event gets one [AnnotationType.TRANSCRIPT] annotation, also when it stays a
- * plain event, so it counts as done.
+ * is speech, a murmur or a noise. Each event gets one [AnnotationType.TRANSCRIPT] annotation, also
+ * when it stays a noise, so it counts as done.
  */
 class SpeechRecognition(model: TranscriptionModel, private val transcriber: Transcriber) : EventAnalysis {
 
@@ -71,18 +71,30 @@ class SpeechRecognition(model: TranscriptionModel, private val transcriber: Tran
         /**
          * [transcript], a stored result of the phone's speech recognition, judged again from its
          * words by the current [TranscriptFilter], whose rules may remove words older ones kept. A
-         * result without words keeps its verdict, because the model's output is not stored.
+         * result without words keeps its verdict, because the model's output is not stored; one
+         * that gave the speech kind without words is a murmur, which filters before version 3
+         * stored that way.
          */
         fun judgedAgain(transcript: AnnotationEntity): AnnotationEntity {
             val verdict = transcript.text?.let(TranscriptFilter::judge)
+            val kindId = when {
+                verdict != null -> kindOf(verdict)
+                transcript.kindId == EventKinds.SPEECH -> EventKinds.MURMUR
+                else -> transcript.kindId
+            }
             return transcript.copy(
-                kindId = verdict?.let(::kindOf) ?: transcript.kindId,
+                kindId = kindId,
                 text = (verdict as? Verdict.Speech)?.text,
                 producer = transcript.producer?.copy(version = "${TranscriptFilter.VERSION}"),
             )
         }
 
-        private fun kindOf(verdict: Verdict) = if (verdict == Verdict.NoSpeech) EventKinds.EVENT else EventKinds.SPEECH
+        /** The kind an event of [verdict] has. */
+        private fun kindOf(verdict: Verdict): String = when (verdict) {
+            is Verdict.Speech -> EventKinds.SPEECH
+            Verdict.Murmur -> EventKinds.MURMUR
+            Verdict.NoSpeech -> EventKinds.NOISE
+        }
 
         /** How much of the sound before and after an event its clip holds, as the models were measured with. */
         val PADDING: Duration = Duration.ofMillis(500)

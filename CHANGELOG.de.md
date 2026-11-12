@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.11.1] - 2026-11-12
+
+### Geändert
+
+- Ein Ereignis, in dem nur ein Murmeln wie „mhm“ oder „äh“ zu hören war, zeigt „Murmeln“ als Art, in eigener Farbe, und der Filter listet es nur noch unter Murmeln, nicht mehr auch unter Sprache; Sprache heißt, dass Wörter erkannt wurden. Ereignisse ohne Wörter heißen „Geräusch“ statt „Ereignis“. Die Statistik stapelt Murmeln zwischen Geräuschen und Sprache, und der Anteil Sprache und die gesprochene Zeit zählen nur Sprache. Schon erkannte Nächte folgen nach dem Update von selbst, ohne sie neu zu erkennen.
+
 ## [0.11.0] - 2026-11-12
 
 ### Hinzugefügt

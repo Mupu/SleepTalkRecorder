@@ -13,8 +13,8 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
-/** An event as stats count it: the instant it started, how long it lasts and whether it is a speech event. */
-data class CountedEvent(val start: Instant, val length: Duration, val speech: Boolean)
+/** An event as stats count it: the instant it started, how long it lasts and whether it is speech or a murmur. */
+data class CountedEvent(val start: Instant, val length: Duration, val speech: Boolean, val murmur: Boolean = false)
 
 /**
  * A finished sleep as stats count it: its name, given when it started, the time from its first to
@@ -54,14 +54,17 @@ data class CountedSleep(val id: Long, val date: SleepDate, val start: Instant, v
                 date = summary.date,
                 start = summary.startedAt,
                 end = summary.endedAt ?: summary.startedAt,
-                events = events.filterNot { it.hidden }.map { CountedEvent(instantAt(it.start), it.end - it.start, it.isSpeech) },
+                events = events.filterNot { it.hidden }.map { CountedEvent(instantAt(it.start), it.end - it.start, it.isSpeech, it.isVoice && !it.isSpeech) },
             )
         }
     }
 }
 
-/** Ten minutes of the clock from [start], with the [events] that started in them, [speech] of which are speech events. */
-data class TenMinutes(val start: Instant, val events: Int, val speech: Int)
+/**
+ * Ten minutes of the clock from [start], with the [events] that started in them, [speech] of which
+ * are speech events and [murmur] murmurs.
+ */
+data class TenMinutes(val start: Instant, val events: Int, val speech: Int, val murmur: Int = 0)
 
 /** The numbers of one sleep, as the stats screen shows them for "this sleep". */
 data class SleepStats(
@@ -100,10 +103,12 @@ data class SleepStats(
             val count = maxOf(1L, (Duration.between(first, sleep.end).toMillis() + TEN_MINUTES.toMillis() - 1) / TEN_MINUTES.toMillis()).toInt()
             val events = IntArray(count)
             val speech = IntArray(count)
+            val murmur = IntArray(count)
             for (event in sleep.events) {
                 val bin = (Duration.between(first, event.start).toMillis() / TEN_MINUTES.toMillis()).toInt().coerceIn(0, count - 1)
                 events[bin] += 1
                 if (event.speech) speech[bin] += 1
+                if (event.murmur) murmur[bin] += 1
             }
 
             val kind = sleep.date.kind
@@ -113,7 +118,7 @@ data class SleepStats(
                 events = sleep.events.size,
                 speechEvents = sleep.events.count { it.speech },
                 talk = sleep.talk,
-                tenMinutes = List(count) { TenMinutes(first + TEN_MINUTES.multipliedBy(it.toLong()), events[it], speech[it]) },
+                tenMinutes = List(count) { TenMinutes(first + TEN_MINUTES.multipliedBy(it.toLong()), events[it], speech[it], murmur[it]) },
                 averageTalk = if (compared.isEmpty()) null else compared.fold(Duration.ZERO) { sum, other -> sum + other.talk }.dividedBy(compared.size.toLong()),
                 compared = compared.size,
             )

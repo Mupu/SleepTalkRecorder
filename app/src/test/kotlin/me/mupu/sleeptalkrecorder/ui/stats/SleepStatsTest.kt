@@ -27,9 +27,9 @@ class SleepStatsTest {
     private fun recording(start: String, minutes: Long) =
         RecordingEntity(sleepId = 1, startedAt = at(start), sampleRate = 16_000, frames = minutes * 60 * 16_000, state = RecordingState.FINISHED)
 
-    private fun stored(startMinute: Double, seconds: Double, speech: Boolean = false, hidden: Boolean = false): SleepEvent {
+    private fun stored(startMinute: Double, seconds: Double, speech: Boolean = false, hidden: Boolean = false, murmur: Boolean = false): SleepEvent {
         val start = (startMinute * 60_000).toLong()
-        val kind = if (speech) "speech" else "event"
+        val kind = if (speech) "speech" else if (murmur) "murmur" else "event"
         val color = KindColor.Theme(if (speech) ThemeRole.TERTIARY else ThemeRole.PRIMARY)
         return SleepEvent(0, Duration.ofMillis(start), Duration.ofMillis(start + (seconds * 1_000).toLong()), kind, null, color, hidden = hidden)
     }
@@ -41,7 +41,7 @@ class SleepStatsTest {
     fun `events are counted at the clock time they happened, also after a gap between recordings, and hidden ones not at all`() {
         // Two half-hour recordings with a half-hour gap: 22:00-22:30 and 23:00-23:30.
         val recordings = listOf(recording("2026-11-08T22:00", 30), recording("2026-11-08T23:00", 30))
-        val events = listOf(stored(10.0, 2.0), stored(20.0, 9.0, speech = true, hidden = true), stored(40.0, 3.5, speech = true))
+        val events = listOf(stored(10.0, 2.0), stored(20.0, 9.0, speech = true, hidden = true), stored(40.0, 3.5, speech = true), stored(45.0, 1.0, murmur = true))
 
         val sleep = CountedSleep.of(summary(1, at("2026-11-08T22:00"), at("2026-11-08T23:30")), recordings, events)
 
@@ -49,12 +49,14 @@ class SleepStatsTest {
             listOf(
                 CountedEvent(at("2026-11-08T22:10"), Duration.ofSeconds(2), speech = false),
                 CountedEvent(at("2026-11-08T23:10"), Duration.ofMillis(3_500), speech = true),
+                CountedEvent(at("2026-11-08T23:15"), Duration.ofSeconds(1), speech = false, murmur = true),
             ),
             sleep.events,
         )
     }
 
-    private fun event(start: String, seconds: Long = 2, speech: Boolean = false) = CountedEvent(at(start), Duration.ofSeconds(seconds), speech)
+    private fun event(start: String, seconds: Long = 2, speech: Boolean = false, murmur: Boolean = false) =
+        CountedEvent(at(start), Duration.ofSeconds(seconds), speech, murmur)
 
     /** A sleep named as the default windows name it, unless it is given its [date]. */
     private fun sleep(id: Long, start: String, end: String, vararg events: CountedEvent, date: SleepDate? = null) =
@@ -83,7 +85,7 @@ class SleepStatsTest {
         val sleep = sleep(
             1, "2026-11-08T22:05", "2026-11-08T23:12",
             event("2026-11-08T22:07", speech = true),
-            event("2026-11-08T22:51"),
+            event("2026-11-08T22:51", murmur = true),
             event("2026-11-08T22:59:59", speech = true),
             event("2026-11-08T23:11"),
         )
@@ -93,6 +95,7 @@ class SleepStatsTest {
         assertEquals((0..7).map { at("2026-11-08T22:00").plus(Duration.ofMinutes(10L * it)) }, bins.map { it.start })
         assertEquals(listOf(1, 0, 0, 0, 0, 2, 0, 1), bins.map { it.events })
         assertEquals(listOf(1, 0, 0, 0, 0, 1, 0, 0), bins.map { it.speech })
+        assertEquals(listOf(0, 0, 0, 0, 0, 1, 0, 0), bins.map { it.murmur })
     }
 
     @Test

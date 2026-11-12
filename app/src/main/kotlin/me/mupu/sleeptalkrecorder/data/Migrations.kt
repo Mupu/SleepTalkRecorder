@@ -43,6 +43,6 @@ internal object Migration1To2 : Migration(1, 2) {
         "CREATE INDEX IF NOT EXISTS `index_annotation_sleep_id_type_start_ms_end_ms` ON `annotation` (`sleep_id`, `type`, `start_ms`, `end_ms`)",
         "CREATE INDEX IF NOT EXISTS `index_annotation_kind_id` ON `annotation` (`kind_id`)",
         "CREATE INDEX IF NOT EXISTS `index_annotation_tag_id` ON `annotation` (`tag_id`)",
-        "UPDATE `event_kind` SET `has_filter` = 1 WHERE `id` = '${EventKinds.EVENT}'",
+        "UPDATE `event_kind` SET `has_filter` = 1 WHERE `id` = '${EventKinds.NOISE}'",
     )
 }

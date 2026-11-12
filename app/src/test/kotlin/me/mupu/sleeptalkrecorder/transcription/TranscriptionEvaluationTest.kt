@@ -91,8 +91,8 @@ class TranscriptionEvaluationTest {
                         val stretch = Stretch(Duration.ofMillis((event.start * 1000).toLong()), Duration.ofMillis((event.end * 1000).toLong()))
                         val transcript = runBlocking { recognition.analyse(EventClip(0, stretch, samples, TestNights.SAMPLE_RATE)) }.single()
                         val verdict = when {
-                            transcript.kindId == EventKinds.EVENT -> "none"
-                            transcript.text == null -> "murmur"
+                            transcript.kindId == EventKinds.NOISE -> "none"
+                            transcript.kindId == EventKinds.MURMUR -> "murmur"
                             else -> "words"
                         }
                         results += Result(name, event, group, labels.filter { overlaps(event, it) }.map { it.kind }.distinct(), verdict, transcript.text)

@@ -18,13 +18,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * One bar of a [BarChart]: [events] in the colour of plain events with [speech] in the colour of
- * speech events stacked on top, and the [label] below it, if any.
+ * One bar of a [BarChart]: [events] in the colour of noises with [murmur] and then [speech] in the
+ * colours of their kinds stacked on top, and the [label] below it, if any.
  */
-data class Bar(val events: Float = 0f, val speech: Float = 0f, val label: String? = null)
+data class Bar(val events: Float = 0f, val speech: Float = 0f, val label: String? = null, val murmur: Float = 0f)
 
 /**
- * Bars of stacked plain and speech events over a baseline, with grid lines at the top, the middle
+ * Bars of stacked noises, murmurs and speech events over a baseline, with grid lines at the top, the middle
  * and the bottom and the top's value, written by [maxLabel], above the top line. The top stands for
  * the highest bar, but for at least [atLeast], so that a chart of zeros still has a scale. With a
  * [highlight] the other bars are drawn paler.
@@ -41,7 +41,7 @@ fun BarChart(
     val colors = MaterialTheme.colorScheme
     val measurer = rememberTextMeasurer()
     val labelStyle = TextStyle(color = colors.onSurfaceVariant, fontSize = 10.sp)
-    val max = maxOf(bars.maxOfOrNull { it.events + it.speech } ?: 0f, atLeast)
+    val max = maxOf(bars.maxOfOrNull { it.events + it.murmur + it.speech } ?: 0f, atLeast)
     val maxText = maxLabel(max)
 
     Canvas(modifier.fillMaxWidth().height(height)) {
@@ -63,11 +63,12 @@ fun BarChart(
         bars.forEachIndexed { index, bar ->
             val alpha = if (highlight == null || highlight == index) 1f else DIMMED
             val left = index * slot + (slot - width) / 2
-            val eventsHeight = bar.events / max * chart
-            val speechHeight = bar.speech / max * chart
-            if (eventsHeight > 0f) drawRoundRect(colors.primary.copy(alpha = alpha), Offset(left, bottom - eventsHeight), Size(width, eventsHeight), corner)
-            if (speechHeight > 0f) {
-                drawRoundRect(colors.tertiary.copy(alpha = alpha), Offset(left, bottom - eventsHeight - speechHeight), Size(width, speechHeight), corner)
+            var stacked = 0f
+            for ((value, color) in listOf(bar.events to colors.primary, bar.murmur to colors.secondary, bar.speech to colors.tertiary)) {
+                val height = value / max * chart
+                if (height <= 0f) continue
+                drawRoundRect(color.copy(alpha = alpha), Offset(left, bottom - stacked - height), Size(width, height), corner)
+                stacked += height
             }
 
             // Labels are centred under their bar; one that would touch the label before it is left out.
@@ -85,7 +86,7 @@ fun BarChart(
     }
 }
 
-/** A ring in the colour of plain events with the [share] (0 to 1) of speech events in theirs, from the top clockwise. */
+/** A ring in the colour of noises with the [share] (0 to 1) of speech events in theirs, from the top clockwise. */
 @Composable
 fun Donut(share: Float, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme

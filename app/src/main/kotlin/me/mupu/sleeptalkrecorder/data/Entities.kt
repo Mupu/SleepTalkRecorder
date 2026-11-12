@@ -63,7 +63,7 @@ data class RecordingEntity(
 )
 
 /**
- * A kind of event, such as a plain loudness event or a speech event. Kinds are rows, not a
+ * A kind of event, such as a noise, a murmur or a speech event. Kinds are rows, not a
  * list in code: what an event's kind is comes from its annotations, and how it looks and filters
  * comes from here, so new kinds need no schema or UI change.
  */
@@ -95,8 +95,8 @@ enum class AnnotationType {
 
     /**
      * What speech recognition made of the event over the same stretch: the kind it gives the event
-     * ([AnnotationEntity.kindId], the speech kind or the plain event) and the words it recognised
-     * ([AnnotationEntity.text], null for a murmur or a plain event). The user's transcript is their
+     * ([AnnotationEntity.kindId], speech, murmur or noise) and the words it recognised
+     * ([AnnotationEntity.text], null for a murmur or a noise). The user's transcript is their
      * correction of the words or their verdict that the event is not speech; it wins over those of
      * analyses and, like a hidden mark, counts for every event that overlaps it.
      */
@@ -316,8 +316,11 @@ data class SleepEvent(
      */
     val comparedResults: List<TranscriptResult> get() = if (corrected || results.size < 2) emptyList() else results
 
-    /** Whether this is a speech event: one with words, or a murmur without them. */
+    /** Whether this is a speech event: one with words, or one the user marked as speech. */
     val isSpeech: Boolean get() = kindId == EventKinds.SPEECH
+
+    /** Whether a voice was heard in it: it is speech or a murmur. */
+    val isVoice: Boolean get() = EventKinds.isVoice(kindId)
 
     /**
      * Every tag it has: the user's, and the system tags that follow from it, each listed in
@@ -328,7 +331,6 @@ data class SleepEvent(
         if (name != null) add(EventTag.System.Named)
         if (hidden) add(EventTag.System.Hidden)
         add(EventTag.System.Kind(kindId))
-        if (isSpeech && transcript == null) add(EventTag.System.Murmur)
     }
 
     /** The stretch of the sleep's audio the event takes. */
@@ -342,13 +344,13 @@ data class TranscriptResult(
     val origin: AnnotationOrigin,
     /** The id of the model that made it, such as `parakeet-ultra`. */
     val producer: String?,
-    /** The kind it gives the event: the speech kind, or the plain event kind when it found no speech. */
+    /** The kind it gives the event: speech, murmur, or noise when it heard no voice. */
     val kindId: String,
     /** The words recognised; null for a murmur or no speech. */
     val text: String?,
 ) {
-    /** Whether it makes the event a speech event, with words or as a murmur. */
-    val isSpeech: Boolean get() = kindId == EventKinds.SPEECH
+    /** Whether it heard a voice in the event: words or a murmur. */
+    val isVoice: Boolean get() = EventKinds.isVoice(kindId)
 }
 
 /** A finished sleep with its recordings in order and all its events, hidden ones included. */

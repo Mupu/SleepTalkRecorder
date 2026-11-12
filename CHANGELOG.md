@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.11.1] - 2026-11-12
+
+### Changed
+
+- An event in which only a murmur such as “mhm” or “uh” was heard shows “Murmur” as its kind, in its own colour, and the filter lists it under Murmur only, no longer also under Speech; Speech means words were recognised. Events without words are called “Noise” instead of “Event”. The stats stack murmurs between noises and speech, and the share of speech and the time talked count only speech. Nights recognised before follow on their own after the update, without recognising them again.
+
 ## [0.11.0] - 2026-11-12
 
 ### Added

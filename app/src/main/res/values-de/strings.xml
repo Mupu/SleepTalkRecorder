@@ -81,7 +81,8 @@
     <string name="events_listed">In der Liste: %1$s · %2$s</string>
     <string name="event_heading">%1$s · %2$s</string>
     <string name="event_details">%1$s · Pos %2$s</string>
-    <string name="kind_event">Ereignis</string>
+    <string name="kind_noise">Geräusch</string>
+    <string name="kind_murmur">Murmeln</string>
     <string name="kind_speech">Sprache</string>
     <string name="no_events_filter">Keine Ereignisse für diesen Filter.</string>
     <string name="hidden_tag">ausgeblendet</string>
@@ -96,6 +97,7 @@
     <string name="transcript_automatic">automatisch erkannt, kann falsch sein · %1$s</string>
     <string name="transcript_quoted">„%1$s“</string>
     <string name="murmur">Murmeln – keine Wörter erkannt</string>
+    <string name="speech_without_words">Sprache – noch keine Wörter eingetragen</string>
     <string name="transcript_corrected">von dir korrigiert</string>
     <string name="correct_text">Text korrigieren</string>
     <string name="correct_text_hint">Bleibt erhalten, auch wenn die Sprache neu erkannt wird. Leer lassen für ein Murmeln ohne Wörter.</string>
@@ -109,8 +111,8 @@
     <string name="model_results">Ergebnisse der Modelle</string>
     <string name="use_result">Übernehmen</string>
     <string name="delete_result">Ergebnis löschen</string>
-    <string name="not_speech_plain_event">Keine Sprache – normales Ereignis</string>
-    <string name="marked_not_speech">Als normales Ereignis markiert</string>
+    <string name="not_speech_noise">Keine Sprache – Geräusch</string>
+    <string name="marked_not_speech">Als Geräusch markiert</string>
     <string name="mark_speech">Als Sprache markieren</string>
     <string name="marked_speech">Als Sprache markiert</string>
     <string name="model_change_hint">Transkripte von %1$s. In den Einstellungen ist jetzt %2$s aktiv.</string>
@@ -413,7 +415,6 @@
     <string name="tag_favourite">Favorit</string>
     <string name="tag_named">Benannt</string>
     <string name="tag_hidden">Ausgeblendet</string>
-    <string name="tag_murmur">Murmeln</string>
     <string name="tag_new">Neuer Tag</string>
     <string name="tag_name">Name</string>
     <string name="tag_name_taken">Es gibt schon einen Tag mit diesem Namen.</string>

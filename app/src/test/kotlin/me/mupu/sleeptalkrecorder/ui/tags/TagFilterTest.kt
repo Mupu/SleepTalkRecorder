@@ -12,7 +12,7 @@ import org.junit.Test
 
 class TagFilterTest {
 
-    private fun event(id: Long, kind: String = EventKinds.EVENT, tags: Set<Long> = emptySet(), hidden: Boolean = false, name: String? = null) =
+    private fun event(id: Long, kind: String = EventKinds.NOISE, tags: Set<Long> = emptySet(), hidden: Boolean = false, name: String? = null) =
         SleepEvent(id, Duration.ofSeconds(id), Duration.ofSeconds(id + 1), kind, null, KindColor.Theme(ThemeRole.PRIMARY), hidden = hidden, tagIds = tags, name = name)
 
     private val events = listOf(
@@ -22,13 +22,14 @@ class TagFilterTest {
         event(4, tags = setOf(7)),
         event(5, tags = setOf(Tags.FAVOURITE), hidden = true),
         event(6, name = "Laughing"),
+        event(7, EventKinds.MURMUR),
     )
 
     private fun listed(vararg chosen: EventTag) = events.filter(TagFilter(chosen.toSet())::shows).map { it.id }
 
     @Test
     fun `without tags every event that is not hidden is listed`() {
-        assertEquals(listOf(1L, 2L, 3L, 4L, 6L), listed())
+        assertEquals(listOf(1L, 2L, 3L, 4L, 6L, 7L), listed())
     }
 
     @Test
@@ -38,7 +39,8 @@ class TagFilterTest {
     }
 
     @Test
-    fun `speech without words is a murmur`() {
-        assertEquals(listOf(2L), listed(EventTag.System.Murmur))
+    fun `a murmur is listed by its own kind, not by speech`() {
+        assertEquals(listOf(7L), listed(EventTag.System.Kind(EventKinds.MURMUR)))
+        assertEquals(listOf(2L), listed(EventTag.System.Kind(EventKinds.SPEECH)))
     }
 }

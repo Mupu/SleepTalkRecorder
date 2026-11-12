@@ -5,15 +5,15 @@ sealed interface Verdict {
     /** Words were recognised: a speech event with a transcript. */
     data class Speech(val text: String) : Verdict
 
-    /** Only fillers such as "mhm" or "uh": a speech event without words. */
+    /** Only fillers such as "mhm" or "uh": a murmur, a voice without words. */
     data object Murmur : Verdict
 
-    /** Nothing, or text the model invents on non-speech: the event stays a plain event. */
+    /** Nothing, or text the model invents on non-speech: the event stays a noise. */
     data object NoSpeech : Verdict
 }
 
 /**
- * Decides from a model's raw output whether an event is a speech event. The rules are the ones the
+ * Decides from a model's raw output whether an event is speech, a murmur or a noise. The rules are the ones the
  * models were measured with on the test nights, applied in this order:
  *
  * 1. Tags such as `[music]`, `(laughs)`, `*lacht*`, `<|nospeech|>` and music notes are removed, and
@@ -30,8 +30,12 @@ sealed interface Verdict {
  */
 object TranscriptFilter {
 
-    /** Changes with the rules, so the results can be told apart from those of other rules. */
-    const val VERSION = 2
+    /**
+     * Changes with the rules or with how their verdicts are stored, so the results can be told
+     * apart from those of other rules. Version 3 stores a murmur with its own kind instead of the
+     * speech kind.
+     */
+    const val VERSION = 3
 
     fun judge(output: String): Verdict {
         val text = UNCLOSED_TAG.replace(TAG.replace(output, " "), " ").replace(SPACE, " ").trim()

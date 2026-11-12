@@ -124,7 +124,8 @@ private fun ColumnScope.ThisSleep(state: StatsUiState) {
         BarChart(
             bars = bins.mapIndexed { index, bin ->
                 Bar(
-                    events = (bin.events - bin.speech).toFloat(),
+                    events = (bin.events - bin.speech - bin.murmur).toFloat(),
+                    murmur = bin.murmur.toFloat(),
                     speech = bin.speech.toFloat(),
                     label = if (index in labelled) clock.format(bin.start, zone) else null,
                 )
@@ -275,11 +276,12 @@ private fun Hint(text: String) {
     Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Start)
 }
 
-/** The colours of plain and speech events, as on the sleep screen. */
+/** The colours of noises, murmurs and speech events, as on the sleep screen. */
 @Composable
 private fun Legend() {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        LegendItem(MaterialTheme.colorScheme.primary, stringResource(R.string.kind_event))
+        LegendItem(MaterialTheme.colorScheme.primary, stringResource(R.string.kind_noise))
+        LegendItem(MaterialTheme.colorScheme.secondary, stringResource(R.string.kind_murmur))
         LegendItem(MaterialTheme.colorScheme.tertiary, stringResource(R.string.kind_speech))
     }
 }

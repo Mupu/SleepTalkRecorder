@@ -197,7 +197,8 @@ private val WaitReason.text: Int
 
 /**
  * What speech recognition found in an event: its transcript, one line until tapped, then whole,
- * marked as automatic or as corrected by the user; for a murmur that no words were recognised.
+ * marked as automatic or as corrected by the user; for a murmur that no words were recognised, for
+ * speech the user marked without words that none are written yet.
  * When several models recognised the event, the line shows the active model's result and, once
  * tapped, every model's result with its name, until the user writes their own text. Correcting it
  * and saying it is not speech are in the event's menu. After a [modelChange] an automatic
@@ -212,11 +213,11 @@ internal fun TranscriptLine(
     onRerun: () -> Unit,
 ) {
     val compared = event.comparedResults
-    if (!event.isSpeech && compared.none { it.isSpeech }) return
+    if (!event.isVoice && compared.none { it.isVoice }) return
     val colors = MaterialTheme.colorScheme
     val transcript = event.transcript
     if (transcript == null && compared.isEmpty()) {
-        ResultText(null, speech = true)
+        ResultText(null, event.kindId)
         return
     }
 
@@ -227,7 +228,7 @@ internal fun TranscriptLine(
                     for (result in compared) ModelResult(result)
                 }
             } else {
-                ResultText(transcript, event.isSpeech, maxLines = if (expanded) Int.MAX_VALUE else 1)
+                ResultText(transcript, event.kindId, maxLines = if (expanded) Int.MAX_VALUE else 1)
                 if (expanded) {
                     Text(
                         if (event.corrected) {
@@ -263,7 +264,7 @@ internal fun TranscriptLine(
 @Composable
 private fun ModelResult(result: TranscriptResult, modifier: Modifier = Modifier) {
     Column(modifier) {
-        ResultText(result.text, result.isSpeech)
+        ResultText(result.text, result.kindId)
         Text(
             result.producer?.let(::modelName).orEmpty(),
             style = MaterialTheme.typography.labelSmall,
@@ -272,9 +273,12 @@ private fun ModelResult(result: TranscriptResult, modifier: Modifier = Modifier)
     }
 }
 
-/** The words of a result in quotation marks; without them a murmur for a [speech] result, else no speech. */
+/**
+ * The words of a result in quotation marks; without them, by its [kindId], that it is a murmur,
+ * speech whose words are not written yet, or no speech.
+ */
 @Composable
-private fun ResultText(text: String?, speech: Boolean, maxLines: Int = Int.MAX_VALUE) {
+private fun ResultText(text: String?, kindId: String, maxLines: Int = Int.MAX_VALUE) {
     val colors = MaterialTheme.colorScheme
     if (text != null) {
         Text(
@@ -286,7 +290,13 @@ private fun ResultText(text: String?, speech: Boolean, maxLines: Int = Int.MAX_V
         )
     } else {
         Text(
-            stringResource(if (speech) R.string.murmur else R.string.no_speech),
+            stringResource(
+                when (kindId) {
+                    EventKinds.MURMUR -> R.string.murmur
+                    EventKinds.SPEECH -> R.string.speech_without_words
+                    else -> R.string.no_speech
+                },
+            ),
             style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
             color = colors.onSurfaceVariant,
         )
@@ -462,7 +472,8 @@ internal fun kindName(id: String, name: String?): String = kindName(LocalResourc
 
 /** The name of an event kind in the app language of [resources]: the user's [name], or the app's for the kinds it ships. */
 internal fun kindName(resources: Resources, id: String, name: String?): String = name ?: when (id) {
-    EventKinds.EVENT -> resources.getString(R.string.kind_event)
+    EventKinds.NOISE -> resources.getString(R.string.kind_noise)
+    EventKinds.MURMUR -> resources.getString(R.string.kind_murmur)
     EventKinds.SPEECH -> resources.getString(R.string.kind_speech)
     else -> id
 }

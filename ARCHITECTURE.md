@@ -197,7 +197,8 @@ Room (`SleepDatabase`) holds five tables:
   language), a colour (a theme colour role such as `primary`, so it follows light and dark mode,
   or a fixed `#RRGGBB`), and whether the tag filter offers the kind as a system tag. The database
   adds the app's kinds that are missing each time it opens, so a new app version can ship new
-  kinds; v1 ships the plain event and the speech event (tertiary colour), both offered.
+  kinds. The app ships three, all offered: the *noise* (id `event`, primary colour), the *murmur*
+  (secondary) and the speech event (tertiary).
 - `tag`: the tags the user sorts events with: Favourite, which the app provides with the fixed id
   1 and names in its language (the database adds it each time it opens if it is missing), and the
   user's own, with a name that is unique whatever its case.
@@ -227,7 +228,7 @@ Tags and names follow the same rule: an event has a tag while a `TAG` mark of it
 event (`SleepEvent.tagIds`), and its name is that of the latest `NAME` mark that overlaps it.
 Deleting an own tag deletes its marks through the foreign key. Tags and hiding are independent:
 a hidden event keeps its tags. *System tags* are not stored but follow from the event
-(`SleepEvent.tags`, `EventTag.System`): named, hidden, each kind the filter offers and murmur;
+(`SleepEvent.tags`, `EventTag.System`): named, hidden and each kind the filter offers;
 a new kind of system tag is one more subtype there. Automatic deletion keeps a sleep with an
 event that has a tag or a name (`SleepSummary.taggedCount`, hidden events included) while
 "Keep tagged sleeps" is on, which it is by default. Version 1 had a `FAVOURITE` mark with the
@@ -384,15 +385,16 @@ because sherpa-onnx fails on input without frames. `TranscriptFilter` then decid
 tags are removed (also one whose bracket the model never closed, such as "(door"), short outputs
 with phrases models write on silence and repetition loops are dropped, and output of fillers only
 ("mhm", "uh") makes a *murmur*. The result is one `TRANSCRIPT`
-annotation over the event's stretch: the speech kind with the words, the speech kind without words
-for a murmur, or the plain event kind, so that every event analysed counts as done. Whisper is
+annotation over the event's stretch: the speech kind with the words, the murmur kind without words,
+or the noise kind, so that every event analysed counts as done. Whisper is
 told the transcript language: it first detects the language itself and is asked again with the
 user's language when it detected neither that nor English.
 
 The filter has a version, stored as the producer version of the phone's transcripts. When it
 changes, the app judges the stored transcripts of older versions again from their words at its
 next start, so new rules reach nights recognised before without running the model again; a
-transcript without words keeps its verdict, because the model's output is not stored. The
+transcript without words keeps its verdict, because the model's output is not stored, except
+that one of the speech kind becomes a murmur, which versions before 3 stored that way. The
 model-change hint compares only models, so a new filter version does not ask for a re-run.
 
 Transcripts follow their events by stretch: the sleep screen shows an event with the kind and
@@ -411,11 +413,13 @@ then lists every model's result with the model's name, the active model's first,
 correction dialog lets the user take one into their text or delete one while another remains.
 Once the user writes their own text, only that is shown.
 
-The user corrects a speech event's text in a dialog, or says it is not speech, which a snackbar
-undoes; every event action is in the ⋮ menu of its row. Any event can also be marked as speech:
-that removes the user's own transcripts over it, and if speech recognition found no speech there
-a transcript of the user's own makes it a murmur whose words they can then write. Either is a `TRANSCRIPT` annotation of the user over the event (the speech kind with the
-user's words, none for a *murmur*, or the plain event kind) in place of the user's earlier ones
+The user corrects the text of a speech event or a murmur in a dialog (words make it speech, none
+a murmur), or says it is not speech, which a snackbar undoes; every event action is in the ⋮ menu
+of its row. A noise or a murmur can also be marked as speech: that removes the user's own
+transcripts over it, and if speech recognition found no words there a transcript of the user's own
+makes it a speech event without words, which they can then write. Either is a `TRANSCRIPT`
+annotation of the user over the event (the speech kind with the user's words or, marked as speech,
+none; the murmur kind; or the noise kind) in place of the user's earlier ones
 there. It wins over every analysis and, like a hidden mark, counts for every event it overlaps,
 so it keeps to its event when a search with other settings finds it with other bounds, and no
 run of speech recognition, with whichever model, touches it. `withTranscripts` combines the
@@ -623,7 +627,8 @@ query each for all recordings, events and transcripts, however many sleeps there
 plain Kotlin computes the numbers from them: `CountedSleep` maps each event that is not hidden to
 the instant it happened through the recordings' start instants and lengths (the database's sample
 counts, without reading the audio files), `SleepStats` counts one sleep in ten-minute steps of the
-local clock and compares its talk, the length of its speech events, with the other sleeps of its
+local clock (noises, murmurs and speech events stacked) and compares its talk, the length of its
+speech events, with the other sleeps of its
 kind, and `NightStats` averages over the nights. Naps are left out of all sleeps, because the
 numbers are per night and a nap would pull every average down. The charts are drawn on a Compose
 `Canvas`.

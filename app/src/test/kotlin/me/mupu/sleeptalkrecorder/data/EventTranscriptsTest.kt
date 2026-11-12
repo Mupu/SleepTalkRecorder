@@ -14,7 +14,7 @@ class EventTranscriptsTest {
 
     /** An event as the detector stores it, a plain event until a transcript says otherwise. */
     private fun event(id: Long, startMillis: Long, endMillis: Long) =
-        SleepEvent(id, Duration.ofMillis(startMillis), Duration.ofMillis(endMillis), EventKinds.EVENT, null, KindColor.Theme(ThemeRole.PRIMARY))
+        SleepEvent(id, Duration.ofMillis(startMillis), Duration.ofMillis(endMillis), EventKinds.NOISE, null, KindColor.Theme(ThemeRole.PRIMARY))
 
     private var nextId = 1L
 
@@ -41,7 +41,7 @@ class EventTranscriptsTest {
         transcript(startMillis, endMillis, EventKinds.SPEECH, text, AnnotationOrigin.USER)
 
     private fun notSpeech(startMillis: Long, endMillis: Long) =
-        transcript(startMillis, endMillis, EventKinds.EVENT, null, AnnotationOrigin.USER)
+        transcript(startMillis, endMillis, EventKinds.NOISE, null, AnnotationOrigin.USER)
 
     private data class Shown(val kind: String, val text: String?, val origin: AnnotationOrigin?, val producer: String?)
 
@@ -54,15 +54,15 @@ class EventTranscriptsTest {
             listOf(event(1, 1_000, 2_000), event(2, 5_000, 6_000), event(3, 9_000, 9_500)),
             listOf(
                 transcript(1_000, 2_000, EventKinds.SPEECH, "hello"),
-                transcript(5_000, 6_000, EventKinds.EVENT, null),
+                transcript(5_000, 6_000, EventKinds.NOISE, null),
             ),
         )
 
         assertEquals(
             listOf(
                 Shown(EventKinds.SPEECH, "hello", AnnotationOrigin.DEVICE, "parakeet-ultra"),
-                Shown(EventKinds.EVENT, null, AnnotationOrigin.DEVICE, "parakeet-ultra"),
-                Shown(EventKinds.EVENT, null, null, null),
+                Shown(EventKinds.NOISE, null, AnnotationOrigin.DEVICE, "parakeet-ultra"),
+                Shown(EventKinds.NOISE, null, null, null),
             ),
             shown,
         )
@@ -72,7 +72,7 @@ class EventTranscriptsTest {
     fun `the phone's transcript of another stretch is not shown on an event`() {
         val shown = shown(listOf(event(1, 1_000, 2_200)), listOf(transcript(1_000, 2_000, EventKinds.SPEECH, "hello")))
 
-        assertEquals(listOf(Shown(EventKinds.EVENT, null, null, null)), shown)
+        assertEquals(listOf(Shown(EventKinds.NOISE, null, null, null)), shown)
     }
 
     @Test
@@ -90,7 +90,7 @@ class EventTranscriptsTest {
         assertEquals(
             listOf(
                 Shown(EventKinds.SPEECH, "hello", AnnotationOrigin.USER, null),
-                Shown(EventKinds.EVENT, null, AnnotationOrigin.USER, null),
+                Shown(EventKinds.NOISE, null, AnnotationOrigin.USER, null),
             ),
             shown,
         )
@@ -117,7 +117,7 @@ class EventTranscriptsTest {
         assertEquals(
             listOf(
                 Shown(EventKinds.SPEECH, "hello", AnnotationOrigin.USER, null),
-                Shown(EventKinds.EVENT, null, AnnotationOrigin.USER, null),
+                Shown(EventKinds.NOISE, null, AnnotationOrigin.USER, null),
                 Shown(EventKinds.SPEECH, "good night", AnnotationOrigin.DEVICE, "whisper-small"),
             ),
             shown,
@@ -141,7 +141,7 @@ class EventTranscriptsTest {
             listOf(correction(1_000, 2_000, "hello")),
         )
 
-        assertEquals(EventKinds.EVENT, shown[1].kind)
+        assertEquals(EventKinds.NOISE, shown[1].kind)
     }
 
     @Test
@@ -175,8 +175,15 @@ class EventTranscriptsTest {
     }
 
     @Test
+    fun `marking a murmur as speech needs a mark of the user's own`() {
+        val transcripts = listOf(transcript(1_000, 2_000, EventKinds.MURMUR, null))
+
+        assertEquals(true, needsUserSpeechMark(event(1, 1_000, 2_000), transcripts, kinds, activeModel = null))
+    }
+
+    @Test
     fun `marking a plain event as speech needs a mark of the user's own`() {
-        val transcripts = listOf(transcript(1_000, 2_000, EventKinds.EVENT, null))
+        val transcripts = listOf(transcript(1_000, 2_000, EventKinds.NOISE, null))
 
         assertEquals(true, needsUserSpeechMark(event(1, 1_000, 2_000), transcripts, kinds, activeModel = null))
         assertEquals(true, needsUserSpeechMark(event(2, 5_000, 6_000), emptyList(), kinds, activeModel = null))
@@ -200,7 +207,7 @@ class EventTranscriptsTest {
     @Test
     fun `the open transcript compares the models' results only while the user wrote none`() {
         val event = event(1, 1_000, 2_000)
-        val parakeet = transcript(1_000, 2_000, EventKinds.EVENT, null, producer = "parakeet-ultra")
+        val parakeet = transcript(1_000, 2_000, EventKinds.NOISE, null, producer = "parakeet-ultra")
         val whisper = transcript(1_000, 2_000, EventKinds.SPEECH, "gute Nacht", producer = "whisper-small")
 
         fun compared(vararg transcripts: AnnotationEntity) =

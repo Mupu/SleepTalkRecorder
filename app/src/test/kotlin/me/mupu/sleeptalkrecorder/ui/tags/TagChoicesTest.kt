@@ -11,7 +11,7 @@ import org.junit.Test
 class TagChoicesTest {
 
     private fun event(vararg tags: Long) =
-        SleepEvent(1, Duration.ZERO, Duration.ofSeconds(1), EventKinds.EVENT, null, KindColor.Theme(ThemeRole.PRIMARY), tagIds = tags.toSet())
+        SleepEvent(1, Duration.ZERO, Duration.ofSeconds(1), EventKinds.NOISE, null, KindColor.Theme(ThemeRole.PRIMARY), tagIds = tags.toSet())
 
     private val tags = listOf(1L, 7L, 9L)
 

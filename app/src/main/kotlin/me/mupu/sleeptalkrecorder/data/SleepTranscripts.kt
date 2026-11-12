@@ -48,7 +48,7 @@ class SleepTranscripts(
             try {
                 SleepAudio(timeline).use { it.clip(stretch) }
             } catch (error: IOException) {
-                // Without its audio the event cannot be recognised and stays a plain event.
+                // Without its audio the event cannot be recognised and stays a noise.
                 Log.w(TAG, "Cannot read the audio of an event of sleep $sleepId at ${event.start}", error)
                 FloatArray(0)
             }

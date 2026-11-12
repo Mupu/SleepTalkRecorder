@@ -51,27 +51,34 @@ class SpeechRecognitionTest {
     }
 
     @Test
-    fun `fillers make it a speech event without words`() = runTest {
-        assertEquals(transcript(EventKinds.SPEECH, null), analyse(FakeTranscriber("Mm-hmm.")))
+    fun `fillers make it a murmur`() = runTest {
+        assertEquals(transcript(EventKinds.MURMUR, null), analyse(FakeTranscriber("Mm-hmm.")))
     }
 
     @Test
-    fun `invented text leaves it a plain event`() = runTest {
-        assertEquals(transcript(EventKinds.EVENT, null), analyse(FakeTranscriber("Thank you for watching.")))
+    fun `invented text leaves it a noise`() = runTest {
+        assertEquals(transcript(EventKinds.NOISE, null), analyse(FakeTranscriber("Thank you for watching.")))
     }
 
     @Test
     fun `a stored transcript is judged again by the current filter`() {
         fun stored(text: String) = transcript(EventKinds.SPEECH, text).copy(producer = Producer(TranscriptionModel.PARAKEET_ULTRA.id, "1"))
-        assertEquals(transcript(EventKinds.EVENT, null), SpeechRecognition.judgedAgain(stored("(door")))
+        assertEquals(transcript(EventKinds.NOISE, null), SpeechRecognition.judgedAgain(stored("(door")))
         assertEquals(transcript(EventKinds.SPEECH, "I said no"), SpeechRecognition.judgedAgain(stored("I said no")))
+    }
+
+    @Test
+    fun `a stored murmur of the speech kind becomes a murmur, a stored noise stays one`() {
+        fun stored(kind: String) = transcript(kind, null).copy(producer = Producer(TranscriptionModel.PARAKEET_ULTRA.id, "2"))
+        assertEquals(transcript(EventKinds.MURMUR, null), SpeechRecognition.judgedAgain(stored(EventKinds.SPEECH)))
+        assertEquals(transcript(EventKinds.NOISE, null), SpeechRecognition.judgedAgain(stored(EventKinds.NOISE)))
     }
 
     @Test
     fun `a clip too short for the model is not sent to it and stays a plain event`() = runTest {
         val transcriber = FakeTranscriber()
 
-        assertEquals(transcript(EventKinds.EVENT, null), analyse(transcriber, seconds = 0.2))
+        assertEquals(transcript(EventKinds.NOISE, null), analyse(transcriber, seconds = 0.2))
         assertEquals(emptyList<Int>(), transcriber.calls)
     }
 

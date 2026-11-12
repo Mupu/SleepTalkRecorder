@@ -28,10 +28,7 @@ sealed interface EventTag {
         /** The user hid the event. */
         data object Hidden : System
 
-        /** The event is of the kind [kindId], such as speech or a plain event. */
+        /** The event is of the kind [kindId], such as speech, murmur or noise. */
         data class Kind(val kindId: String) : System
-
-        /** The event is speech in which no words were recognised. */
-        data object Murmur : System
     }
 }

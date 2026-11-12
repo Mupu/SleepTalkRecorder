@@ -72,7 +72,6 @@ internal fun tagName(tag: TagEntity): String = tag.name ?: stringResource(R.stri
 internal fun tagName(tag: EventTag, tags: List<TagEntity>, kinds: List<EventKindEntity>): String = when (tag) {
     is EventTag.Stored -> tags.firstOrNull { it.id == tag.id }?.let { tagName(it) }.orEmpty()
     is EventTag.System.Kind -> kindName(tag.kindId, kinds.firstOrNull { it.id == tag.kindId }?.name)
-    EventTag.System.Murmur -> stringResource(R.string.tag_murmur)
     EventTag.System.Named -> stringResource(R.string.tag_named)
     EventTag.System.Hidden -> stringResource(R.string.tag_hidden)
 }

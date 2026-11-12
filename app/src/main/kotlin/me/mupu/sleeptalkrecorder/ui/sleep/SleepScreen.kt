@@ -841,8 +841,8 @@ private fun EventRow(
                 onRecogniseAgain?.let {
                     MenuEntry(R.string.recognise_again, R.drawable.ic_subtitles, enabled = canRecogniseAgain && recognisingWith == null) { it(event) }
                 },
-                MenuEntry(R.string.correct_text, R.drawable.ic_edit) { onCorrect(event) }.takeIf { event.isSpeech },
-                MenuEntry(R.string.not_speech_plain_event, R.drawable.ic_voice_over_off) { onMarkSpeech(event, false) }.takeIf { event.isSpeech },
+                MenuEntry(R.string.correct_text, R.drawable.ic_edit) { onCorrect(event) }.takeIf { event.isVoice },
+                MenuEntry(R.string.not_speech_noise, R.drawable.ic_voice_over_off) { onMarkSpeech(event, false) }.takeIf { event.isVoice },
                 MenuEntry(R.string.mark_speech, R.drawable.ic_record_voice) { onMarkSpeech(event, true) }.takeUnless { event.isSpeech },
             ),
         )
