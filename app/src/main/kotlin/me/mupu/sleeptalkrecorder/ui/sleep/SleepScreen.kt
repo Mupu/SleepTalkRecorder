@@ -346,7 +346,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     recognising = recognising,
                     // Only the first way's events are recognised again on their own.
                     onRecogniseAgain = if (transcription == TranscriptionStatus.Off || state.way != EventWay.OLD) null else { event -> choosingModel = event },
-                    canRecogniseAgain = transcription.canRun,
+                    canRecogniseAgain = transcription.canRecogniseAgain,
                     developerMode = state.developerMode,
                 )
                 naming?.let { event ->

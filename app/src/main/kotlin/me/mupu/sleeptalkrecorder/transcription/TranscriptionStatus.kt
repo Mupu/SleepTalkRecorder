@@ -250,8 +250,8 @@ class Transcriptions(
 
     /**
      * Recognises speech in [event] of [sleepId] again with [model], which keeps its own result
-     * beside those of other models. It takes seconds, but waits while a run is in progress, since
-     * runs never overlap.
+     * beside those of other models. It takes seconds, also while a run is in progress, which gives
+     * way to it and goes on afterwards.
      */
     fun recogniseEvent(sleepId: Long, event: Stretch, model: TranscriptionModel) {
         val recognition = EventRecognition(sleepId, event, model)

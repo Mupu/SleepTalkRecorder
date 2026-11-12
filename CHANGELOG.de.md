@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.13.1] - 2026-11-12
+
+### Behoben
+
+- „Neu erkennen mit …“ bei einem Ereignis wartet nicht mehr, bis die Spracherkennung im Hintergrund fertig ist, was nach der ersten Suche des neuen Wegs Stunden dauern kann: Das Ereignis kommt zuerst dran, auch während seine Nacht erkannt wird, und der Lauf im Hintergrund macht danach dort weiter, wo er war.
+
 ## [0.13.0] - 2026-11-12
 
 ### Hinzugefügt

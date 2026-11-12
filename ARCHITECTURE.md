@@ -537,7 +537,11 @@ of stretches that are no longer an event are removed with the new events.
 installed model the user picks (with only one installed it leads to the settings, where more are
 downloaded), to compare models without hours of re-running a night. It is a `TranscriptionRunner`
 run of its own for one event, started by `Transcriptions` in the container's scope, so leaving
-the screen does not stop it; the event shows that it is recognised meanwhile. Its open transcript
+the screen does not stop it; the event shows that it is recognised meanwhile. It goes before a
+run in progress, also one on the same sleep: the run gives way before its next event and closes
+its speech model, or at the next check of its search, whose small sound models stay loaded, and
+once no single event waits it loads its model again and goes on where it was, leaving out the
+events that got a result meanwhile. Its open transcript
 then lists every model's result with the model's name, the active model's first, and the
 correction dialog lets the user take one into their text or delete one while another remains.
 Once the user writes their own text, only that is shown.

@@ -62,6 +62,10 @@ import me.mupu.sleeptalkrecorder.transcription.WaitReason
 internal val TranscriptionStatus.canRun: Boolean
     get() = this != TranscriptionStatus.NoEvents && this != TranscriptionStatus.Off && this !is TranscriptionStatus.Running
 
+/** Whether a single event of the sleep can be recognised again: also while a run is on the sleep, which gives way to it. */
+internal val TranscriptionStatus.canRecogniseAgain: Boolean
+    get() = this != TranscriptionStatus.NoEvents && this != TranscriptionStatus.Off
+
 /** Whether speech recognition has not yet recognised any event of the sleep. */
 internal val TranscriptionStatus.nothingRecognised: Boolean
     get() = this is TranscriptionStatus.Waiting && pending == events

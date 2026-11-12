@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.13.1] - 2026-11-12
+
+### Fixed
+
+- “Recognise again with …” on an event no longer waits until speech recognition in the background has finished, which after the new way's first search can take hours: the event goes first, also while its night is being recognised, and the run in the background then goes on where it was.
+
 ## [0.13.0] - 2026-11-12
 
 ### Added

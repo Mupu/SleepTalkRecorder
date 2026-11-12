@@ -4,11 +4,15 @@ import me.mupu.sleeptalkrecorder.data.AnnotationEntity
 import me.mupu.sleeptalkrecorder.playback.Stretch
 import java.time.Duration
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /** Where speech recognition reads the events of sleeps and their audio, and keeps its results. */
 interface TranscriptStore {
@@ -130,8 +134,13 @@ data class TranscriptionProgress(val sleepId: Long, val done: Int, val total: In
 /**
  * Runs speech recognition over the events of sleeps, one event at a time, and keeps each result as
  * soon as it is there, so a run that is stopped continues where it stopped. Runs never overlap:
- * a second one waits until the first has finished, so only one model is ever in memory. Sleeps the
- * user paused are left out from their next event on.
+ * a second one waits until the first has finished, so only one speech model is ever in memory.
+ * Sleeps the user paused are left out from their next event on.
+ *
+ * A single event the user asked for ([TranscriptionRequest.Event]) goes first: a run in progress
+ * gives way before its next event, closing its speech model, or at the next check of its search,
+ * whose small sound models stay loaded; once no such event waits, the run loads its model again
+ * and goes on where it was, leaving out what got a result meanwhile.
  *
  * The first way's events ([store]) come first, exactly as without the second way. Only when none of
  * them waits does the second way's [search] search the sleeps it has not searched to their end,
@@ -172,7 +181,15 @@ class TranscriptionRunner(
         NOT_ALLOWED,
     }
 
+    /** Held by a run over events of sleeps for its whole length, so these runs never overlap. */
     private val running = Mutex()
+
+    /** Held by whatever recognises speech now: a run, or a single event while the run gives way. */
+    private val turn = Mutex()
+
+    /** The single events that wait for their [turn] or have it. */
+    private val singles = MutableStateFlow(0)
+
     private val current = MutableStateFlow<TranscriptionProgress?>(null)
 
     private val newWay = MutableStateFlow<NewWayProgress?>(null)
@@ -186,16 +203,48 @@ class TranscriptionRunner(
     /**
      * Analyses the events of [request] with the analysis [open] loads, which it loads only if there
      * is work, and closes at the end; [open] gives null when no model is installed. Then, unless
-     * the request was for one event, the second way searches and its events are recognised.
+     * the request was for one event, the second way searches and its events are recognised. A
+     * request for one event goes before a run in progress and reports no progress.
      */
-    suspend fun run(request: TranscriptionRequest, open: suspend () -> EventAnalysis?): Outcome = running.withLock {
+    suspend fun run(request: TranscriptionRequest, open: suspend () -> EventAnalysis?): Outcome {
+        if (request is TranscriptionRequest.Event) return recogniseSingle(request, open)
+        return running.withLock { turn.withLock { runEvents(request, open) } }
+    }
+
+    private suspend fun recogniseSingle(request: TranscriptionRequest.Event, open: suspend () -> EventAnalysis?): Outcome {
+        singles.update { it + 1 }
         try {
-            if (request is TranscriptionRequest.Night) return@withLock runNight(request, open)
+            return turn.withLock { recognise(store, request, open) {} }
+        } finally {
+            singles.update { it - 1 }
+        }
+    }
+
+    /**
+     * Lets the single events the user asked for go first, if one waits: [release] frees what the run
+     * holds, and the run waits until none is left. Returns whether it gave way.
+     */
+    private suspend fun giveWay(release: () -> Unit = {}): Boolean {
+        if (singles.value == 0) return false
+        release()
+        turn.unlock()
+        try {
+            singles.first { it == 0 }
+        } finally {
+            // The run releases its turn at its end also when it is stopped meanwhile.
+            withContext(NonCancellable) { turn.lock() }
+        }
+        return true
+    }
+
+    private suspend fun runEvents(request: TranscriptionRequest, open: suspend () -> EventAnalysis?): Outcome {
+        return try {
+            if (request is TranscriptionRequest.Night) return runNight(request, open)
             val first = recognise(store, request, open) { current.value = it }
             // A model that is missing holds back nothing the second way's search needs.
-            if (request is TranscriptionRequest.Event || (first != Outcome.FINISHED && first != Outcome.NO_MODEL)) return@withLock first
-            searchNewWay(request)?.let { return@withLock it }
-            val own = candidates ?: return@withLock first
+            if (first != Outcome.FINISHED && first != Outcome.NO_MODEL) return first
+            searchNewWay(request)?.let { return it }
+            val own = candidates ?: return first
             val second = when (request) {
                 is TranscriptionRequest.Sleep -> TranscriptionRequest.Sleep(request.sleepId, onlyPending = true)
                 else -> request
@@ -219,7 +268,7 @@ class TranscriptionRunner(
             search.searchNight(
                 request.sleepId,
                 onProgress = { share -> newWay.value = NewWayProgress(request.sleepId, searching = true, done = (share * PERCENT).toInt(), total = PERCENT) },
-                shouldStop = { stopReason(request, request.sleepId) != null },
+                shouldStop = { giveWay(); stopReason(request, request.sleepId) != null },
             )
         } finally {
             newWay.value = null
@@ -244,21 +293,21 @@ class TranscriptionRunner(
         open: suspend () -> EventAnalysis?,
         report: (TranscriptionProgress?) -> Unit,
     ): Outcome {
-        var analysis: EventAnalysis? = null
+        val analysis = LoadedAnalysis(open)
         try {
-            return work(store, request, report) { analysis ?: open()?.also { analysis = it } }
+            return work(store, request, report, analysis)
         } finally {
             report(null)
-            analysis?.close()
+            analysis.close()
         }
     }
 
-    /** Works through [request] in [store], with the analysis [analysis] loads on first use. */
+    /** Works through [request] in [store], with the [analysis] loaded on first use. */
     private suspend fun work(
         store: TranscriptStore,
         request: TranscriptionRequest,
         report: (TranscriptionProgress?) -> Unit,
-        analysis: suspend () -> EventAnalysis?,
+        analysis: LoadedAnalysis,
     ): Outcome {
         // Events the analysis failed on wait for the next run, so this one does not try them forever.
         val failed = HashSet<Pair<Long, Stretch>>()
@@ -277,14 +326,19 @@ class TranscriptionRunner(
                     .filter { (request.sleepId to it) !in failed && (request.failures[it] ?: 0) < NIGHT_ATTEMPTS }
             }
             if (events.isEmpty()) return Outcome.FINISHED
-            val opened = analysis() ?: return Outcome.NO_MODEL
+            analysis.get() ?: return Outcome.NO_MODEL
 
             // Events without a result keep waiting on their own; a run over all events remembers
             // where it is, so one that is paused or stopped goes on there instead of starting again.
             val rerun = request is TranscriptionRequest.Sleep && !request.onlyPending
 
             report(TranscriptionProgress(sleepId, 0, events.size))
+            // The events still without a result after the run gave way to single events, which may have recognised some.
+            var stillWaiting: Set<Stretch>? = null
             for ((index, event) in events.withIndex()) {
+                if (request !is TranscriptionRequest.Event && giveWay(analysis::close) && !rerun) {
+                    stillWaiting = store.eventsOf(sleepId, onlyPending = true).toSet()
+                }
                 if (request is TranscriptionRequest.Waiting) {
                     if (request.pauseOnLowBattery && batteryLow()) return Outcome.LOW_BATTERY
                     if (store.isRecording()) return Outcome.RECORDING
@@ -297,6 +351,11 @@ class TranscriptionRunner(
                     if (request is TranscriptionRequest.Waiting) break
                     return Outcome.PAUSED
                 }
+                if (stillWaiting != null && event !in stillWaiting) {
+                    report(TranscriptionProgress(sleepId, index + 1, events.size))
+                    continue
+                }
+                val opened = analysis.get() ?: return Outcome.NO_MODEL
                 if (!analyse(store, opened, sleepId, event)) {
                     if (request is TranscriptionRequest.Event) return Outcome.FAILED
                     failed += sleepId to event
@@ -336,7 +395,7 @@ class TranscriptionRunner(
                     sleepId,
                     again = request is TranscriptionRequest.Sleep && request.searchAgain,
                     onProgress = { share -> newWay.value = NewWayProgress(sleepId, searching = true, done = (share * PERCENT).toInt(), total = PERCENT) },
-                    shouldStop = { stopReason(request, sleepId) != null },
+                    shouldStop = { giveWay(); stopReason(request, sleepId) != null },
                 )
                 when (outcome) {
                     // Without its models no sleep is searched.
@@ -393,6 +452,18 @@ class TranscriptionRunner(
         }
         store.store(sleepId, event, annotations)
         return true
+    }
+
+    /** The speech recognition of a run, loaded on first use; closed, it is loaded again when used next. */
+    private class LoadedAnalysis(private val open: suspend () -> EventAnalysis?) {
+        private var analysis: EventAnalysis? = null
+
+        suspend fun get(): EventAnalysis? = analysis ?: open()?.also { analysis = it }
+
+        fun close() {
+            analysis?.close()
+            analysis = null
+        }
     }
 
     private fun batteryLow(): Boolean = battery().let { !it.charging && it.percent < LOW_BATTERY_PERCENT }

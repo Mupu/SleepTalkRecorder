@@ -8,6 +8,9 @@ import me.mupu.sleeptalkrecorder.playback.Stretch
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionRunner.Outcome
 import java.time.Duration
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -172,6 +175,25 @@ class TranscriptionRunnerTest {
         assertEquals(Outcome.FINISHED, runner.run(TranscriptionRequest.Event(1, event(20))) { analysis })
         assertEquals(listOf(1L to event(20)), store.stored)
         assertEquals(true, analysis.closed)
+    }
+
+    @Test
+    fun `a single event goes before a run in progress, which then goes on without doing it again`() = runTest {
+        var opened = 0
+        var single: Job? = null
+        val outcome = runner.run(TranscriptionRequest.Waiting(pauseOnLowBattery = false)) {
+            opened += 1
+            FakeAnalysis {
+                single = single ?: launch(start = CoroutineStart.UNDISPATCHED) {
+                    runner.run(TranscriptionRequest.Event(1, event(20))) { FakeAnalysis() }
+                }
+            }
+        }
+        single?.join()
+
+        assertEquals(Outcome.FINISHED, outcome)
+        assertEquals(listOf(1L to event(10), 1L to event(20), 2L to event(5)), store.stored)
+        assertEquals(2, opened)
     }
 
     @Test
