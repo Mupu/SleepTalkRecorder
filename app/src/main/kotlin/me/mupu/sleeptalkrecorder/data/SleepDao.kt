@@ -243,9 +243,22 @@ interface SleepDao {
     )
     suspend fun deleteCandidateTranscripts(sleepId: Long, start: Duration, end: Duration, origin: AnnotationOrigin, producerId: String?)
 
-    /** Removes the second way's events that start at or after [from], before that part is stored again. */
-    @Query("DELETE FROM annotation WHERE sleep_id = :sleepId AND type = 'CANDIDATE' AND producer = :producerId AND start_ms >= :from")
-    suspend fun deleteCandidatesFrom(sleepId: Long, producerId: String, from: Duration)
+    /** Every annotation of a sleep. */
+    @Query("SELECT * FROM annotation WHERE sleep_id = :sleepId")
+    suspend fun annotationsOf(sleepId: Long): List<AnnotationEntity>
+
+    /** Moves the annotation [id] onto the stretch from [start] until [end]. */
+    @Query("UPDATE annotation SET start_ms = :start, end_ms = :end WHERE id = :id")
+    suspend fun moveAnnotation(id: Long, start: Duration, end: Duration)
+
+    /** The second way's events of a sleep as stored, in order. */
+    @Query("SELECT * FROM annotation WHERE sleep_id = :sleepId AND type = 'CANDIDATE' ORDER BY start_ms, id")
+    suspend fun candidateAnnotations(sleepId: Long): List<AnnotationEntity>
+
+    /** The windows the second way's search during the night heard in a sleep ([AnnotationType.LISTENED]), in order. */
+    @Query("SELECT * FROM annotation WHERE sleep_id = :sleepId AND type = 'LISTENED' ORDER BY start_ms, id")
+    suspend fun listenedWindows(sleepId: Long): List<AnnotationEntity>
+
 
     /** Removes the marks of the second way's search of a sleep. */
     @Query("DELETE FROM annotation WHERE sleep_id = :sleepId AND type = 'SEARCH' AND producer = :producerId")

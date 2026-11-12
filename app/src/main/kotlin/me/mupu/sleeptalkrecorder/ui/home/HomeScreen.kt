@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -58,6 +59,7 @@ import me.mupu.sleeptalkrecorder.time.RecordingClock
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.AppBarIcon
 import me.mupu.sleeptalkrecorder.ui.components.texts
+import me.mupu.sleeptalkrecorder.ui.format.formatDuration
 import me.mupu.sleeptalkrecorder.ui.format.formatPosition
 import me.mupu.sleeptalkrecorder.ui.format.sleepTitle
 import me.mupu.sleeptalkrecorder.ui.library.SleepKindIcon
@@ -180,6 +182,25 @@ private fun RecorderPanel(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (progress != null) {
+            state.night?.let { night ->
+                val found = night.found
+                Text(
+                    if (found == null) {
+                        stringResource(R.string.night_scan_waiting)
+                    } else {
+                        stringResource(
+                            R.string.night_scan_found,
+                            pluralStringResource(R.plurals.event_count, found.events, found.events),
+                            formatDuration(resources, found.searchedTo),
+                        )
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
 
         if (recorder is RecorderState.Failed) {
             Text(

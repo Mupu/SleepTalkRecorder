@@ -11,14 +11,14 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 |---|---|---|
 | `time` | The time model: the *sleep windows* that name *nights* and *naps*, the timeline of a *recording*, the latest stop time | none |
 | `recording` | The recording session, WAV chunk writer, microphone, foreground service and its notifications | only in `MicrophoneSource`, `Recorder`, `RecordingService`, `RecordingNotifications` |
-| `detection` | The feature track (extraction and file format), the `EventDetector` with its baseline, and the *new way* of finding events: the `SoundSearch` with its `OnsetRule`, `HighPass` and the `CedTagger` that runs a sound model | none (sherpa-onnx only in `CedTagger`) |
+| `detection` | The feature track (extraction and file format), the `EventDetector` with its baseline, and the *new way* of finding events: the `SoundSearch` with its `OnsetRule`, `HighPass` and the `CedTagger` that runs a sound model, and the `SlidingThreshold` it finds events with during the night | none (sherpa-onnx only in `CedTagger`) |
 | `data` | Room database, entities, the `SleepRepository` through which screens read and change sleeps, `SleepRecordings` (the recording session's `RecordingStore`), `SleepTranscripts` (speech recognition's `TranscriptStore`), the `RecordingFiles` of each recording, loading feature tracks for a sleep, and the `AnalysisExport` of every sleep | Room |
 | `playback` | The `SleepTimeline` of a sleep's chunk files, the `SleepAudio` stream made of them, the `CutPlan` of cut playback and the `SleepPlayer` that plays it | only in `SleepPlayer` (Media3) |
 | `share` | Sharing events as a short video or an audio file: the stretch that is shared (`ShareStretch`), the caption sent along (`caption`), the video's still `ShareCard`, the `Mp4Encoder` and `EventShares`, which writes the files and hands them to Android's share sheet | only in `ShareCard` (`Bitmap`, `Canvas`), `Mp4Encoder` (`MediaCodec`, `MediaMuxer`) and `EventShares` (`FileProvider`, intents) |
 | `retention` | Automatic deletion: which sleeps are old enough (`SleepRetention`) and the WorkManager job that deletes them | only in `AutoDeletion` (WorkManager) |
 | `settings` | The user's settings and the `SettingsStore` that keeps them; the app language | DataStore; AppCompat only in `AppLanguages` |
 | `models` | The downloadable models: the catalogues of transcription models (`TranscriptionModel`) and *sound models* (`SoundModel`), the `ModelInstaller` that downloads and checks their files, the `ModelLibrary` with their states and the active transcription model, and the WorkManager job that downloads them | only in `ModelDownloadWorker` (WorkManager) |
-| `transcription` | Speech recognition of events: the `EventAnalysis` interface, the `SpeechRecognition` with its `TranscriptFilter`, the sherpa-onnx `SherpaTranscriber`, the `TranscriptionRunner` that works through the events (the old way's first, then the new way's `EventSearch` and its own events), the `TranscriptionPauses` the user made, and the WorkManager jobs that run it | only in `TranscriptionWork` (WorkManager, notifications, battery) |
+| `transcription` | Speech recognition of events: the `EventAnalysis` interface, the `SpeechRecognition` with its `TranscriptFilter`, the sherpa-onnx `SherpaTranscriber`, the `TranscriptionRunner` that works through the events (the old way's first, then the new way's `EventSearch` and its own events), the `TranscriptionPauses` the user made, the WorkManager jobs that run it, and the `NightScan` that runs the new way while a sleep is recorded | only in `TranscriptionWork` (WorkManager, notifications, battery) |
 | `notifications` | The ids of all notifications and the progress notification that model downloads and speech recognition share | Android notifications, WorkManager's `ForegroundInfo` |
 | `readiness` | Whether the phone lets a whole night be recorded: the `Requirement`s it misses, the `VendorStep`s of its maker, and the `SystemPage`s that fix them | only in `PhoneReadiness` |
 | `whatsnew` | The changelogs bundled into the app: their `Changelog` parser, the `BundledChangelogs` of each app language and `WhatsNew`, which decides whether an update brought news the user has not seen | only in `BundledChangelogs.fromAssets` (assets) |
@@ -209,7 +209,7 @@ Room (`SleepDatabase`) holds five tables:
   a kind, `SENSITIVITY` with a start threshold in `value`: the one the detector chose for the
   sleep, or one the user set for the stretch,
   `MICROPHONE_UNAVAILABLE` from the recorder, `TRANSCRIPT` with the kind speech recognition or
-  the user gives an event and its words in `text`, `HIDDEN` from the user over an event they hid, `TAG` from the user over an event they gave the tag `tag_id`, `NAME` from the user with the name they gave an event in `text`, `CANDIDATE` and `SEARCH` and `CANDIDATE_TRANSCRIPT` from the *new way* of finding events, see [The new way of finding events](#the-new-way-of-finding-events)), and `origin` (`DEVICE`, `SERVER` or `USER`),
+  the user gives an event and its words in `text`, `HIDDEN` from the user over an event they hid, `TAG` from the user over an event they gave the tag `tag_id`, `NAME` from the user with the name they gave an event in `text`, `CANDIDATE`, `SEARCH`, `CANDIDATE_TRANSCRIPT` and `LISTENED` from the *new way* of finding events, see [The new way of finding events](#the-new-way-of-finding-events)), and `origin` (`DEVICE`, `SERVER` or `USER`),
   `producer` and `producer_version` say who stated it. Gaps between recordings take no time on
   this axis and need no annotation: they follow from the recordings' start instants and lengths.
 
@@ -426,6 +426,58 @@ afterwards; a change searches nothing again, but "Search again with current sett
 sleep's ⋮ menu runs the new way over the open sleep now, as a speech recognition job for that
 sleep. In developer mode every event of the new way shows what found it, its human score and its
 rise, and the filter offers what found it as system tags.
+
+#### Scan during the night
+
+With *Scan during the night* (`Settings.nightScan`, off by default, a switch under the sound
+models) the new way searches the sleep while it is recorded, so its events are there in the
+morning. `RecordingService` tells the `AppContainer` which sleep it records, and `NightScan`
+follows it until the recording ends: every minute it asks whether it may run (`nightScanMayRun`:
+the conditions of speech recognition's mode, so after the stop while the battery has at least
+30 % or the phone charges, while charging only then, manually or off never) and runs the
+`TranscriptionRunner` with a `TranscriptionRequest.Night`, which shares the runner's lock with
+every other run, so only one model is in memory. Such a run skips the old way, whose events are
+found after the stop; it lets `SoundSearches.searchNight` search what is recorded and then
+recognises the new way's waiting events of the sleep, and it stops as soon as its conditions no
+longer hold or the recording ended. The recording service's wake lock keeps the CPU awake for it.
+It runs in the recording's process, so nothing that fails there may end it: `NightScan` reports a
+failed run and tries again at its next look, a sound model that cannot be loaded (`ModelUnusable`,
+also an error of the native runtime) ends the scan for the night, a speech model that cannot be
+loaded ends its speech recognition for the night, and a piece the analysis fails on is tried at
+most three times a night (`NIGHT_ATTEMPTS`). The app's scope logs whatever still escapes a job.
+
+The night's search reads the recording while it is written: the feature tracks as far as their
+files hold them without extracting or appending anything (`SleepRepository.recordedTrack`), and
+the audio as far as the stored progress counts. Its loudness search takes the start threshold of
+each moment from the hour before it (`SlidingThreshold.LOOK_BACK`: the residual histogram of the
+detector over a sliding window of 60 minutes that only looks back, evaluated every 10 s), which
+on the labelled test nights comes close to one threshold per night. It searches the same 15-minute
+parts as after the night, each once it is final (`SoundSearch.isSettled`): the first hour is
+recorded, the part's events ended 45 s before the end of the recording (`SETTLE`: the baseline's
+half minute ahead, the threshold's step and the joining gap), and the recording reaches as far
+past the part as the listening pass may follow a sound (`earliestSettled`, 5 minutes). A part is
+so searched about 5 minutes after it ends, and a looked-at part needs nothing but the
+recording's length until then. An event is therefore found, and its speech recognised, about 5
+to 20 minutes after it happened, depending on where in its part it lies; the threshold alone
+would be final 40 s after it. Each part is stored with a `SEARCH` mark that is
+`provisional` (`SleepRepository.storeNightPart`, only while the sleep is still recorded and the
+mark reaches the part) and a `LISTENED` annotation with the windows the listening pass heard
+there and which of them heard a human sound (`ListenedWindows`).
+
+After the stop the sleep is not searched to its end, so the search after the night takes it, with
+the settings of the night and one threshold for the whole sleep, from its start. Each part
+replaces only the candidates that start in it (`searchPartChanges`), so the night's
+candidates after it stay until their part is searched. It takes the night's work over instead of
+running the models again (`SearchMemory`, `SleepRepository.searchMemory`): the windows the night
+heard, and the score of every stored candidate whose stretch it finds again; both depend only on
+the audio and the settings, so the result is exactly that of a search without the night. Once the
+sleep is searched to its end, the `LISTENED` annotations go, and the night's transcripts stay for
+every piece found again unchanged. The other threshold moves most bounds by a hop or so, so a
+night transcript whose piece is gone moves onto the one piece that now overlaps it when both of its
+ends lie within 100 ms (`MOVED_PIECE`) and that piece has no result of the same model yet: a clip
+hears its padding around the piece anyway, so the words would be the same. User marks keep to their
+stretches by overlap, as after every search. While recording, home shows how many events that
+are not background the night found and in how much of the recording (`nightFindings`).
 
 ### Sensitivity
 

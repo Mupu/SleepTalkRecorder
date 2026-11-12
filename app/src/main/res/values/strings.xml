@@ -36,6 +36,9 @@
     <string name="live">REC</string>
     <string name="meter_idle">The level shows while recording</string>
     <string name="level_dbfs">%1$d dBFS</string>
+    <!-- Under the level meter while the scan during the night runs: "Found during the night: 12 events in the first 1 h 15 min". -->
+    <string name="night_scan_found">Found during the night: %1$s in the first %2$s</string>
+    <string name="night_scan_waiting">The scan during the night starts after the first hour</string>
     <string name="last_sleep">Last sleep</string>
     <string name="problem_not_allowed">Recording needs the microphone permission.</string>
     <string name="problem_microphone">The microphone is not available. The recording stopped.</string>
@@ -585,6 +588,10 @@
     <string name="sound_model_purpose_tiny">Listens through the whole night for quiet human sounds</string>
     <string name="sound_model_purpose_mini">Sorts each sound into human, unsure or background</string>
     <string name="sound_model_purpose_small">A larger sorting model to compare in developer mode</string>
+    <string name="settings_night_scan">Scan during the night</string>
+    <string name="settings_night_scan_after_stop">Finds the new way’s events while recording, from the first hour on, so the night is ready in the morning. Runs while the battery has at least 30 percent or the phone charges; after the stop the whole night is searched once more.</string>
+    <string name="settings_night_scan_while_charging">Finds the new way’s events while recording, from the first hour on, but only while the phone charges; after the stop the whole night is searched once more.</string>
+    <string name="settings_night_scan_never">Does not run while speech recognition runs only manually or not at all.</string>
     <string name="settings_developer">Developer</string>
     <string name="settings_developer_mode">Developer mode</string>
     <string name="settings_developer_mode_hint">Shows test settings and what the new way knows about each event</string>

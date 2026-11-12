@@ -68,6 +68,10 @@ data class DetectionUiState(
     val sortingModel: SoundModel,
     /** The sound model the user asked to delete, until they confirm or cancel. */
     val deleting: SoundModel?,
+    /** Whether the second way searches the sleep while it is recorded. */
+    val nightScan: Boolean,
+    /** When speech recognition runs, whose conditions the scan during the night follows. */
+    val transcriptionMode: TranscriptionMode,
 )
 
 /** The updates section of the settings screen. */
@@ -137,8 +141,9 @@ class SettingsViewModel(
         combine(models.soundModels, store.flow(Settings.developerMode), deletingSound, ::Triple),
         combine(store.flow(Settings.searchSensitivity), store.flow(Settings.searchListening), store.flow(Settings.listeningThreshold), ::Triple),
         combine(store.flow(Settings.backgroundThreshold), store.flow(Settings.onsetVote), store.flow(Settings.sortingModel), ::Triple),
-    ) { (sound, developer, deleting), (sensitivity, listening, listeningThreshold), (backgroundThreshold, onsetVote, sortingModel) ->
-        DetectionUiState(sound, developer, sensitivity, listening, listeningThreshold, backgroundThreshold, onsetVote, sortingModel, deleting)
+        combine(store.flow(Settings.nightScan), store.flow(Settings.transcriptionMode), ::Pair),
+    ) { (sound, developer, deleting), (sensitivity, listening, listeningThreshold), (backgroundThreshold, onsetVote, sortingModel), (night, mode) ->
+        DetectionUiState(sound, developer, sensitivity, listening, listeningThreshold, backgroundThreshold, onsetVote, sortingModel, deleting, night, mode)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Downloads the sound model [model]. */

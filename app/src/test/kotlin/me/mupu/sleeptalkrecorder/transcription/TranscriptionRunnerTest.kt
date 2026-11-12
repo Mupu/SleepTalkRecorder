@@ -196,6 +196,12 @@ class TranscriptionRunnerTest {
             }
             return outcome
         }
+
+        override suspend fun searchNight(sleepId: Long, onProgress: (Float) -> Unit, shouldStop: suspend () -> Boolean): SearchOutcome {
+            if (shouldStop()) return SearchOutcome.STOPPED
+            log += "night $sleepId"
+            return outcome
+        }
     }
 
     private val log = mutableListOf<String>()
@@ -226,6 +232,43 @@ class TranscriptionRunnerTest {
         assertEquals(listOf("old 1", "old 1", "old 2", "search 2", "search 1", "new 1"), log)
         assertNull(runner.progress.value)
         assertNull(runner.newWayProgress.value)
+    }
+
+    @Test
+    fun `a run during the night searches the sleep being recorded and recognises only the second way's events`() = runTest {
+        store.recording = true
+        candidateStore.recording = true
+        val runner = TranscriptionRunner(logged, pauses, { battery }, FakeSearch(log), candidates) { _, _ -> }
+
+        assertEquals(Outcome.FINISHED, runner.run(TranscriptionRequest.Night(1) { true }) { FakeAnalysis() })
+        assertEquals(listOf("night 1", "new 1"), log)
+    }
+
+    @Test
+    fun `a run during the night stops once its conditions no longer hold or the recording ended`() = runTest {
+        store.recording = true
+        var asked = 0
+        val runner = TranscriptionRunner(logged, pauses, { battery }, FakeSearch(log), candidates) { _, _ -> }
+
+        // Allowed until the search is done, then no more: no event is recognised.
+        assertEquals(Outcome.NOT_ALLOWED, runner.run(TranscriptionRequest.Night(1) { ++asked <= 2 }) { FakeAnalysis() })
+        assertEquals(listOf("night 1"), log)
+
+        store.recording = false
+        assertEquals(Outcome.FINISHED, runner.run(TranscriptionRequest.Night(1) { true }) { error("loaded") })
+        assertEquals(listOf("night 1"), log)
+    }
+
+    @Test
+    fun `a piece the analysis fails on is tried at most three times during the night`() = runTest {
+        store.recording = true
+        val failures = HashMap<Stretch, Int>()
+        val broken = FakeAnalysis { error("broken") }
+        val runner = TranscriptionRunner(logged, pauses, { battery }, FakeSearch(log), candidates) { _, _ -> }
+
+        repeat(5) { runner.run(TranscriptionRequest.Night(1, failures) { true }) { broken } }
+
+        assertEquals(3, broken.clips)
     }
 
     @Test

@@ -52,6 +52,11 @@ data class DetectionParams(
     val minLengthAtMostSensitive: Duration = Duration.ofMillis(80),
     /** Events closer together than this are joined into one. */
     val mergeGap: Duration = Duration.ofMillis(1500),
+    /**
+     * Takes the automatic threshold of each moment from the stretch of the sleep around it; null
+     * takes one threshold from the whole sleep.
+     */
+    val thresholdWindow: SlidingThreshold? = null,
 ) {
     /** How many noise spreads above the noise median the automatic threshold lies. */
     internal val spreads: Float get() = lerp(5f, 1.8f, sensitivity)
@@ -71,7 +76,7 @@ class Detection(
     val level: FloatArray,
     /** The baseline at each hop, in dBFS. */
     val baseline: FloatArray,
-    /** How far above the baseline a sound had to be to start an event, chosen for this track. */
+    /** How far above the baseline a sound had to be to start an event, chosen for the whole track. */
     val thresholdDb: Float,
     /** The overrides of [thresholdDb] the events were found with, oldest first. */
     val overrides: List<ThresholdOverride>,
@@ -82,13 +87,18 @@ class Detection(
      * joined: each event holds one or more of them. The onset rule judges each on its own.
      */
     val stretches: List<HopRange> = events,
+    /**
+     * The automatic start threshold of each hop when [DetectionParams.thresholdWindow] chose one
+     * per moment; null when [thresholdDb] holds for every hop.
+     */
+    val automatic: FloatArray? = null,
 ) {
     /**
      * The start threshold at [hop] with [overrides]: that of the newest override covering it, or
-     * the automatic [thresholdDb].
+     * the automatic one.
      */
     fun thresholdAt(hop: Int, overrides: List<ThresholdOverride> = this.overrides): Float =
-        overrides.lastOrNull { hop >= it.range.start && hop < it.range.end }?.thresholdDb ?: thresholdDb
+        overrides.lastOrNull { hop >= it.range.start && hop < it.range.end }?.thresholdDb ?: automatic?.get(hop) ?: thresholdDb
 }
 
 /**
@@ -100,9 +110,10 @@ class Detection(
  * 2. The baseline is a low percentile of the level over a window centred on each moment. It stays
  *    below sounds that cover less than the rest of the window and follows a changing floor (a fan
  *    switching on) within a part of the window. Digital silence is left out of it.
- * 3. The start threshold above the baseline is chosen per track from the spread of the noise: the
- *    lower half of the residual (level minus baseline) is the noise, whatever the events do.
- *    [ThresholdOverride]s replace it in the stretches the user set a sensitivity for.
+ * 3. The start threshold above the baseline is chosen from the spread of the noise: the lower half
+ *    of the residual (level minus baseline) is the noise, whatever the events do. It is chosen per
+ *    track, or per moment from a [SlidingThreshold] window around it. [ThresholdOverride]s replace
+ *    it in the stretches the user set a sensitivity for.
  * 4. A hysteresis state machine starts an event above the start threshold and ends it after a
  *    hangover below the lower stop threshold; short events are dropped and close ones joined.
  *
@@ -125,9 +136,11 @@ object EventDetector {
         val speech = track.speech
         val level = smoothedLevel(speech, hops(params.smoothing))
         val baseline = baseline(speech, params)
-        val threshold = automaticThreshold(speech, level, baseline, params)
-        val stretches = stretches(level, baseline, threshold, overrides, HopRange(0, level.size), params)
-        return Detection(level, baseline, threshold, overrides, merge(stretches, hops(params.mergeGap)), stretches)
+        val residuals = residualBins(speech, level, baseline)
+        val threshold = ResidualHistogram().apply { residuals.forEach { if (it != ResidualHistogram.NONE) add(it) } }.threshold(params)
+        val automatic = params.thresholdWindow?.thresholds(residuals, params)
+        val stretches = stretches(level, baseline, threshold, automatic, overrides, HopRange(0, level.size), params)
+        return Detection(level, baseline, threshold, overrides, merge(stretches, hops(params.mergeGap)), stretches, automatic)
     }
 
     /**
@@ -146,20 +159,25 @@ object EventDetector {
     ): List<HopRange> {
         val margin = hops(RESCAN_MARGIN)
         val scanned = HopRange((range.start - margin).coerceAtLeast(0), (range.end + margin).coerceAtMost(detection.level.size))
-        val stretches = stretches(detection.level, detection.baseline, detection.thresholdDb, overrides, scanned, params)
+        val stretches = stretches(detection.level, detection.baseline, detection.thresholdDb, detection.automatic, overrides, scanned, params)
         return merge(stretches, hops(params.mergeGap)).filter { it.overlaps(range) }
     }
 
-    /** The hysteresis and minimum length steps over the hops of [range]: the stretches that make up events once joined. */
+    /**
+     * The hysteresis and minimum length steps over the hops of [range], with the start threshold
+     * of each hop from [automatic], or [threshold] where that is null, and [overrides]: the
+     * stretches that make up events once joined.
+     */
     private fun stretches(
         level: FloatArray,
         baseline: FloatArray,
-        automatic: Float,
+        threshold: Float,
+        automatic: FloatArray?,
         overrides: List<ThresholdOverride>,
         range: HopRange,
         params: DetectionParams,
     ): List<HopRange> {
-        val thresholds = FloatArray(range.end - range.start) { automatic }
+        val thresholds = FloatArray(range.end - range.start) { automatic?.get(range.start + it) ?: threshold }
         for (override in overrides) {
             // Oldest first, so a newer override is written over an older one.
             val from = max(override.range.start, range.start)
@@ -241,33 +259,11 @@ object EventDetector {
     }
 
     /**
-     * The start threshold above the baseline: the median residual plus [DetectionParams.spreads]
-     * times the noise spread, which is the distance from the 16th percentile to the median (one
-     * standard deviation for Gaussian noise). Events lie in the upper tail and do not move it.
+     * The [ResidualHistogram] bin of each hop's residual, the level above the baseline, or
+     * [ResidualHistogram.NONE] for digital silence.
      */
-    private fun automaticThreshold(speech: ByteArray, level: FloatArray, baseline: FloatArray, params: DetectionParams): Float {
-        val histogram = IntArray(RESIDUAL_BINS)
-        var count = 0
-        for (i in level.indices) {
-            if (speech[i].toInt() == 0) continue
-            val bin = ((level[i] - baseline[i] - RESIDUAL_MIN_DB) * RESIDUAL_BINS_PER_DB).toInt()
-            histogram[bin.coerceIn(0, RESIDUAL_BINS - 1)]++
-            count++
-        }
-        if (count == 0) return params.maxThresholdDb
-
-        fun percentile(share: Float): Float {
-            val rank = (share * count).toInt()
-            var below = 0
-            var bin = 0
-            while (bin < RESIDUAL_BINS - 1 && below + histogram[bin] <= rank) below += histogram[bin++]
-            return bin / RESIDUAL_BINS_PER_DB + RESIDUAL_MIN_DB
-        }
-
-        val median = percentile(0.5f)
-        val spread = median - percentile(0.16f)
-        return (median + params.spreads * spread).coerceIn(params.minThresholdDb, params.maxThresholdDb)
-    }
+    private fun residualBins(speech: ByteArray, level: FloatArray, baseline: FloatArray): IntArray =
+        IntArray(level.size) { i -> if (speech[i].toInt() == 0) ResidualHistogram.NONE else ResidualHistogram.bin(level[i] - baseline[i]) }
 
     /**
      * Starts an event once the level stayed [DetectionParams.minOnset] at or above the start
@@ -343,11 +339,6 @@ object EventDetector {
 
     /** How often the baseline percentile is evaluated, in hops: every half second. */
     private const val BASELINE_STEP = 25
-
-    /** The residual histogram covers -30 to +90 dB in steps of 0.25 dB. */
-    private const val RESIDUAL_MIN_DB = -30f
-    private const val RESIDUAL_BINS_PER_DB = 4f
-    private const val RESIDUAL_BINS = 480
 
     /** The power of each level code; code 0 (digital silence) has none. */
     private val POWER = DoubleArray(256) { code ->

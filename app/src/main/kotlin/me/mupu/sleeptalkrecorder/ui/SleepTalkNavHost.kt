@@ -16,6 +16,7 @@ import androidx.navigation.navArgument
 import me.mupu.sleeptalkrecorder.AppContainer
 import me.mupu.sleeptalkrecorder.playback.SleepPlayer
 import me.mupu.sleeptalkrecorder.settings.AppLanguages
+import me.mupu.sleeptalkrecorder.settings.Settings
 import me.mupu.sleeptalkrecorder.ui.home.HomeScreen
 import me.mupu.sleeptalkrecorder.ui.home.HomeViewModel
 import me.mupu.sleeptalkrecorder.ui.library.LibraryScreen
@@ -82,7 +83,7 @@ fun SleepTalkNavHost(container: AppContainer) {
     NavHost(navController = navController, startDestination = Routes.HOME) {
         composable(Routes.HOME) {
             HomeScreen(
-                viewModel = viewModel { HomeViewModel(container.recorder, container.sleepRepository, container.readiness, container.updater) },
+                viewModel = viewModel { HomeViewModel(container.recorder, container.sleepRepository, container.readiness, container.updater, container.settings.flow(Settings.nightScan)) },
                 onOpenLibrary = { navController.navigate(Routes.LIBRARY) },
                 onOpenSettings = { navController.navigate(Routes.settings()) },
                 onOpenSleep = { navController.navigate(Routes.sleep(it)) },

@@ -107,6 +107,7 @@ class RecordingService : Service() {
                     ).record { progress ->
                         container.recorder.report(RecorderState.Recording(progress))
                         if (progress.startedAt != shownStart) {
+                            if (shownStart == null) container.recordingStarted(progress.sleepId)
                             shownStart = progress.startedAt
                             notifications.update(notifications.recording(progress))
                         }

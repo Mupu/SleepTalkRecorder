@@ -26,11 +26,15 @@ import me.mupu.sleeptalkrecorder.models.SoundModel
 import me.mupu.sleeptalkrecorder.models.SoundModelStatus
 import me.mupu.sleeptalkrecorder.settings.FloatSetting
 import me.mupu.sleeptalkrecorder.settings.Settings
+import me.mupu.sleeptalkrecorder.settings.TranscriptionMode
 import me.mupu.sleeptalkrecorder.ui.components.ModelProgress
 import me.mupu.sleeptalkrecorder.ui.components.fileSize
 import kotlin.math.roundToInt
 
-/** The sound models of the second way of finding events, each downloaded, cancelled or deleted on its own. */
+/**
+ * The sound models of the second way of finding events, each downloaded, cancelled or deleted on
+ * its own, and whether it searches during the night.
+ */
 @Composable
 internal fun SoundModelSettings(state: DetectionUiState, viewModel: SettingsViewModel) {
     SettingsSection(stringResource(R.string.settings_sound_models))
@@ -48,6 +52,19 @@ internal fun SoundModelSettings(state: DetectionUiState, viewModel: SettingsView
             onDelete = { viewModel.askDelete(status.model) },
         )
     }
+    SwitchSetting(
+        icon = R.drawable.ic_bedtime,
+        label = stringResource(R.string.settings_night_scan),
+        hint = stringResource(
+            when (state.transcriptionMode) {
+                TranscriptionMode.AFTER_STOP -> R.string.settings_night_scan_after_stop
+                TranscriptionMode.WHILE_CHARGING -> R.string.settings_night_scan_while_charging
+                TranscriptionMode.MANUAL, TranscriptionMode.OFF -> R.string.settings_night_scan_never
+            },
+        ),
+        checked = state.nightScan,
+        onCheckedChange = { viewModel.set(Settings.nightScan, it) },
+    )
     state.deleting?.let { model ->
         DeleteModelDialog(model.displayName, model.bytes, onConfirm = viewModel::confirmDeleteSound, onDismiss = viewModel::cancelDeleteSound)
     }

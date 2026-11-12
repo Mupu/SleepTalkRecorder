@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.13.0] - 2026-11-12
+
+### Hinzugefügt
+
+- Während der Nacht suchen: Eine Einstellung bei den Geräuschmodellen (voreingestellt aus) lässt den neuen Weg Ereignisse schon finden, während die Nacht noch aufgenommen wird, sodass sie am Morgen fertig ist. Ab dem Ende der ersten Stunde durchsucht er das Aufgenommene, jeweils eine Viertelstunde, mit der Lautstärke der letzten Stunde, und die Spracherkennung hört seine Ereignisse gleich ab, sodass ein Ereignis etwa 5 bis 20 Minuten später erscheint. Er folgt der Einstellung der Spracherkennung: nach dem Stopp läuft er, solange der Akku mindestens 30 Prozent hat oder das Handy lädt, beim Laden nur am Ladegerät, und manuell oder aus gar nicht. Während der Aufnahme zeigt der Startbildschirm, wie viele Ereignisse er bisher gefunden hat. Nach dem Stopp wird die ganze Nacht noch einmal mit der Lautstärke der ganzen Nacht durchsucht, und ihre Ereignisse treten an die Stelle der in der Nacht gefundenen; was die Nacht schon gehört und erkannt hat, wird übernommen, sodass das schnell geht, und deine Tags und Namen bleiben bei ihren Ereignissen.
+
 ## [0.12.0] - 2026-11-12
 
 ### Hinzugefügt

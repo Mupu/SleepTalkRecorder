@@ -27,6 +27,7 @@ import me.mupu.sleeptalkrecorder.settings.SettingsStore
 import me.mupu.sleeptalkrecorder.settings.searchSettings
 import me.mupu.sleeptalkrecorder.share.EventShares
 import me.mupu.sleeptalkrecorder.transcription.EventAnalysis
+import me.mupu.sleeptalkrecorder.transcription.NightScan
 import me.mupu.sleeptalkrecorder.transcription.SherpaTranscriber
 import me.mupu.sleeptalkrecorder.transcription.SpeechRecognition
 import me.mupu.sleeptalkrecorder.transcription.TranscriptionPauses
@@ -46,6 +47,7 @@ import me.mupu.sleeptalkrecorder.whatsnew.BundledChangelogs
 import me.mupu.sleeptalkrecorder.whatsnew.Version
 import me.mupu.sleeptalkrecorder.whatsnew.WhatsNew
 import java.io.File
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -54,6 +56,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -79,7 +82,13 @@ class SleepTalkApplication : Application() {
 /** The objects that live as long as the process, wired by hand. */
 class AppContainer(context: Context) {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    /**
+     * The scope of the app's background work. Its last guard logs what escapes a job instead of
+     * ending the process, which would also end a recording.
+     */
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, error -> Log.e("SleepTalk", "Background work failed", error) },
+    )
 
     private val database = SleepDatabase.open(context)
 
@@ -161,6 +170,19 @@ class AppContainer(context: Context) {
     ) { openSpeechRecognition(it) }
 
     private val appContext = context.applicationContext
+
+    /** The scan during the night, which follows the sleep being recorded. */
+    private val nightScan = NightScan(
+        transcriptionRunner,
+        enabled = settings.flow(Settings.nightScan),
+        mode = settings.flow(Settings.transcriptionMode),
+        battery = { batteryState(context) },
+        open = { openSpeechRecognition() },
+        onFailure = { message, error -> Log.w("NightScan", message, error) },
+    )
+
+    /** The sleep being recorded, which the scan during the night follows; null while none is. */
+    private val recordedSleep = MutableStateFlow<Long?>(null)
 
     /** Writes events as audio files for Android's share sheet. */
     val eventShares = EventShares(appContext)
@@ -247,6 +269,7 @@ class AppContainer(context: Context) {
     init {
         scope.launch { AutoDeletion.followSettings(context, settings) }
         scope.launch { settings.flow(Settings.transcriptionMode).collect(transcriptions::follow) }
+        scope.launch { recordedSleep.collectLatest { sleepId -> if (sleepId != null) nightScan.follow(sleepId) } }
         scope.launch {
             try {
                 transcriptStore.judgeStoredAgain()
@@ -266,8 +289,14 @@ class AppContainer(context: Context) {
     /** Pauses speech recognition of [sleepId], from the notification, where nothing else waits for it. */
     fun pauseTranscription(sleepId: Long): Job = scope.launch { transcriptions.pause(sleepId) }
 
+    /** A recording of the sleep [sleepId] is under way: the scan during the night follows it. */
+    fun recordingStarted(sleepId: Long) {
+        recordedSleep.value = sleepId
+    }
+
     /** A recording ended: its events are found, and pauses that end with a recording end. */
     fun recordingEnded() {
+        recordedSleep.value = null
         scope.launch { transcriptions.recordingEnded() }
         findMissingEvents()
     }

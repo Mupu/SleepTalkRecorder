@@ -107,6 +107,12 @@ object Settings {
     /** Which way's events the sleep screen shows: the first way's by default during the test phase of the second. */
     val eventWay = enumSetting("event_way", EventWay.OLD)
 
+    /**
+     * Whether the second way of finding events searches the sleep while it is recorded, under the
+     * conditions of speech recognition ([TranscriptionMode]); off by default.
+     */
+    val nightScan = booleanSetting("night_scan", false)
+
     /** Whether the settings show the developer settings and the sleep screen what the second way of finding events knows. */
     val developerMode = booleanSetting("developer_mode", false)
 

@@ -146,6 +146,16 @@ enum class AnnotationType {
      * never counts as a result of a first way's event, whose transcripts stay as they are.
      */
     CANDIDATE_TRANSCRIPT,
+
+    /**
+     * Which windows of the listening pass the second way's search during the night heard over the
+     * stretch, so the search after the night needs not hear them again ([ListenedWindows]): the
+     * stretch reaches from the first window's second to the second after the last one,
+     * [AnnotationEntity.text] lists the windows that heard a human sound, and
+     * [AnnotationEntity.value] is the listening threshold they were heard with. Removed once the
+     * sleep is searched to its end.
+     */
+    LISTENED,
 }
 
 /** Whether a [TagEntity] is the one the app provides or one of the user's own. */

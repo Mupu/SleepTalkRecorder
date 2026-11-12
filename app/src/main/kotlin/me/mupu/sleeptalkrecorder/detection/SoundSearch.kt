@@ -104,6 +104,20 @@ interface SleepSamples {
 }
 
 /**
+ * What earlier searches of the same audio with the same settings already worked out, so a search
+ * again (the one after the night, after the search during it) needs not do it twice: the listening
+ * pass's verdict on each window and the sorting model's score of each candidate's stretch. Both
+ * depend only on the audio and the settings, never on the start threshold.
+ */
+interface SearchMemory {
+    /** Whether the listening pass heard a human sound in the window starting at second [window]; null when it is not known. */
+    fun heard(window: Int): Boolean?
+
+    /** The human score of a candidate over exactly [hops]; null when it is not known. */
+    fun score(hops: HopRange): Float?
+}
+
+/**
  * The second way of finding events, run after the night: it searches more eagerly than the
  * loudness detector alone and sorts what it finds instead of listing everything.
  *
@@ -124,8 +138,13 @@ interface SleepSamples {
  */
 class SoundSearch(private val settings: SearchSettings, private val onset: OnsetRule = OnsetRule()) {
 
-    /** The loudness search over the sleep's [track], which every part of a search reads. */
-    fun loudness(track: SleepTrack): Detection = EventDetector.detect(track.track, DetectionParams(sensitivity = settings.sensitivity))
+    /**
+     * The loudness search over the sleep's [track], which every part of a search reads; with
+     * [thresholdWindow] the start threshold of each moment comes from that stretch of the sleep
+     * instead of the whole of it, as during the night ([SlidingThreshold.LOOK_BACK]).
+     */
+    fun loudness(track: SleepTrack, thresholdWindow: SlidingThreshold? = null): Detection =
+        EventDetector.detect(track.track, DetectionParams(sensitivity = settings.sensitivity, thresholdWindow = thresholdWindow))
 
     /**
      * Searches the sleep of [track] and [samples] in parts of [partLength], one after the other,
@@ -157,8 +176,9 @@ class SoundSearch(private val settings: SearchSettings, private val onset: Onset
      * the candidates that start here reach, so a part gives the same candidates whether the parts
      * before it were searched in this run or another. The candidates are sorted with [sorter].
      * [onProgress] hears the share of the part done from 0 to 1; [shouldStop] is asked now and
-     * then, and a true answer gives null. Blocks while the taggers run, so it is called off the
-     * main thread.
+     * then, and a true answer gives null. What [memory] knows is taken from it instead of the
+     * taggers, and [onHeard] learns every window the listening pass heard itself and whether it
+     * heard a human sound in it. Blocks while the taggers run, so it is called off the main thread.
      *
      * @throws java.io.IOException when the audio cannot be read.
      */
@@ -172,6 +192,8 @@ class SoundSearch(private val settings: SearchSettings, private val onset: Onset
         until: Duration,
         onProgress: (Float) -> Unit = {},
         shouldStop: suspend () -> Boolean = { false },
+        memory: SearchMemory? = null,
+        onHeard: (window: Int, human: Boolean) -> Unit = { _, _ -> },
     ): List<SortedCandidate>? {
         val owned = detection.events.filter { track.positionOf(it.start) >= from && track.positionOf(it.start) < until }
         val first = from.seconds.toInt()
@@ -188,10 +210,9 @@ class SoundSearch(private val settings: SearchSettings, private val onset: Onset
             val human = HumanScore(listener.classNames)
             val rate = samples.sampleRate
             val start = (first - 2).coerceAtLeast(0)
-            val filter = HighPass(LISTENING_CUTOFF_HZ, rate)
-            // The filter settles on the second before, so a window sounds the same in every run.
-            if (start > 0) filter.filter(samples.read((start - 1L) * rate, rate))
-            var previous = filter.filter(samples.read(start.toLong() * rate, rate))
+            // The filter and the second it filtered last; null after a window the memory knew.
+            var filter = HighPass(LISTENING_CUTOFF_HZ, rate)
+            var previous: FloatArray? = null
             var window = start
             while (window < windows) {
                 val goesOn = heard.isNotEmpty() && heard.last() >= window - 2
@@ -201,8 +222,23 @@ class SoundSearch(private val settings: SearchSettings, private val onset: Onset
                     if (shouldStop()) return null
                     onProgress((window - first).coerceAtLeast(0).toFloat() / work(owned.size))
                 }
+                val known = memory?.heard(window)
+                if (known != null) {
+                    if (known) heard += window
+                    previous = null
+                    window++
+                    continue
+                }
+                val before = previous ?: run {
+                    // The filter settles on the second before, so a window sounds the same in every run.
+                    filter = HighPass(LISTENING_CUTOFF_HZ, rate)
+                    if (window > 0) filter.filter(samples.read((window - 1L) * rate, rate))
+                    filter.filter(samples.read(window.toLong() * rate, rate))
+                }
                 val next = filter.filter(samples.read((window + 1L) * rate, rate))
-                if (human.of(listener.tag(previous + next, rate)) >= settings.listeningThreshold) heard += window
+                val isHuman = human.of(listener.tag(before + next, rate)) >= settings.listeningThreshold
+                if (isHuman) heard += window
+                onHeard(window, isHuman)
                 previous = next
                 window++
             }
@@ -226,13 +262,33 @@ class SoundSearch(private val settings: SearchSettings, private val onset: Onset
                 if (shouldStop()) return null
                 onProgress(((last - first) + CANDIDATE_WORK * index).toFloat() / work(candidates.size))
             }
-            val (clipFrom, clipUntil) = clipOf(candidate, track, duration)
-            val clipFirst = clipFrom.toNanos() * samples.sampleRate / NANOS_PER_SECOND
-            val clipLast = clipUntil.toNanos() * samples.sampleRate / NANOS_PER_SECOND
-            val clip = samples.read(clipFirst, (clipLast - clipFirst).toInt())
-            val score = viewsOf(clip, samples.sampleRate).maxOf { human.of(sorter.tag(it, samples.sampleRate)) }
+            val score = memory?.score(candidate.hops) ?: run {
+                val (clipFrom, clipUntil) = clipOf(candidate, track, duration)
+                val clipFirst = clipFrom.toNanos() * samples.sampleRate / NANOS_PER_SECOND
+                val clipLast = clipUntil.toNanos() * samples.sampleRate / NANOS_PER_SECOND
+                val clip = samples.read(clipFirst, (clipLast - clipFirst).toInt())
+                viewsOf(clip, samples.sampleRate).maxOf { human.of(sorter.tag(it, samples.sampleRate)) }
+            }
             SortedCandidate(candidate, score, verdict(score, candidate.sudden))
         }.also { onProgress(1f) }
+    }
+
+    /**
+     * Whether the part from [from] until [until] of a search during the night is final on the
+     * [recorded] audio: whether it gives the same candidates now as on any longer recording of the
+     * sleep, with the loudness search's [detection] of the recorded [track] found with
+     * [SlidingThreshold.LOOK_BACK]. That needs the first hour recorded, whose thresholds the
+     * window takes from all of it; the part's events to have ended [SETTLE] before the end of the
+     * recording, so the thresholds, the baseline and the joining of close stretches around them are
+     * known; and the audio after the part as far as the listening pass may follow a sound it heard
+     * ([earliestSettled]).
+     */
+    fun isSettled(track: SleepTrack, detection: Detection, from: Duration, until: Duration, recorded: Duration): Boolean {
+        if (recorded < SlidingThreshold.LOOK_BACK.window + SETTLE || recorded < earliestSettled(until)) return false
+        val reach = detection.events.filter { track.positionOf(it.start) >= from && track.positionOf(it.start) < until }
+            .maxOfOrNull { track.positionOf(it.end) } ?: return true
+        // The listening pass hears on to the end of the part's last event and a window past it.
+        return recorded >= maxOf(reach + SETTLE, Duration.ofSeconds(ceilSeconds(reach) + WINDOW_SECONDS + 1L))
     }
 
     private fun ceilSeconds(position: Duration): Int = ((position.toMillis() + 999) / 1000).toInt()
@@ -300,6 +356,21 @@ class SoundSearch(private val settings: SearchSettings, private val onset: Onset
 
         /** How far past its part a stretch heard by the listening pass is followed at most, in seconds. */
         const val LONGEST_LOOK_AHEAD = 300
+
+        /**
+         * How long after an event of a search during the night the recording must go on before
+         * the event is final: the half minute the baseline looks ahead, the ten seconds between
+         * evaluations of [SlidingThreshold.LOOK_BACK], and the gap within which a following
+         * stretch would still be joined, with room to spare.
+         */
+        val SETTLE: Duration = Duration.ofSeconds(45)
+
+        /**
+         * The shortest recording on which a part ending at [until] can be final ([isSettled]): the
+         * listening pass may follow a sound heard in it [LONGEST_LOOK_AHEAD] past its end, reading
+         * a window and a second more there.
+         */
+        fun earliestSettled(until: Duration): Duration = until + Duration.ofSeconds(LONGEST_LOOK_AHEAD + WINDOW_SECONDS + 1L)
 
         /** The shortest clip the sorting model gets; shorter ones are filled up with silence. */
         val SHORTEST_CLIP: Duration = Duration.ofMillis(500)

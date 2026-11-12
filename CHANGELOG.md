@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.13.0] - 2026-11-12
+
+### Added
+
+- Scan during the night: a setting under the sound models (off by default) lets the new way find events while the night is still recorded, so it is ready in the morning. From the end of the first hour on it searches what is recorded, a quarter of an hour at a time, with the loudness of the last hour, and speech recognition hears its events right away, so an event shows up about 5 to 20 minutes after it happened. It follows the speech recognition setting: after the stop it runs while the battery has at least 30 percent or the phone charges, while charging only on the charger, and manually or off not at all. While recording, the start screen shows how many events it has found so far. After the stop the whole night is searched once more with the loudness of the whole night, and its events take the place of those found during the night; what the night already heard and recognised is taken over, so this goes quickly, and your tags and names stay with their events.
+
 ## [0.12.0] - 2026-11-12
 
 ### Added

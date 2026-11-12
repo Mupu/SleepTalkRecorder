@@ -6,6 +6,7 @@ import kotlin.math.sin
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -100,6 +101,63 @@ class SoundSearchTest {
         assertTrue(sorted.all { it.score == 0.03f })
         // Parts of 40 s, as stored one by one, cut the sound heard from 38 s on and give the same.
         assertEquals(sorted, search.search(track, samples, listener, sorter, partLength = Duration.ofSeconds(40)))
+    }
+
+    /** A night of [minutes]: a 1 kHz tone with loud stretches at the [loud] seconds, the rest quiet. */
+    private fun tone(minutes: Int, loud: Set<Long>) = object : SleepSamples {
+        override val sampleRate = 16_000
+        override val length = minutes * 60L * 16_000
+        override fun read(from: Long, count: Int) = FloatArray(maxOf(0, minOf(count.toLong(), length - from).toInt())) {
+            val at = from + it
+            (if (at / 16_000 in loud) 0.1f else 0.001f) * sin(2 * PI * 1_000 * at / 16_000).toFloat()
+        }
+    }
+
+    private val loudTagger = FakeTagger { samples -> if (samples.maxOf { kotlin.math.abs(it) } > 0.05f) 0.9f else 0f }
+
+    @Test
+    fun `a part searched during the night is final once settled and stays as the longer recording finds it`() = runTest {
+        // 75 minutes with words at 47:00, 52:30 and 59:50; the listener also hears a sound at 50:10 the loudness search misses.
+        val codes = ByteArray(HOPS_PER_SECOND * 75 * 60) { FeatureTrack.levelCode(-60.0 + (it % 3)) }
+        for (word in listOf(47 * 60, 52 * 60 + 30, 59 * 60 + 50)) {
+            for (hop in word * HOPS_PER_SECOND until (word + 1) * HOPS_PER_SECOND) codes[hop] = FeatureTrack.levelCode(-35.0)
+        }
+        val loud = setOf(47L * 60, 50L * 60 + 10, 50L * 60 + 11)
+        val sorter = FakeTagger { samples -> samples.maxOf { kotlin.math.abs(it) } }
+        fun recorded(minutes: Int) = SleepTrack.of(listOf(trackOf(codes.copyOf(HOPS_PER_SECOND * minutes * 60)) to Duration.ZERO))
+        val whole = recorded(75)
+        val prefix = recorded(66)
+        val night = search.loudness(prefix, SlidingThreshold.LOOK_BACK)
+        val from = Duration.ofMinutes(45)
+        val until = Duration.ofMinutes(60)
+
+        assertTrue(search.isSettled(prefix, night, from, until, Duration.ofMinutes(66)))
+        assertFalse(search.isSettled(prefix, night, until, until + SoundSearch.PART_LENGTH, Duration.ofMinutes(66)))
+        assertFalse(search.isSettled(recorded(50), search.loudness(recorded(50), SlidingThreshold.LOOK_BACK), Duration.ZERO, SoundSearch.PART_LENGTH, Duration.ofMinutes(50)))
+
+        val provisional = search.searchPart(prefix, night, tone(66, loud), loudTagger, sorter, from, until)!!
+        val later = search.searchPart(whole, search.loudness(whole, SlidingThreshold.LOOK_BACK), tone(75, loud), loudTagger, sorter, from, until)
+
+        assertEquals(listOf(FoundBy.BOTH, FoundBy.LISTENING, FoundBy.LOUDNESS, FoundBy.LOUDNESS), provisional.map { it.candidate.foundBy })
+        assertEquals(provisional, later)
+    }
+
+    @Test
+    fun `a search again takes the windows heard and the scores given before instead of running the models`() = runTest {
+        val codes = ByteArray(HOPS_PER_SECOND * 60) { FeatureTrack.levelCode(-60.0 + (it % 3)) }
+        for (hop in 20 * HOPS_PER_SECOND until 21 * HOPS_PER_SECOND) codes[hop] = FeatureTrack.levelCode(-30.0)
+        val track = SleepTrack.of(listOf(trackOf(codes) to Duration.ZERO))
+        val samples = tone(1, loud = setOf(39, 40, 41))
+        val detection = search.loudness(track)
+        val heard = HashMap<Int, Boolean>()
+        val first = search.searchPart(track, detection, samples, loudTagger, FakeTagger { 0.03f }, Duration.ZERO, Duration.ofMinutes(1), onHeard = { window, human -> heard[window] = human })!!
+        val memory = object : SearchMemory {
+            override fun heard(window: Int) = heard[window]
+            override fun score(hops: HopRange) = first.find { it.candidate.hops == hops }?.score
+        }
+        val unused = FakeTagger { error("a model ran again") }
+
+        assertEquals(first, search.searchPart(track, detection, samples, unused, unused, Duration.ZERO, Duration.ofMinutes(1), memory = memory))
     }
 
     @Test

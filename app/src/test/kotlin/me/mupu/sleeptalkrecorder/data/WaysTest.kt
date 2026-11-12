@@ -102,9 +102,56 @@ class WaysTest {
     fun `a search mark is read back as it was stored`() {
         val mark = SearchMark(SearchSettings(), Duration.ofMinutes(30), done = true, partial = true)
         val stored = AnnotationEntity(sleepId = 1, type = AnnotationType.SEARCH, start = Duration.ZERO, end = mark.searchedTo, value = 1.0, text = mark.text(), origin = AnnotationOrigin.DEVICE)
+        val night = SearchMark(SearchSettings(listening = false), Duration.ofMinutes(75), done = false, provisional = true)
 
         assertEquals(mark, SearchMark.of(stored))
         assertEquals(false, SearchMark.of(stored.copy(value = 0.0, text = SearchSettings().encode()))?.done)
+        assertEquals(night, SearchMark.of(stored.copy(end = night.searchedTo, value = 0.0, text = night.text())))
+    }
+
+    @Test
+    fun `the windows heard during the night are read back as they were stored`() {
+        val windows = ListenedWindows(3598, 4505, listOf(3605, 3606, 3607, 3610, 4500), 0.18f)
+        val stored = AnnotationEntity(
+            sleepId = 1, type = AnnotationType.LISTENED, start = Duration.ofSeconds(3598), end = Duration.ofSeconds(4505),
+            value = 0.18f.toDouble(), text = windows.text(), origin = AnnotationOrigin.DEVICE,
+        )
+
+        assertEquals("3605-3607 3610 4500", windows.text())
+        assertEquals(windows, ListenedWindows.of(stored))
+    }
+
+    private fun searched(id: Long, type: AnnotationType, from: Long, until: Long, origin: AnnotationOrigin = AnnotationOrigin.DEVICE) = AnnotationEntity(
+        id = id, sleepId = 1, type = type, start = Duration.ofSeconds(from), end = Duration.ofSeconds(until), origin = origin,
+        producer = Producers.SORTING.takeIf { origin == AnnotationOrigin.DEVICE && type != AnnotationType.CANDIDATE_TRANSCRIPT },
+    )
+
+    @Test
+    fun `the search after the night replaces the night's events part by part and keeps marks and transcripts that still fit`() {
+        val night = listOf(
+            searched(1, AnnotationType.SEARCH, 0, 3600),
+            searched(2, AnnotationType.LISTENED, 0, 905),
+            searched(3, AnnotationType.CANDIDATE, 100, 102),
+            searched(4, AnnotationType.CANDIDATE, 500, 503),
+            searched(5, AnnotationType.CANDIDATE, 2000, 2001),
+            // The user's tag over the first event and the transcripts of the first three events.
+            searched(6, AnnotationType.TAG, 100, 102, AnnotationOrigin.USER),
+            transcript(7, 100, 102, "hello"),
+            transcript(8, 500, 503, null),
+            transcript(9, 2000, 2001, "night"),
+        )
+        val first = Duration.ofMinutes(15)
+
+        // The first part of the search after the night replaces the night's events up to 15 minutes only.
+        val part = searchPartChanges(night, Duration.ZERO, SearchMark(SearchSettings(), first, done = false), emptyList())
+        assertEquals(SearchPartChanges(listOf(1L, 3L, 4L)), part)
+
+        // Once it is done, it finds the first event again unchanged, the second one a second longer
+        // and the third one a hop later, onto which its transcript moves.
+        val moved = Stretch(Duration.ofMillis(2_000_020), Duration.ofSeconds(2001))
+        val found = listOf(Stretch(Duration.ofSeconds(100), Duration.ofSeconds(102)), Stretch(Duration.ofSeconds(500), Duration.ofSeconds(504)), moved)
+        val done = searchPartChanges(night, Duration.ZERO, SearchMark(SearchSettings(), Duration.ofMinutes(60), done = true), found)
+        assertEquals(SearchPartChanges(listOf(1L, 2L, 3L, 4L, 5L, 8L), mapOf(9L to moved)), done)
     }
 
     @Test

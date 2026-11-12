@@ -6,7 +6,11 @@ import android.util.Log
 import androidx.room.withTransaction
 import me.mupu.sleeptalkrecorder.data.Producers.DETECTOR
 import me.mupu.sleeptalkrecorder.data.Producers.SORTING
+import me.mupu.sleeptalkrecorder.detection.HopRange
+import me.mupu.sleeptalkrecorder.detection.SearchMemory
+import me.mupu.sleeptalkrecorder.detection.SearchSettings
 import me.mupu.sleeptalkrecorder.detection.SortedCandidate
+import me.mupu.sleeptalkrecorder.detection.Verdict
 import me.mupu.sleeptalkrecorder.detection.SensitivityOverride
 import me.mupu.sleeptalkrecorder.detection.SleepTrack
 import me.mupu.sleeptalkrecorder.detection.replacedBy
@@ -134,8 +138,15 @@ class SleepRepository(
     /**
      * Stores what the second way found in one part of a sleep, over [track], and [mark], how far
      * it has searched now. With [fresh] its earlier results go first, as when it starts the sleep
-     * from its start; else the candidates of an earlier attempt at this part ([from] on) are
-     * replaced. Only stored while the sleep is still finished at [endedAt], as when the search began.
+     * from its start; else the candidates that start in this part ([from] until the part's end,
+     * [SearchMark.searchedTo], or until the end of the sleep once the mark is done) are replaced,
+     * those of an earlier attempt at the part or of the search during the night, while the ones
+     * after it stay until their part is searched. Only stored while the sleep is still finished at
+     * [endedAt], as when the search began.
+     *
+     * Once the sleep is searched to its end, the windows the search during the night heard go, and
+     * the transcripts of the second way's events follow their pieces, so those of events found
+     * again unchanged or nearly so stay ([searchPartChanges]).
      *
      * Returns whether it was stored.
      */
@@ -147,45 +158,114 @@ class SleepRepository(
         sorted: List<SortedCandidate>,
         mark: SearchMark,
         fresh: Boolean,
-    ): Boolean {
-        val candidates = sorted.map { found ->
-            val sorting = Sorting(found.verdict, found.candidate.foundBy, found.score, found.candidate.riseDb)
+    ): Boolean = database.withTransaction {
+        if (dao.findSleep(sleepId)?.endedAt != endedAt) return@withTransaction false
+        if (fresh) dao.deleteResults(sleepId, AnnotationOrigin.DEVICE, SORTING.id)
+        val candidates = candidatesOf(sleepId, track, sorted)
+        val changes = searchPartChanges(dao.annotationsOf(sleepId), from, mark, candidates.map { it.stretch })
+        dao.deleteAnnotations(changes.removes)
+        for ((id, stretch) in changes.moves) dao.moveAnnotation(id, stretch.start, stretch.end)
+        dao.insertAnnotations(candidates + searchOf(sleepId, mark))
+        true
+    }
+
+    /**
+     * Stores what the second way's search during the night found in the part of the sleep being
+     * recorded from [from] on, over [track], with its [mark] ([SearchMark.provisional]), how far it
+     * has searched now, and the windows the listening pass [listened] to there. Only stored while
+     * the sleep is still recorded and the search during the night has reached [from], so a part is
+     * never stored twice nor after the night ended.
+     *
+     * Returns whether it was stored.
+     */
+    suspend fun storeNightPart(
+        sleepId: Long,
+        track: SleepTrack,
+        from: Duration,
+        sorted: List<SortedCandidate>,
+        mark: SearchMark,
+        listened: ListenedWindows?,
+    ): Boolean = database.withTransaction {
+        if (dao.findSleep(sleepId)?.let { it.endedAt == null } != true) return@withTransaction false
+        val before = dao.searchMark(sleepId, SORTING.id)?.let(SearchMark::of)
+        if (from == Duration.ZERO) {
+            if (before != null) return@withTransaction false
+            // Results of an older version of the search, before the sleep was continued.
+            dao.deleteResults(sleepId, AnnotationOrigin.DEVICE, SORTING.id)
+        } else if (before?.provisional != true || before.searchedTo != from) {
+            return@withTransaction false
+        }
+        dao.deleteSearchMarks(sleepId, SORTING.id)
+        val heard = listened?.let { windows ->
             AnnotationEntity(
                 sleepId = sleepId,
-                type = AnnotationType.CANDIDATE,
-                start = track.positionOf(found.candidate.hops.start),
-                end = track.positionOf(found.candidate.hops.end),
-                kindId = EventKinds.NOISE,
-                value = found.score.toDouble(),
-                text = sorting.encode(),
+                type = AnnotationType.LISTENED,
+                start = Duration.ofSeconds(windows.from.toLong()),
+                end = Duration.ofSeconds(windows.until.toLong()),
+                value = windows.threshold.toDouble(),
+                text = windows.text(),
                 origin = AnnotationOrigin.DEVICE,
                 producer = SORTING,
             )
         }
-        val search = AnnotationEntity(
+        dao.insertAnnotations(candidatesOf(sleepId, track, sorted) + listOfNotNull(searchOf(sleepId, mark), heard))
+        true
+    }
+
+    /**
+     * What earlier searches of a sleep with [settings] worked out ([SearchMemory]), on its [track]:
+     * the windows the search during the night heard with the same listening threshold, and the
+     * scores of the candidates stored now, which the current search sorted with the same model.
+     */
+    suspend fun searchMemory(sleepId: Long, track: SleepTrack, settings: SearchSettings): SearchMemory {
+        val windows = dao.listenedWindows(sleepId).mapNotNull(ListenedWindows::of).filter { it.threshold == settings.listeningThreshold }
+        val heard = HashMap<Int, Boolean>()
+        for (listened in windows) {
+            for (window in listened.from until listened.until) heard[window] = false
+            for (window in listened.heard) heard[window] = true
+        }
+        val scores = dao.candidateAnnotations(sleepId).mapNotNull { candidate ->
+            candidate.value?.let { track.hopsOf(candidate.start, candidate.end) to it.toFloat() }
+        }.toMap()
+        return object : SearchMemory {
+            override fun heard(window: Int): Boolean? = heard[window]
+            override fun score(hops: HopRange): Float? = scores[hops]
+        }
+    }
+
+    /**
+     * What the second way's search during the night found so far in the sleep being recorded: its
+     * events that are not background and how far it got; null until it stored its first part.
+     */
+    fun nightFindings(sleepId: Long): Flow<NightFindings?> = combine(dao.candidates(sleepId), searchMark(sleepId)) { rows, mark ->
+        mark?.takeIf { it.provisional }?.let { NightFindings(rows.count { it.sorted().sorting?.verdict != Verdict.BACKGROUND }, it.searchedTo) }
+    }.distinctUntilChanged()
+
+    private fun candidatesOf(sleepId: Long, track: SleepTrack, sorted: List<SortedCandidate>) = sorted.map { found ->
+        val sorting = Sorting(found.verdict, found.candidate.foundBy, found.score, found.candidate.riseDb)
+        AnnotationEntity(
             sleepId = sleepId,
-            type = AnnotationType.SEARCH,
-            start = Duration.ZERO,
-            end = mark.searchedTo,
-            value = if (mark.done) 1.0 else 0.0,
-            text = mark.text(),
+            type = AnnotationType.CANDIDATE,
+            start = track.positionOf(found.candidate.hops.start),
+            end = track.positionOf(found.candidate.hops.end),
+            kindId = EventKinds.NOISE,
+            value = found.score.toDouble(),
+            text = sorting.encode(),
             origin = AnnotationOrigin.DEVICE,
             producer = SORTING,
         )
-        return database.withTransaction {
-            if (dao.findSleep(sleepId)?.endedAt != endedAt) return@withTransaction false
-            if (fresh) dao.deleteResults(sleepId, AnnotationOrigin.DEVICE, SORTING.id) else dao.deleteCandidatesFrom(sleepId, SORTING.id, from)
-            dao.deleteSearchMarks(sleepId, SORTING.id)
-            dao.insertAnnotations(candidates + search)
-            // Once the sleep is searched, the transcripts of the second way's events follow their
-            // pieces, so those of events found again unchanged stay; the first way's are not touched.
-            if (mark.done) {
-                val pieces = dao.candidateStretches(sleepId).flatMapTo(HashSet()) { piecesOf(it) }
-                dao.deleteAnnotations(dao.candidateTranscripts(sleepId).filter { it.origin != AnnotationOrigin.USER && it.stretch !in pieces }.map { it.id })
-            }
-            true
-        }
     }
+
+    private fun searchOf(sleepId: Long, mark: SearchMark) = AnnotationEntity(
+        sleepId = sleepId,
+        type = AnnotationType.SEARCH,
+        start = Duration.ZERO,
+        end = mark.searchedTo,
+        value = if (mark.done) 1.0 else 0.0,
+        text = mark.text(),
+        origin = AnnotationOrigin.DEVICE,
+        producer = SORTING,
+    )
 
     /** The event kinds the tag filter offers as system tags. */
     fun filterKinds(): Flow<List<EventKindEntity>> = dao.filterKinds()
@@ -201,6 +281,22 @@ class SleepRepository(
      * that hold its saved samples. Empty if the sleep has no playable audio.
      */
     suspend fun timeline(sleepId: Long): SleepTimeline = files.timelineOf(dao.recordingsOf(sleepId))
+
+    /**
+     * The feature track of a sleep that is being recorded, as far as its recordings' files hold
+     * it and their stored progress counts, without extracting or writing anything.
+     */
+    suspend fun recordedTrack(sleepId: Long): SleepTrack {
+        val recordings = dao.recordingsOf(sleepId)
+        val timeline = files.timelineOf(recordings)
+        return withContext(Dispatchers.IO) {
+            SleepTrack.of(
+                recordings.mapIndexed { index, recording ->
+                    readFeatureTrack(files.directoryOf(recording.id), timeline.recordings[index]) to timeline.recordingPositions[index]
+                },
+            )
+        }
+    }
 
     /**
      * The feature track of a sleep, hop by hop over its audio; tracks that are missing or damaged

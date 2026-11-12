@@ -44,7 +44,20 @@ interface EventSearch {
      * 1 and asks [shouldStop] now and then.
      */
     suspend fun search(sleepId: Long, again: Boolean, onProgress: (Float) -> Unit, shouldStop: suspend () -> Boolean): SearchOutcome
+
+    /**
+     * Searches the sleep [sleepId] while it is recorded, from where the search during the night
+     * got, as far as the recording makes its results final, storing each part as soon as it is
+     * searched; DONE also when no part is final yet. It tells [onProgress] the share of the part
+     * done from 0 to 1 and asks [shouldStop] now and then.
+     *
+     * @throws ModelUnusable when a sound model cannot be loaded, which no later run that night changes.
+     */
+    suspend fun searchNight(sleepId: Long, onProgress: (Float) -> Unit, shouldStop: suspend () -> Boolean): SearchOutcome
 }
+
+/** A model is installed but cannot be loaded, for example because its native runtime refused it. */
+class ModelUnusable(message: String, cause: Throwable) : Exception(message, cause)
 
 /** How a search of the second way ended. */
 enum class SearchOutcome {
@@ -93,6 +106,22 @@ sealed interface TranscriptionRequest {
 
     /** One event of a sleep, again: the user asked for it, to compare the result of another model. */
     data class Event(val sleepId: Long, val event: Stretch) : TranscriptionRequest
+
+    /**
+     * The sleep [sleepId] while it is recorded: the second way searches what is recorded so far as
+     * far as it is final ([EventSearch.searchNight]), and its own events that wait are recognised;
+     * the first way finds its events only after the stop. It runs while [mayRun] says yes (the
+     * conditions of the scan during the night) and the recording goes on. [failures] counts, over
+     * the night's runs, how often the analysis failed on each piece; one that failed
+     * [TranscriptionRunner.NIGHT_ATTEMPTS] times waits for the run after the night.
+     */
+    class Night(
+        val sleepId: Long,
+        val failures: MutableMap<Stretch, Int> = HashMap(),
+        val mayRun: suspend () -> Boolean,
+    ) : TranscriptionRequest {
+        override fun toString() = "Night(sleepId=$sleepId)"
+    }
 }
 
 /** How far a run is: the sleep it works on and its events done in this run, of [total]. */
@@ -106,7 +135,8 @@ data class TranscriptionProgress(val sleepId: Long, val done: Int, val total: In
  *
  * The first way's events ([store]) come first, exactly as without the second way. Only when none of
  * them waits does the second way's [search] search the sleeps it has not searched to their end,
- * and then the second way's own events ([candidates]) that wait are recognised.
+ * and then the second way's own events ([candidates]) that wait are recognised. A run during the
+ * night ([TranscriptionRequest.Night]) does only the latter two, for the sleep being recorded.
  */
 class TranscriptionRunner(
     private val store: TranscriptStore,
@@ -137,6 +167,9 @@ class TranscriptionRunner(
         FAILED,
         /** The user paused the sleep it was asked for. */
         PAUSED,
+
+        /** A run during the night stopped because its conditions no longer hold (battery, charger, settings). */
+        NOT_ALLOWED,
     }
 
     private val running = Mutex()
@@ -157,6 +190,7 @@ class TranscriptionRunner(
      */
     suspend fun run(request: TranscriptionRequest, open: suspend () -> EventAnalysis?): Outcome = running.withLock {
         try {
+            if (request is TranscriptionRequest.Night) return@withLock runNight(request, open)
             val first = recognise(store, request, open) { current.value = it }
             // A model that is missing holds back nothing the second way's search needs.
             if (request is TranscriptionRequest.Event || (first != Outcome.FINISHED && first != Outcome.NO_MODEL)) return@withLock first
@@ -173,6 +207,30 @@ class TranscriptionRunner(
         } finally {
             current.value = null
             newWay.value = null
+        }
+    }
+
+    /** The second way's search of the sleep being recorded, then speech recognition of its waiting events. */
+    private suspend fun runNight(request: TranscriptionRequest.Night, open: suspend () -> EventAnalysis?): Outcome {
+        val search = search ?: return Outcome.FINISHED
+        val own = candidates ?: return Outcome.FINISHED
+        stopReason(request, request.sleepId)?.let { return it }
+        val searched = try {
+            search.searchNight(
+                request.sleepId,
+                onProgress = { share -> newWay.value = NewWayProgress(request.sleepId, searching = true, done = (share * PERCENT).toInt(), total = PERCENT) },
+                shouldStop = { stopReason(request, request.sleepId) != null },
+            )
+        } finally {
+            newWay.value = null
+        }
+        when (searched) {
+            SearchOutcome.NO_MODEL, SearchOutcome.FAILED -> return Outcome.FINISHED
+            SearchOutcome.STOPPED -> return stopReason(request, request.sleepId) ?: Outcome.FINISHED
+            SearchOutcome.DONE -> Unit
+        }
+        return recognise(own, request, open) { progress ->
+            newWay.value = progress?.let { NewWayProgress(it.sleepId, searching = false, done = it.done, total = it.total) }
         }
     }
 
@@ -215,6 +273,8 @@ class TranscriptionRunner(
                     if (store.isRecording()) return Outcome.RECORDING
                     nextWaiting(store, failed) ?: return Outcome.FINISHED
                 }
+                is TranscriptionRequest.Night -> request.sleepId to store.eventsOf(request.sleepId, onlyPending = true)
+                    .filter { (request.sleepId to it) !in failed && (request.failures[it] ?: 0) < NIGHT_ATTEMPTS }
             }
             if (events.isEmpty()) return Outcome.FINISHED
             val opened = analysis() ?: return Outcome.NO_MODEL
@@ -229,6 +289,7 @@ class TranscriptionRunner(
                     if (request.pauseOnLowBattery && batteryLow()) return Outcome.LOW_BATTERY
                     if (store.isRecording()) return Outcome.RECORDING
                 }
+                if (request is TranscriptionRequest.Night) stopReason(request, sleepId)?.let { return it }
                 if (rerun) pauses.rerunAt(sleepId, Rerun(event.start, events.size - index))
                 // A single event the user asked for is recognised also while its sleep is paused.
                 if (request !is TranscriptionRequest.Event && sleepId in pauses.paused()) {
@@ -239,6 +300,7 @@ class TranscriptionRunner(
                 if (!analyse(store, opened, sleepId, event)) {
                     if (request is TranscriptionRequest.Event) return Outcome.FAILED
                     failed += sleepId to event
+                    if (request is TranscriptionRequest.Night) request.failures.merge(event, 1, Int::plus)
                 }
                 report(TranscriptionProgress(sleepId, index + 1, events.size))
             }
@@ -257,7 +319,7 @@ class TranscriptionRunner(
     private suspend fun searchNewWay(request: TranscriptionRequest): Outcome? {
         val search = search ?: return null
         val sleeps = when (request) {
-            is TranscriptionRequest.Event -> return null
+            is TranscriptionRequest.Event, is TranscriptionRequest.Night -> return null
             is TranscriptionRequest.Sleep ->
                 if (request.searchAgain || request.sleepId in search.sleepsToSearch()) listOf(request.sleepId) else return null
             is TranscriptionRequest.Waiting -> search.sleepsToSearch()
@@ -293,10 +355,16 @@ class TranscriptionRunner(
         return null
     }
 
-    /** Why a run over [request] stops at [sleepId] now: a low battery, a recording or the user's pause; null to go on. */
+    /**
+     * Why a run over [request] stops at [sleepId] now: a low battery, a recording or the user's
+     * pause, or for a run during the night its conditions or the end of the recording, after which
+     * the search after the night takes over; null to go on.
+     */
     private suspend fun stopReason(request: TranscriptionRequest, sleepId: Long): Outcome? = when {
         request is TranscriptionRequest.Waiting && request.pauseOnLowBattery && batteryLow() -> Outcome.LOW_BATTERY
         request is TranscriptionRequest.Waiting && store.isRecording() -> Outcome.RECORDING
+        request is TranscriptionRequest.Night && !store.isRecording() -> Outcome.FINISHED
+        request is TranscriptionRequest.Night && !request.mayRun() -> Outcome.NOT_ALLOWED
         sleepId in pauses.paused() -> Outcome.PAUSED
         else -> null
     }
@@ -329,11 +397,14 @@ class TranscriptionRunner(
 
     private fun batteryLow(): Boolean = battery().let { !it.charging && it.percent < LOW_BATTERY_PERCENT }
 
-    private companion object {
+    companion object {
         /** Below this charge an automatic run pauses until the phone charges. */
         const val LOW_BATTERY_PERCENT = 30
 
+        /** How often a run during the night tries a piece the analysis fails on. */
+        const val NIGHT_ATTEMPTS = 3
+
         /** The total a search's progress counts up to. */
-        const val PERCENT = 100
+        private const val PERCENT = 100
     }
 }

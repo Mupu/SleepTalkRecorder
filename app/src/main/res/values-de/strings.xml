@@ -31,6 +31,8 @@
     <string name="live">REC</string>
     <string name="meter_idle">Der Pegel erscheint während der Aufnahme</string>
     <string name="level_dbfs">%1$d dBFS</string>
+    <string name="night_scan_found">In der Nacht gefunden: %1$s in den ersten %2$s</string>
+    <string name="night_scan_waiting">Die Suche während der Nacht beginnt nach der ersten Stunde</string>
     <string name="last_sleep">Letzter Schlaf</string>
     <string name="problem_not_allowed">Zum Aufnehmen braucht die App die Mikrofon-Berechtigung.</string>
     <string name="problem_microphone">Das Mikrofon ist nicht verfügbar. Die Aufnahme wurde beendet.</string>
@@ -514,6 +516,10 @@
     <string name="sound_model_purpose_tiny">Hört die ganze Nacht nach leisen menschlichen Geräuschen ab</string>
     <string name="sound_model_purpose_mini">Sortiert jedes Geräusch in menschlich, unsicher oder Hintergrund</string>
     <string name="sound_model_purpose_small">Ein größeres Sortiermodell zum Vergleichen im Entwicklermodus</string>
+    <string name="settings_night_scan">Während der Nacht suchen</string>
+    <string name="settings_night_scan_after_stop">Findet die Ereignisse des neuen Wegs schon während der Aufnahme, ab der ersten Stunde, damit die Nacht am Morgen fertig ist. Läuft, solange der Akku mindestens 30 Prozent hat oder das Handy lädt; nach dem Stopp wird die ganze Nacht noch einmal durchsucht.</string>
+    <string name="settings_night_scan_while_charging">Findet die Ereignisse des neuen Wegs schon während der Aufnahme, ab der ersten Stunde, aber nur während das Handy lädt; nach dem Stopp wird die ganze Nacht noch einmal durchsucht.</string>
+    <string name="settings_night_scan_never">Läuft nicht, solange die Spracherkennung nur manuell oder gar nicht läuft.</string>
     <string name="settings_developer">Entwickler</string>
     <string name="settings_developer_mode">Entwicklermodus</string>
     <string name="settings_developer_mode_hint">Zeigt Testeinstellungen und was der neue Weg über jedes Ereignis weiß</string>

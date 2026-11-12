@@ -43,6 +43,17 @@ internal fun loadFeatureTrack(directory: File, recording: TimelineRecording): Fe
 }
 
 /**
+ * The feature track of [recording] as far as the file in [directory] holds it, at most one hop for
+ * every whole hop of samples the recording plays, without extracting or writing anything: the
+ * track of a recording that is still being written, whose writer appends to the file meanwhile.
+ */
+internal fun readFeatureTrack(directory: File, recording: TimelineRecording): FeatureTrack {
+    val hops = (recording.frames / FeatureTrack.HOP_SAMPLES).toInt()
+    val stored = FeatureTrackFile.read(File(directory, FeatureTrackFile.FILE_NAME)) ?: return FeatureTrack.fromRecords(ByteArray(0))
+    return stored.take(minOf(hops, stored.size))
+}
+
+/**
  * Feeds the samples [recording] plays from hop [firstHop] on, file by file, to a [FeatureExtractor]
  * and hands each hop's record to [onHop].
  *

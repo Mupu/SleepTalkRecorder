@@ -88,6 +88,10 @@ _Avoid_: Maybe, uncertain event
 A model that tells which sounds a stretch of audio holds (CED); the new way listens and sorts with it. Downloaded like a transcription model.
 _Avoid_: Classifier (in the UI), tagger (in the UI)
 
+**Scan during the night**:
+A setting that lets the new way find events while the sleep is still recorded, from the end of the first hour on, with the sensitivity of the last hour, under the same conditions as speech recognition. Its events are provisional: after the stop the whole sleep is searched again, and those events take their place.
+_Avoid_: Live detection, real-time scan
+
 **Developer mode**:
 A setting that shows the new way's test settings and, for each of its events, what found it, its human score and the rise of its level.
 _Avoid_: Debug mode, expert mode
