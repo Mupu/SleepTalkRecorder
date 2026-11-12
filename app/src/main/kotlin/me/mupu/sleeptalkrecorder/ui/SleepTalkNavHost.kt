@@ -104,7 +104,7 @@ fun SleepTalkNavHost(container: AppContainer) {
                 onBack = dropUnlessResumed { navController.popBackStack() },
                 onOpenRunning = { navController.popBackStack(Routes.HOME, inclusive = false) },
                 onOpenSleep = { navController.navigate(Routes.sleep(it)) },
-                onOpenFavourite = { sleepId, eventId, action -> navController.navigate(Routes.sleep(sleepId, eventId, action)) },
+                onOpenEvent = { sleepId, eventId, action -> navController.navigate(Routes.sleep(sleepId, eventId, action)) },
                 onOpenStats = { navController.navigate(Routes.stats()) },
                 shareViewModel = { sleepId, eventId ->
                     SleepViewModel(sleepId, container.sleepRepository, container.settings, SleepPlayer(context, container::playbackChanged), container.transcriptions, container.eventShares, openEventId = eventId, openAction = OpenEventAction.SHARE)

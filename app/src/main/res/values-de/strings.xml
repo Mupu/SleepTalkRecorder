@@ -83,11 +83,7 @@
     <string name="event_details">%1$s · Pos %2$s</string>
     <string name="kind_event">Ereignis</string>
     <string name="kind_speech">Sprache</string>
-    <string name="filter_all">Alle</string>
-    <string name="filter_kind_only">Nur %1$s</string>
     <string name="no_events_filter">Keine Ereignisse für diesen Filter.</string>
-    <string name="filter_hidden">Ausgeblendete</string>
-    <string name="no_hidden_events">Keine ausgeblendeten Ereignisse.</string>
     <string name="hidden_tag">ausgeblendet</string>
     <string name="hide_event">Ausblenden</string>
     <string name="unhide_event">Einblenden</string>
@@ -260,6 +256,8 @@
     <string name="settings_auto_delete_dialog_title">Schlafzeiten löschen nach</string>
     <string name="settings_auto_delete_days_unit">Tagen</string>
     <string name="settings_auto_delete_days_range">Erlaubt: %1$d bis %2$d</string>
+    <string name="settings_keep_tagged">Getaggte Schlafzeiten behalten</string>
+    <string name="settings_keep_tagged_hint">Schlafzeiten mit getaggtem oder benanntem Ereignis werden nicht gelöscht</string>
     <plurals name="settings_auto_delete_after_days">
         <item quantity="one">%d Tag</item>
         <item quantity="other">%d Tagen</item>
@@ -403,23 +401,41 @@
     <string name="setup_updates_install_why">Erlaube es für %1$s, dann installieren sich Updates, ohne jedes Mal zu fragen. Ohne fragt Android vor jedem Update.</string>
     <string name="setup_updates_never_recording">Ein Update wird nie während einer Aufnahme installiert.</string>
 
-    <!-- Favourites -->
-    <string name="filter_favourites">Favoriten</string>
-    <string name="favourite">Favorit</string>
-    <string name="add_favourite">Zu Favoriten</string>
-    <string name="remove_favourite">Aus Favoriten entfernen</string>
-    <string name="favourite_removed">Aus Favoriten entfernt</string>
-    <plurals name="favourites_removed">
-        <item quantity="one">Aus Favoriten entfernt</item>
-        <item quantity="other">%d aus Favoriten entfernt</item>
+    <!-- Tags -->
+    <string name="tag_filter">Filter</string>
+    <string name="tag_filter_all">Alle</string>
+    <string name="tag_filter_title">Ereignisse zeigen mit</string>
+    <string name="tag_filter_hint">Einem der gewählten Tags. Ausgeblendete nur mit „Ausgeblendet“.</string>
+    <string name="tag_filter_remove">%1$s aus dem Filter nehmen</string>
+    <string name="tag_filter_clear">Leeren</string>
+    <string name="tags_mine">Meine Tags</string>
+    <string name="tags_automatic">Automatisch</string>
+    <string name="tag_favourite">Favorit</string>
+    <string name="tag_named">Benannt</string>
+    <string name="tag_hidden">Ausgeblendet</string>
+    <string name="tag_murmur">Murmeln</string>
+    <string name="tag_new">Neuer Tag</string>
+    <string name="tag_name">Name</string>
+    <string name="tag_name_taken">Es gibt schon einen Tag mit diesem Namen.</string>
+    <string name="tags_button">Tags</string>
+    <plurals name="tags_title">
+        <item quantity="one">Tags des Ereignisses</item>
+        <item quantity="other">Tags von %d Ereignissen</item>
     </plurals>
+    <string name="tags_hint">Das Fenster öffnet mit deinen letzten Änderungen.</string>
+    <string name="tag_delete">Tag löschen</string>
+    <string name="tag_delete_title">Tag %1$s löschen?</string>
+    <plurals name="tag_delete_text">
+        <item quantity="one">Ein Ereignis verliert diesen Tag.</item>
+        <item quantity="other">%d Ereignisse verlieren diesen Tag.</item>
+    </plurals>
+    <string name="tag_delete_unused">Kein Ereignis hat diesen Tag.</string>
     <string name="name_event_menu">Benennen</string>
     <string name="name_event">Ereignis benennen</string>
-    <string name="name_event_hint">Benennen macht es zum Favoriten. Leer lassen für keinen Namen.</string>
-    <string name="no_favourites">Keine Favoriten in diesem Schlaf.</string>
+    <string name="name_event_hint">Leer lassen für keinen Namen.</string>
     <string name="library_tab_sleeps">Schlafzeiten</string>
-    <string name="library_tab_favourites">Favoriten</string>
-    <string name="library_no_favourites">Noch keine Favoriten. Füge im ⋮-Menü eines Ereignisses eines hinzu.</string>
+    <string name="library_tab_tagged">Getaggt</string>
+    <string name="library_no_tagged">Noch keine getaggten Ereignisse. Tagge ein Ereignis mit dem Tag-Knopf in seiner Zeile oder benenne es.</string>
 
     <!-- Export for analysis -->
     <string name="settings_analysis">Analyse</string>
@@ -433,7 +449,7 @@
 
     <!-- Sharing an event -->
     <string name="share_event">Teilen</string>
-    <string name="share_favourite">Dieses Ereignis teilen</string>
+    <string name="share_tagged">Dieses Ereignis teilen</string>
     <string name="share_title">Ereignis um %1$s teilen</string>
     <string name="share_stretch">%1$s–%2$s · %3$s</string>
     <string name="share_chart">Lautstärke um das Ereignis mit dem Abschnitt, der geteilt wird</string>

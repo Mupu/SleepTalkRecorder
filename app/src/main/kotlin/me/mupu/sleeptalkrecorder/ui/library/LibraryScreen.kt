@@ -29,10 +29,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -62,6 +60,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.data.SleepSummary
+import me.mupu.sleeptalkrecorder.data.TagEntity
 import me.mupu.sleeptalkrecorder.time.SleepKind
 import me.mupu.sleeptalkrecorder.ui.components.AppBar
 import me.mupu.sleeptalkrecorder.ui.components.AppBarIcon
@@ -80,16 +79,21 @@ import me.mupu.sleeptalkrecorder.ui.share.totalLength
 import me.mupu.sleeptalkrecorder.ui.sleep.OpenEventAction
 import me.mupu.sleeptalkrecorder.ui.sleep.SleepViewModel
 import me.mupu.sleeptalkrecorder.ui.sleep.kindName
+import me.mupu.sleeptalkrecorder.ui.tags.EventTagLabels
+import me.mupu.sleeptalkrecorder.ui.tags.TagDialogs
+import me.mupu.sleeptalkrecorder.ui.tags.TagFilter
+import me.mupu.sleeptalkrecorder.ui.tags.TagFilterBar
 import java.time.Duration
 import java.time.ZoneId
 
 /**
  * Every sleep, grouped by the day it is named after, with the running sleep on top; a long press
- * on a finished sleep deletes it after a confirmation. The second tab lists the favourites of all
- * sleeps under the sleep each belongs to; tapping one opens its sleep there, its play button plays it,
- * and its share button opens its share step over the library, built by [shareViewModel]. A long
- * press on a favourite starts selection mode, in which taps select favourites of any sleeps to
- * share them together or remove them from the favourites; Back ends it.
+ * on a finished sleep deletes it after a confirmation. The second tab lists the events of all
+ * sleeps with a tag of the user or a name under the sleep each belongs to, with the tag filter on
+ * top; tapping one opens its sleep there, its play button plays it, and its share button opens its
+ * share step over the library, built by [shareViewModel]. A long press on an event starts
+ * selection mode, in which taps select events of any sleeps to share or tag them together; Back
+ * ends it.
  */
 @Composable
 fun LibraryScreen(
@@ -97,13 +101,16 @@ fun LibraryScreen(
     onBack: () -> Unit,
     onOpenRunning: () -> Unit,
     onOpenSleep: (Long) -> Unit,
-    onOpenFavourite: (sleepId: Long, eventId: Long, action: OpenEventAction) -> Unit,
+    onOpenEvent: (sleepId: Long, eventId: Long, action: OpenEventAction) -> Unit,
     onOpenStats: () -> Unit,
     shareViewModel: (sleepId: Long, eventId: Long) -> SleepViewModel,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    var showFavourites by rememberSaveable { mutableStateOf(false) }
-    val sharedFavourite by viewModel.sharedFavourite.collectAsStateWithLifecycle()
+    var showTagged by rememberSaveable { mutableStateOf(false) }
+    var filtering by rememberSaveable { mutableStateOf(false) }
+    val tags by viewModel.tagging.tags.collectAsStateWithLifecycle()
+    val filterKinds by viewModel.filterKinds.collectAsStateWithLifecycle()
+    val sharedEvent by viewModel.sharedEvent.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val deletionFailedMessage = stringResource(R.string.delete_sleep_failed)
@@ -116,16 +123,6 @@ fun LibraryScreen(
         if (state.deletionFailed) {
             snackbarHostState.showSnackbar(deletionFailedMessage)
             viewModel.deletionFailureShown()
-        }
-    }
-    LaunchedEffect(viewModel) {
-        viewModel.favouritesRemoved.collect { removed ->
-            val result = snackbarHostState.showSnackbar(
-                resources.getQuantityString(R.plurals.favourites_removed, removed.size, removed.size),
-                actionLabel = resources.getString(R.string.undo),
-                duration = SnackbarDuration.Long,
-            )
-            if (result == SnackbarResult.ActionPerformed) viewModel.undoRemoval(removed)
         }
     }
     LaunchedEffect(viewModel) {
@@ -143,7 +140,7 @@ fun LibraryScreen(
             if (selected.isNotEmpty()) {
                 SelectionBar(selected.size, totalLength(selected.map { it.event }), onClose = viewModel::clearSelection) {
                     AppBarIcon(R.drawable.ic_share, stringResource(R.string.share_event), viewModel::shareSelected)
-                    AppBarIcon(R.drawable.ic_star, stringResource(R.string.remove_favourite), viewModel::removeSelected)
+                    AppBarIcon(R.drawable.ic_label_outline, stringResource(R.string.tags_button), viewModel::tagSelected)
                 }
             } else {
                 AppBar(
@@ -157,17 +154,19 @@ fun LibraryScreen(
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             LibraryTabs(
-                showFavourites,
+                showTagged,
                 onSelect = {
-                    showFavourites = it
+                    showTagged = it
                     viewModel.clearSelection()
                 },
             )
-            if (showFavourites) {
-                FavouriteList(
+            if (showTagged) {
+                TagFilterBar(state.filter, tags, filterKinds, onOpen = { filtering = true }, onRemove = viewModel::toggleFilterTag, onClear = viewModel::clearFilter)
+                TaggedList(
                     state,
-                    onOpenFavourite,
-                    onShare = viewModel::shareFavourite,
+                    tags,
+                    onOpenEvent,
+                    onShare = viewModel::shareEvent,
                     onToggleSelection = viewModel::toggleSelection,
                 )
             } else {
@@ -176,13 +175,24 @@ fun LibraryScreen(
         }
     }
 
-    sharedFavourite?.let { favourite ->
-        key(favourite.sleepId, favourite.event.id) {
-            FavouriteShare(
-                createViewModel = { shareViewModel(favourite.sleepId, favourite.event.id) },
+    TagDialogs(
+        viewModel.tagging,
+        filterKinds,
+        state.filter,
+        filterOpen = filtering,
+        count = { tag -> state.allTagged.count(TagFilter(setOf(tag))::shows) },
+        onToggleFilter = viewModel::toggleFilterTag,
+        onClearFilter = viewModel::clearFilter,
+        onCloseFilter = { filtering = false },
+        onApplied = viewModel::clearSelection,
+    )
+    sharedEvent?.let { item ->
+        key(item.sleepId, item.event.id) {
+            TaggedShare(
+                createViewModel = { shareViewModel(item.sleepId, item.event.id) },
                 onFailed = { scope.launch { snackbarHostState.showSnackbar(shareFailedMessage) } },
                 onShared = viewModel::clearSelection,
-                onClosed = viewModel::favouriteShareClosed,
+                onClosed = viewModel::eventShareClosed,
             )
         }
     }
@@ -192,16 +202,16 @@ fun LibraryScreen(
     }
 }
 
-/** Sleeps or favourites, as two connected buttons below the top bar. */
+/** Sleeps or tagged events, as two connected buttons below the top bar. */
 @Composable
-private fun LibraryTabs(showFavourites: Boolean, onSelect: (Boolean) -> Unit) {
-    val tabs = listOf(false to R.string.library_tab_sleeps, true to R.string.library_tab_favourites)
+private fun LibraryTabs(showTagged: Boolean, onSelect: (Boolean) -> Unit) {
+    val tabs = listOf(false to R.string.library_tab_sleeps, true to R.string.library_tab_tagged)
     // Equally high buttons, also when one label takes two lines.
     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).height(IntrinsicSize.Min)) {
-        tabs.forEachIndexed { index, (favourites, label) ->
+        tabs.forEachIndexed { index, (tagged, label) ->
             SegmentedButton(
-                selected = showFavourites == favourites,
-                onClick = { onSelect(favourites) },
+                selected = showTagged == tagged,
+                onClick = { onSelect(tagged) },
                 shape = SegmentedButtonDefaults.itemShape(index, tabs.size),
                 modifier = Modifier.fillMaxHeight(),
             ) {
@@ -275,17 +285,18 @@ private fun SleepList(state: LibraryUiState, onOpenRunning: () -> Unit, onOpenSl
 }
 
 /**
- * The favourites of all sleeps under the name of their sleep: each by its name, else its words,
- * else its kind, with the clock time it began and its length. A long press selects a favourite,
- * which starts selection mode: while any is selected, a tap selects a favourite or takes it out of
- * the selection, and each row shows a checkbox instead of its buttons.
+ * The tagged and named events the filter shows, under the name of their sleep: each by its name,
+ * else its words, else its kind, with its tags, the clock time it began and its length. A long
+ * press selects an event, which starts selection mode: while any is selected, a tap selects an
+ * event or takes it out of the selection, and each row shows a checkbox instead of its buttons.
  */
 @Composable
-private fun FavouriteList(
+private fun TaggedList(
     state: LibraryUiState,
-    onOpenFavourite: (sleepId: Long, eventId: Long, action: OpenEventAction) -> Unit,
-    onShare: (FavouriteItem) -> Unit,
-    onToggleSelection: (FavouriteItem) -> Unit,
+    tags: List<TagEntity>,
+    onOpenEvent: (sleepId: Long, eventId: Long, action: OpenEventAction) -> Unit,
+    onShare: (TaggedItem) -> Unit,
+    onToggleSelection: (TaggedItem) -> Unit,
 ) {
     val selecting = state.selected.isNotEmpty()
     val selectedIds = remember(state.selected) { state.selected.mapTo(HashSet()) { it.event.id } }
@@ -294,8 +305,8 @@ private fun FavouriteList(
     val zone = ZoneId.systemDefault()
 
     LazyColumn(Modifier.fillMaxSize()) {
-        for (group in state.favourites) {
-            item(key = "favourites-${group.sleep.id}") {
+        for (group in state.tagged) {
+            item(key = "tagged-${group.sleep.id}") {
                 Text(
                     sleepTitle(resources, group.sleep.date),
                     style = MaterialTheme.typography.titleSmall,
@@ -303,11 +314,11 @@ private fun FavouriteList(
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
                 )
             }
-            items(group.favourites, key = { "favourite-${it.event.id}" }) { favourite ->
-                val event = favourite.event
+            items(group.events, key = { "tagged-event-${it.event.id}" }) { item ->
+                val event = item.event
                 val transcript = event.transcript?.let { stringResource(R.string.transcript_quoted, it) }
                 val details = listOfNotNull(
-                    favourite.at?.let { clock.format(it, zone, seconds = true) },
+                    item.at?.let { clock.format(it, zone, seconds = true) },
                     formatEventLength(resources, event.end - event.start),
                 ).joinToString(" · ")
                 val selected = event.id in selectedIds
@@ -316,7 +327,7 @@ private fun FavouriteList(
                         containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
                     ),
                     leadingContent = {
-                        Icon(painterResource(R.drawable.ic_star), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Icon(painterResource(R.drawable.ic_label), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     },
                     headlineContent = {
                         Text(event.name ?: transcript ?: kindName(event.kindId, event.kindName), maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -324,36 +335,37 @@ private fun FavouriteList(
                     supportingContent = {
                         Column {
                             if (event.name != null && transcript != null) Text(transcript, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            EventTagLabels(event, tags)
                             Text(details)
                         }
                     },
                     trailingContent = {
                         if (selecting) {
-                            Checkbox(checked = selected, onCheckedChange = { onToggleSelection(favourite) })
+                            Checkbox(checked = selected, onCheckedChange = { onToggleSelection(item) })
                         } else {
                             Row {
-                                IconButton(onClick = { onShare(favourite) }) {
-                                    Icon(painterResource(R.drawable.ic_share), contentDescription = stringResource(R.string.share_favourite))
+                                IconButton(onClick = { onShare(item) }) {
+                                    Icon(painterResource(R.drawable.ic_share), contentDescription = stringResource(R.string.share_tagged))
                                 }
-                                IconButton(onClick = { onOpenFavourite(group.sleep.id, event.id, OpenEventAction.PLAY) }) {
+                                IconButton(onClick = { onOpenEvent(group.sleep.id, event.id, OpenEventAction.PLAY) }) {
                                     Icon(painterResource(R.drawable.ic_play), contentDescription = stringResource(R.string.play_event))
                                 }
                             }
                         }
                     },
                     modifier = Modifier.combinedClickable(
-                        onLongClick = { onToggleSelection(favourite) },
+                        onLongClick = { onToggleSelection(item) },
                         onClick = {
-                            if (selecting) onToggleSelection(favourite) else onOpenFavourite(group.sleep.id, event.id, OpenEventAction.SHOW)
+                            if (selecting) onToggleSelection(item) else onOpenEvent(group.sleep.id, event.id, OpenEventAction.SHOW)
                         },
                     ),
                 )
             }
         }
-        if (state.loaded && state.favourites.isEmpty()) {
-            item(key = "no-favourites") {
+        if (state.loaded && state.tagged.isEmpty()) {
+            item(key = "no-tagged") {
                 Text(
-                    stringResource(R.string.library_no_favourites),
+                    stringResource(if (state.allTagged.isEmpty()) R.string.library_no_tagged else R.string.no_events_filter),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,

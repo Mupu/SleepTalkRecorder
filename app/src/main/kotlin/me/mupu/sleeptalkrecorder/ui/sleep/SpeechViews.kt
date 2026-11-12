@@ -2,7 +2,6 @@ package me.mupu.sleeptalkrecorder.ui.sleep
 
 import android.content.res.Resources
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,7 +18,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -47,7 +45,6 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.mupu.sleeptalkrecorder.R
-import me.mupu.sleeptalkrecorder.data.EventKindEntity
 import me.mupu.sleeptalkrecorder.data.EventKinds
 import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.TranscriptResult
@@ -197,39 +194,6 @@ private val WaitReason.text: Int
         WaitReason.CHARGER -> R.string.transcription_waits_charger
         WaitReason.BATTERY -> R.string.transcription_waits_battery
     }
-
-/**
- * The exclusive filter chips with the number of events each lists: "All 12", one "Speech only 3"
- * per kind with a filter, "Favourites 1" and "Hidden 2". Tapping the selected one again shows all.
- */
-@Composable
-internal fun EventFilterChips(
-    kinds: List<EventKindEntity>,
-    events: List<SleepEvent>,
-    selected: EventFilter,
-    onSelect: (EventFilter) -> Unit,
-) {
-    @Composable
-    fun Chip(filter: EventFilter, label: String) {
-        FilterChip(
-            selected = selected == filter,
-            onClick = { onSelect(if (selected == filter) EventFilter.All else filter) },
-            label = { Text("$label  ${events.count(filter::shows)}") },
-        )
-    }
-
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-    ) {
-        Chip(EventFilter.All, stringResource(R.string.filter_all))
-        for (kind in kinds) {
-            Chip(EventFilter.Kind(kind.id), stringResource(R.string.filter_kind_only, kindName(kind.id, kind.name)))
-        }
-        Chip(EventFilter.Favourites, stringResource(R.string.filter_favourites))
-        Chip(EventFilter.Hidden, stringResource(R.string.filter_hidden))
-    }
-}
 
 /**
  * What speech recognition found in an event: its transcript, one line until tapped, then whole,

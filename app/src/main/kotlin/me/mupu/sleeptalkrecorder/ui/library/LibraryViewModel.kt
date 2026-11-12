@@ -2,8 +2,10 @@ package me.mupu.sleeptalkrecorder.ui.library
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import me.mupu.sleeptalkrecorder.data.AnnotationEntity
+import me.mupu.sleeptalkrecorder.data.EventKindEntity
+import me.mupu.sleeptalkrecorder.data.EventTag
 import me.mupu.sleeptalkrecorder.data.SleepEvent
+import me.mupu.sleeptalkrecorder.data.SleepEventOf
 import me.mupu.sleeptalkrecorder.data.SleepRepository
 import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
@@ -15,21 +17,21 @@ import me.mupu.sleeptalkrecorder.time.RecordingClock
 import me.mupu.sleeptalkrecorder.ui.share.EventSelection
 import me.mupu.sleeptalkrecorder.ui.share.EventSharing
 import me.mupu.sleeptalkrecorder.ui.share.ShareItem
+import me.mupu.sleeptalkrecorder.ui.tags.TagEditing
+import me.mupu.sleeptalkrecorder.ui.tags.TagFilter
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /** The sleeps named after one day, shown under that date. */
@@ -38,18 +40,19 @@ data class SleepGroup(val date: LocalDate, val sleeps: List<SleepSummary>)
 /** The sleep being recorded, with how long it has been recorded so far when known. */
 data class RunningSleep(val sleep: SleepSummary, val elapsed: Duration?)
 
-/** A favourite as the library lists it: its event and the clock time it began, if known. */
-data class FavouriteItem(val sleepId: Long, val event: SleepEvent, val at: Instant?)
+/** A tagged or named event as the library lists it: its event and the clock time it began, if known. */
+data class TaggedItem(val sleepId: Long, val event: SleepEvent, val at: Instant?)
 
-/** The favourites of one sleep, listed under its name. */
-data class FavouriteGroup(val sleep: SleepSummary, val favourites: List<FavouriteItem>)
+/** The tagged events of one sleep, listed under its name. */
+data class TaggedGroup(val sleep: SleepSummary, val events: List<TaggedItem>)
 
-/** The favourites of [groups] that [selection] holds, in the list's order across all sleeps. */
-fun selectedFavourites(groups: List<FavouriteGroup>, selection: EventSelection): List<FavouriteItem> =
-    groups.flatMap { it.favourites }.filter { it.event.id in selection.ids }
+/** The events of [groups] that [selection] holds, in the list's order across all sleeps. */
+fun selectedTagged(groups: List<TaggedGroup>, selection: EventSelection): List<TaggedItem> =
+    groups.flatMap { it.events }.filter { it.event.id in selection.ids }
 
-/** A favourite the user removed from the favourites, with its favourite marks before, which undo restores. */
-class RemovedFavourite(val favourite: FavouriteItem, val previous: List<AnnotationEntity>)
+/** The groups with only the events [filter] shows, without the groups it leaves empty. */
+fun List<TaggedGroup>.filtered(filter: TagFilter): List<TaggedGroup> =
+    mapNotNull { group -> group.events.filter { filter.shows(it.event) }.takeIf { it.isNotEmpty() }?.let { group.copy(events = it) } }
 
 /** A finished sleep the user asked to delete, with the bytes its files take up. */
 data class DeletionRequest(val sleep: SleepSummary, val bytes: Long)
@@ -58,48 +61,55 @@ data class DeletionRequest(val sleep: SleepSummary, val bytes: Long)
 data class LibraryUiState(
     val running: RunningSleep? = null,
     val groups: List<SleepGroup> = emptyList(),
-    /** The favourites of all sleeps, the newest sleep first. */
-    val favourites: List<FavouriteGroup> = emptyList(),
+    /** The tagged and named events of all sleeps that the [filter] shows, the newest sleep first. */
+    val tagged: List<TaggedGroup> = emptyList(),
+    /** Every tagged and named event, whatever the filter, which the filter window counts. */
+    val allTagged: List<SleepEvent> = emptyList(),
+    /** Which tagged events the second tab lists. */
+    val filter: TagFilter = TagFilter(),
     val loaded: Boolean = false,
     /** The sleep whose deletion waits for the user's confirmation, if any. */
     val deletion: DeletionRequest? = null,
     /** Whether the last deletion left part of its sleep behind. */
     val deletionFailed: Boolean = false,
-    /** The favourites selected together, of any sleeps, in the list's order; selection mode while there are any. */
-    val selected: List<FavouriteItem> = emptyList(),
+    /** The events selected together, of any sleeps, in the list's order; selection mode while there are any. */
+    val selected: List<TaggedItem> = emptyList(),
 )
 
 /**
- * State of the library: every sleep, the running one on top, and the favourites of all sleeps;
- * finished sleeps can be deleted. Several favourites, also of different sleeps, can be selected to
- * share them together or remove them from the favourites.
+ * State of the library: every sleep, the running one on top, and the events of all sleeps that
+ * have a tag of the user or a name, filtered by tags; finished sleeps can be deleted. Several
+ * tagged events, also of different sleeps, can be selected to share or tag them together.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LibraryViewModel(
     recorder: Recorder,
     private val repository: SleepRepository,
-    settings: SettingsStore,
+    private val settings: SettingsStore,
     shares: EventShares,
 ) : ViewModel() {
 
     private val deletion = MutableStateFlow<DeletionRequest?>(null)
     private val deletionFailed = MutableStateFlow(false)
 
-    /** The favourites selected together, by event id; selection mode while any is still a favourite. */
+    /** The tagged events selected together, by event id; selection mode while any is still listed. */
     private val selection = MutableStateFlow(EventSelection())
 
-    /** The timelines of the sleeps with favourites, read once each, for the favourites' clock times. */
+    /** Which tagged events the second tab lists. */
+    private val filter = MutableStateFlow(TagFilter())
+
+    /** The timelines of the sleeps with tagged events, read once each, for the events' clock times. */
     private val timelines = mutableMapOf<Long, SleepTimeline>()
 
-    private val favourites = combine(repository.sleeps(), repository.favourites()) { sleeps, favourites -> sleeps to favourites }
-        .mapLatest { (sleeps, favourites) ->
+    private val tagged = combine(repository.sleeps(), repository.taggedEvents()) { sleeps, tagged -> sleeps to tagged }
+        .mapLatest { (sleeps, tagged) ->
             val byId = sleeps.associateBy { it.id }
-            favourites.groupBy { it.sleepId }.mapNotNull { (sleepId, of) ->
+            tagged.groupBy { it.sleepId }.mapNotNull { (sleepId, of) ->
                 val sleep = byId[sleepId] ?: return@mapNotNull null
                 val timeline = timelines.getOrPut(sleepId) { repository.timeline(sleepId) }
-                FavouriteGroup(
+                TaggedGroup(
                     sleep,
-                    of.map { FavouriteItem(sleepId, it.event, timeline.takeIf { t -> t.pieces.isNotEmpty() }?.instantAt(it.event.start)) },
+                    of.map { TaggedItem(sleepId, it.event, timeline.takeIf { t -> t.pieces.isNotEmpty() }?.instantAt(it.event.start)) },
                 )
             }
         }
@@ -109,8 +119,8 @@ class LibraryViewModel(
         recorder.state,
         deletion,
         deletionFailed,
-        combine(favourites, selection, ::Pair),
-    ) { sleeps, recorderState, deletion, deletionFailed, (favourites, selection) ->
+        combine(tagged, filter, selection, ::Triple),
+    ) { sleeps, recorderState, deletion, deletionFailed, (all, filter, selection) ->
         val zone = ZoneId.systemDefault()
         val progress = (recorderState as? RecorderState.Recording)?.progress
 
@@ -124,15 +134,18 @@ class LibraryViewModel(
             .filterNot { it.isRunning }
             .groupBy { it.date.date }
             .map { (date, group) -> SleepGroup(date, group) }
+        val shown = all.filtered(filter)
 
         LibraryUiState(
             running = running,
             groups = groups,
-            favourites = favourites,
+            tagged = shown,
+            allTagged = all.flatMap { group -> group.events.map { it.event } },
+            filter = filter,
             loaded = true,
             deletion = deletion,
             deletionFailed = deletionFailed,
-            selected = selectedFavourites(favourites, selection),
+            selected = selectedTagged(shown, selection),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
@@ -158,9 +171,31 @@ class LibraryViewModel(
         deletionFailed.value = false
     }
 
-    /** Adds [favourite] to the selection, which starts selection mode, or takes it out again. */
-    fun toggleSelection(favourite: FavouriteItem) {
-        selection.value = selection.value.toggle(favourite.event)
+    /** The event kinds the filter offers as system tags. */
+    val filterKinds: StateFlow<List<EventKindEntity>> =
+        repository.filterKinds().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Chooses [tag] in the filter, or takes it out. */
+    fun toggleFilterTag(tag: EventTag) {
+        filter.update { it.toggle(tag) }
+    }
+
+    /** Lists every tagged event that is not hidden again. */
+    fun clearFilter() {
+        filter.value = TagFilter()
+    }
+
+    /** The user's tags and the tag window of the selected events; a deleted tag leaves the filter. */
+    val tagging = TagEditing(viewModelScope, repository, settings, onDeleted = { id -> filter.update { it.without(id) } })
+
+    /** Opens the tag window for the selected events; selection mode ends once its choice is applied. */
+    fun tagSelected() {
+        tagging.open(state.value.selected.map { SleepEventOf(it.sleepId, it.event) })
+    }
+
+    /** Adds [item] to the selection, which starts selection mode, or takes it out again. */
+    fun toggleSelection(item: TaggedItem) {
+        selection.value = selection.value.toggle(item.event)
     }
 
     /** Ends selection mode. */
@@ -168,75 +203,52 @@ class LibraryViewModel(
         selection.value = EventSelection()
     }
 
-    private val removedChannel = Channel<List<RemovedFavourite>>(Channel.BUFFERED)
-
-    /** The favourites the user removed together, once that is stored, so it can be undone. */
-    val favouritesRemoved: Flow<List<RemovedFavourite>> = removedChannel.receiveAsFlow()
-
-    /** Removes the selected favourites from the favourites, which a snackbar undoes, and ends selection mode. */
-    fun removeSelected() {
-        val selected = state.value.selected
-        clearSelection()
-        if (selected.isEmpty()) return
-        viewModelScope.launch {
-            val removed = selected.map { RemovedFavourite(it, repository.setFavourite(it.sleepId, it.event, false, it.event.name)) }
-            removedChannel.send(removed)
-        }
-    }
-
-    /** Makes the favourites of [removed] favourites again, each with the name it had. */
-    fun undoRemoval(removed: List<RemovedFavourite>) {
-        viewModelScope.launch {
-            for (it in removed) repository.restoreFavourites(it.favourite.sleepId, it.favourite.event, it.previous)
-        }
-    }
-
     /**
-     * The step that shares several selected favourites, without a player to listen with; sharing
-     * them ends selection mode. A single favourite is shared as [sharedFavourite] instead.
+     * The step that shares several selected events, without a player to listen with; sharing
+     * them ends selection mode. A single event is shared as [sharedEvent] instead.
      */
     val sharing = EventSharing(viewModelScope, settings, shares, onShared = ::clearSelection)
 
-    private val sharedFavouriteFlow = MutableStateFlow<FavouriteItem?>(null)
+    private val sharedEventFlow = MutableStateFlow<TaggedItem?>(null)
 
     /**
-     * The single favourite whose share step is open over the library: the step of the sleep
+     * The single tagged event whose share step is open over the library: the step of the sleep
      * screen, read with its sleep's loudness and player, so its stretch can be moved and listened
      * to; null while none is.
      */
-    val sharedFavourite: StateFlow<FavouriteItem?> = sharedFavouriteFlow
+    val sharedEvent: StateFlow<TaggedItem?> = sharedEventFlow
 
-    /** Opens the share step of [favourite] alone. */
-    fun shareFavourite(favourite: FavouriteItem) {
-        sharedFavouriteFlow.value = favourite
+    /** Opens the share step of [item] alone. */
+    fun shareEvent(item: TaggedItem) {
+        sharedEventFlow.value = item
     }
 
-    /** The share step of [sharedFavourite] closed. */
-    fun favouriteShareClosed() {
-        sharedFavouriteFlow.value = null
+    /** The share step of [sharedEvent] closed. */
+    fun eventShareClosed() {
+        sharedEventFlow.value = null
     }
 
     /**
-     * Opens the share step for the selected favourites: for a single one that of [shareFavourite],
+     * Opens the share step for the selected events: for a single one that of [shareEvent],
      * for several [sharing], each with the audio of its own sleep as it is now, once that is read.
      */
     fun shareSelected() {
         val current = state.value
         val single = current.selected.singleOrNull()
         if (single != null) {
-            shareFavourite(single)
+            shareEvent(single)
             return
         }
         if (current.selected.isEmpty()) return
-        val sleeps = current.favourites.associate { it.sleep.id to it.sleep }
+        val sleeps = current.tagged.associate { it.sleep.id to it.sleep }
         viewModelScope.launch {
             // Read anew rather than taken from [timelines]: a sleep may have grown since.
             val audio = current.selected.map { it.sleepId }.distinct().associateWith { sleepId ->
                 repository.timeline(sleepId) to repository.microphoneUnavailable(sleepId).first()
             }
-            val items = current.selected.map { favourite ->
-                val (timeline, unavailable) = audio.getValue(favourite.sleepId)
-                ShareItem(favourite.event, sleeps[favourite.sleepId], timeline, unavailable)
+            val items = current.selected.map { item ->
+                val (timeline, unavailable) = audio.getValue(item.sleepId)
+                ShareItem(item.event, sleeps[item.sleepId], timeline, unavailable)
             }
             sharing.open(items)
         }

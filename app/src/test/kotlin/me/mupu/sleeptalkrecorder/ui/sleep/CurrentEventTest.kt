@@ -1,9 +1,12 @@
 package me.mupu.sleeptalkrecorder.ui.sleep
 
+import me.mupu.sleeptalkrecorder.data.EventTag
 import me.mupu.sleeptalkrecorder.data.KindColor
 import me.mupu.sleeptalkrecorder.data.SleepEvent
+import me.mupu.sleeptalkrecorder.data.Tags
 import me.mupu.sleeptalkrecorder.data.ThemeRole
 import me.mupu.sleeptalkrecorder.playback.Stretch
+import me.mupu.sleeptalkrecorder.ui.tags.TagFilter
 import java.time.Duration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -12,7 +15,7 @@ import org.junit.Test
 class CurrentEventTest {
 
     private fun event(id: Long, startMillis: Long, endMillis: Long, favourite: Boolean = false) =
-        SleepEvent(id, Duration.ofMillis(startMillis), Duration.ofMillis(endMillis), "event", null, KindColor.Theme(ThemeRole.PRIMARY), favourite = favourite)
+        SleepEvent(id, Duration.ofMillis(startMillis), Duration.ofMillis(endMillis), "event", null, KindColor.Theme(ThemeRole.PRIMARY), tagIds = if (favourite) setOf(Tags.FAVOURITE) else emptySet())
     private fun stretch(startMillis: Long, endMillis: Long) = Stretch(Duration.ofMillis(startMillis), Duration.ofMillis(endMillis))
 
     private val events = listOf(event(1, 10_000, 12_000, favourite = true), event(2, 13_500, 14_000), event(3, 30_000, 31_000, favourite = true))
@@ -35,7 +38,7 @@ class CurrentEventTest {
         assertEquals(1L, at(11_900))
     }
 
-    private fun neighbours(millis: Long, filter: EventFilter = EventFilter.All): Pair<Long?, Long?> {
+    private fun neighbours(millis: Long, filter: TagFilter = TagFilter()): Pair<Long?, Long?> {
         val listed = events.indices.filter { filter.shows(events[it]) }
         val (previous, next) = neighbourEvents(listed.map(events::get), listed.map(played::get), Duration.ofMillis(millis))
         return previous?.id to next?.id
@@ -51,10 +54,12 @@ class CurrentEventTest {
         assertEquals(3L to null, neighbours(40_000))
     }
 
+    private val favourites = TagFilter(setOf(EventTag.Stored(Tags.FAVOURITE)))
+
     @Test
     fun `only the listed events count`() {
-        assertEquals(1L to 3L, neighbours(13_600, EventFilter.Favourites))
-        assertEquals(null to 3L, neighbours(11_000, EventFilter.Favourites))
+        assertEquals(1L to 3L, neighbours(13_600, favourites))
+        assertEquals(null to 3L, neighbours(11_000, favourites))
     }
 
     @Test

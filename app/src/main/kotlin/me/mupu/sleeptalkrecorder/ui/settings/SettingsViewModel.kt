@@ -40,6 +40,8 @@ data class SettingsUiState(
     val sleepWindows: SleepWindows,
     val autoDelete: Boolean,
     val autoDeleteAfter: Duration,
+    /** Whether automatic deletion keeps sleeps with tagged or named events. */
+    val keepTagged: Boolean,
     /** Every transcription model with its state, in catalogue order. */
     val models: List<ModelStatus>,
     val transcriptLanguage: TranscriptLanguage,
@@ -102,11 +104,11 @@ class SettingsViewModel(
         combine(store.flow(Settings.theme), store.flow(Settings.timeFormat), ::Pair),
         combine(store.flow(Settings.leadIn), store.flow(Settings.tail), ::Pair),
         combine(store.flow(Settings.stopAtEnabled), store.flow(Settings.stopAt), store.flow(Settings.sleepWindows), ::Triple),
-        combine(store.flow(Settings.autoDelete), store.flow(Settings.autoDeleteAfter), ::Pair),
+        combine(store.flow(Settings.autoDelete), store.flow(Settings.autoDeleteAfter), store.flow(Settings.keepTagged), ::Triple),
         combine(models.models, store.flow(Settings.transcriptLanguage), store.flow(Settings.transcriptionMode), deleting, ::Speech),
-    ) { (theme, timeFormat), (leadIn, tail), (stopAtEnabled, stopAt, sleepWindows), (autoDelete, autoDeleteAfter), speech ->
+    ) { (theme, timeFormat), (leadIn, tail), (stopAtEnabled, stopAt, sleepWindows), (autoDelete, autoDeleteAfter, keepTagged), speech ->
         SettingsUiState(
-            theme, timeFormat, leadIn, tail, stopAtEnabled, stopAt, sleepWindows, autoDelete, autoDeleteAfter,
+            theme, timeFormat, leadIn, tail, stopAtEnabled, stopAt, sleepWindows, autoDelete, autoDeleteAfter, keepTagged,
             speech.models, speech.language, speech.mode, speech.deleting,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)

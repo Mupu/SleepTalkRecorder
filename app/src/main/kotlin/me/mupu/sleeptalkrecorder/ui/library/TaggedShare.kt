@@ -22,14 +22,14 @@ import me.mupu.sleeptalkrecorder.ui.share.startShareChooser
 import me.mupu.sleeptalkrecorder.ui.sleep.SleepViewModel
 
 /**
- * The share step of a favourite, shown over the library. [createViewModel] reads the favourite's
+ * The share step of a tagged event, shown over the library. [createViewModel] reads the event's
  * sleep as the sleep screen would and opens the share step once it is read; [onClosed] follows
  * once the step is closed, or once its files went to Android's share sheet, after [onShared], or
  * [onFailed] reported that they could not be written. The sleep is let go of when this leaves the
  * composition.
  */
 @Composable
-fun FavouriteShare(createViewModel: () -> SleepViewModel, onFailed: () -> Unit, onShared: () -> Unit, onClosed: () -> Unit) {
+fun TaggedShare(createViewModel: () -> SleepViewModel, onFailed: () -> Unit, onShared: () -> Unit, onClosed: () -> Unit) {
     val owner = remember { object : ViewModelStoreOwner { override val viewModelStore = ViewModelStore() } }
     DisposableEffect(owner) { onDispose { owner.viewModelStore.clear() } }
     CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {

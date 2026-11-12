@@ -6,6 +6,7 @@ import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.playback.PlaybackKind
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
+import me.mupu.sleeptalkrecorder.ui.tags.TagFilter
 import java.time.Duration
 
 /** The player of the sleep screen, once the sleep's audio is known; its position is [SleepViewModel.position]. */
@@ -42,7 +43,7 @@ data class SleepUiState(
     /** The events the timeline colours: those that are not hidden. */
     val timelineEvents: List<SleepEvent> = emptyList(),
     /** Which events the list shows. */
-    val filter: EventFilter = EventFilter.All,
+    val filter: TagFilter = TagFilter(),
     /** The events the list shows and cut playback plays: those the [filter] shows. */
     val listedEvents: List<SleepEvent> = emptyList(),
     /** The stretches of the sleep's audio in which the microphone was unavailable. */
@@ -84,9 +85,6 @@ data class SensitivityUiState(
  * is the whole sleep if [wholeSleep].
  */
 data class SensitivityApplied(val wholeSleep: Boolean, val events: Int)
-
-/** The user removed [event] from the favourites; [previous] are its favourite marks before, which undo restores. */
-class FavouriteRemoved(val event: SleepEvent, val previous: List<AnnotationEntity>)
 
 /**
  * The user marked [event] as speech ([speech] true) or as not speech; [previous] are the user's

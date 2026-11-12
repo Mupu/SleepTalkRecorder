@@ -15,14 +15,14 @@ import java.time.LocalDate
 
 /**
  * The app's database: sleeps, their recordings, and the annotations found in them with the event
- * kinds those refer to. Audio and feature tracks are not stored here but in files next to it (see
+ * kinds and tags those refer to. Audio and feature tracks are not stored here but in files next to it (see
  * [SleepRepository]).
  */
 @Database(
-    entities = [SleepEntity::class, RecordingEntity::class, EventKindEntity::class, AnnotationEntity::class],
-    version = 1,
+    entities = [SleepEntity::class, RecordingEntity::class, EventKindEntity::class, TagEntity::class, AnnotationEntity::class],
+    version = 2,
 )
-@TypeConverters(InstantConverter::class, LocalDateConverter::class, DurationConverter::class, KindColorConverter::class)
+@TypeConverters(InstantConverter::class, LocalDateConverter::class, DurationConverter::class, KindColorConverter::class, TagIdsConverter::class)
 abstract class SleepDatabase : RoomDatabase() {
 
     abstract fun sleepDao(): SleepDao
@@ -31,13 +31,18 @@ abstract class SleepDatabase : RoomDatabase() {
         /** Opens the database stored in the app's private storage. */
         fun open(context: Context): SleepDatabase =
             Room.databaseBuilder(context, SleepDatabase::class.java, "sleeps.db")
-                .addCallback(AddBuiltInKinds)
+                .addMigrations(Migration1To2)
+                .addCallback(AddBuiltInRows)
                 .build()
     }
 }
 
-/** Adds the [EventKinds.builtIn] kinds that are missing, so a new app version can ship new kinds. */
-private object AddBuiltInKinds : RoomDatabase.Callback() {
+/**
+ * Adds the [EventKinds.builtIn] kinds and the tag Favourite ([Tags.favourite]) when they are
+ * missing, so a new app version can ship new kinds and a new database has Favourite before the
+ * user makes a tag of their own.
+ */
+private object AddBuiltInRows : RoomDatabase.Callback() {
     override fun onOpen(db: SupportSQLiteDatabase) {
         for (kind in EventKinds.builtIn) {
             val values = ContentValues().apply {
@@ -48,7 +53,23 @@ private object AddBuiltInKinds : RoomDatabase.Callback() {
             }
             db.insert("event_kind", SQLiteDatabase.CONFLICT_IGNORE, values)
         }
+        val favourite = ContentValues().apply {
+            put("id", Tags.favourite.id)
+            put("type", Tags.favourite.type.name)
+            putNull("name")
+        }
+        db.insert("tag", SQLiteDatabase.CONFLICT_IGNORE, favourite)
     }
+}
+
+/** Stores the ids of an event's tags as a comma-separated list, as `GROUP_CONCAT` gives them. */
+class TagIdsConverter {
+
+    @TypeConverter
+    fun toList(ids: Set<Long>?): String? = ids?.takeIf { it.isNotEmpty() }?.joinToString(",")
+
+    @TypeConverter
+    fun fromList(list: String?): Set<Long> = list?.split(',')?.mapNotNull { it.trim().toLongOrNull() }?.toSet().orEmpty()
 }
 
 /** Stores instants as UTC milliseconds since the epoch. */

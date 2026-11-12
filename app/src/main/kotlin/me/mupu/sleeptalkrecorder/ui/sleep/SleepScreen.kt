@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -30,6 +32,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -46,6 +49,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -66,6 +70,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -73,6 +78,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.mupu.sleeptalkrecorder.R
 import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.SleepSummary
+import me.mupu.sleeptalkrecorder.data.TagEntity
 import me.mupu.sleeptalkrecorder.models.TranscriptionModel
 import me.mupu.sleeptalkrecorder.playback.PlaybackKind
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
@@ -93,13 +99,18 @@ import me.mupu.sleeptalkrecorder.ui.library.sleepSubtitle
 import me.mupu.sleeptalkrecorder.ui.share.EventShareSheet
 import me.mupu.sleeptalkrecorder.ui.share.startShareChooser
 import me.mupu.sleeptalkrecorder.ui.share.totalLength
+import me.mupu.sleeptalkrecorder.ui.tags.EventTagLabels
+import me.mupu.sleeptalkrecorder.ui.tags.TagDialogs
+import me.mupu.sleeptalkrecorder.ui.tags.TagFilter
+import me.mupu.sleeptalkrecorder.ui.tags.TagFilterBar
 import java.text.NumberFormat
 import java.time.Duration
 import java.time.ZoneId
 
 /**
  * One sleep: its name and times, the zoomable loudness timeline with its overview, the player with
- * full and cut playback, and the list of its events, each of which plays on its own.
+ * full and cut playback, and the list of its events, each of which plays on its own, filtered by
+ * tags chosen in the filter window ([TagDialogs]) and shown as pills above it.
  *
  * The list highlights the event at the playhead and scrolls to it. Auto zoom, on until the user
  * pans or zooms the timeline by hand, frames that event and keeps the playhead in view.
@@ -124,6 +135,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
     val share by viewModel.sharing.state.collectAsStateWithLifecycle()
     val installedModels by viewModel.installedModels.collectAsStateWithLifecycle()
     val recognising by viewModel.recognising.collectAsStateWithLifecycle()
+    val tags by viewModel.tagging.tags.collectAsStateWithLifecycle()
     // Read only where it is drawn or shown, so the moving playhead recomposes nothing else.
     val positionState = viewModel.position.collectAsStateWithLifecycle()
     val position = remember(positionState) { { positionState.value } }
@@ -143,16 +155,6 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                 duration = SnackbarDuration.Long,
             )
             if (result == SnackbarResult.ActionPerformed) viewModel.unhide(events)
-        }
-    }
-    LaunchedEffect(viewModel) {
-        viewModel.favouriteRemoved.collect { change ->
-            val result = snackbars.showSnackbar(
-                resources.getString(R.string.favourite_removed),
-                actionLabel = resources.getString(R.string.undo),
-                duration = SnackbarDuration.Long,
-            )
-            if (result == SnackbarResult.ActionPerformed) viewModel.undoFavouriteRemoval(change)
         }
     }
     LaunchedEffect(viewModel) {
@@ -196,7 +198,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     state.selected,
                     onClose = viewModel::clearSelection,
                     onShare = viewModel::shareSelected,
-                    onFavourite = viewModel::favouriteSelected,
+                    onTag = viewModel::tagSelected,
                     onHide = viewModel::hideSelected,
                 )
             } else {
@@ -232,6 +234,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                 var choosingModel by remember { mutableStateOf<SleepEvent?>(null) }
                 var expanded by remember { mutableStateOf(emptySet<Long>()) }
                 var naming by remember { mutableStateOf<SleepEvent?>(null) }
+                var filtering by rememberSaveable { mutableStateOf(false) }
 
                 val current = state.currentEvent
                 LaunchedEffect(autoZoom, current?.id) {
@@ -278,7 +281,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                 }
                 HorizontalDivider()
                 if (state.events.isNotEmpty()) {
-                    EventFilterChips(filterKinds, state.events, state.filter, onSelect = viewModel::setFilter)
+                    TagFilterBar(state.filter, tags, filterKinds, onOpen = { filtering = true }, onRemove = viewModel::toggleFilterTag, onClear = viewModel::clearFilter)
                 }
                 if (state.listedEvents.isNotEmpty()) ListedSummary(state.listedEvents)
                 EventList(
@@ -296,7 +299,8 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     },
                     onTogglePlay = viewModel::togglePlayEvent,
                     onHide = viewModel::setHidden,
-                    onFavourite = { event, favourite -> viewModel.setFavourite(event, favourite) },
+                    tags = tags,
+                    onTags = viewModel::openTags,
                     onName = { naming = it },
                     onShare = viewModel::openShare,
                     onSensitivity = if (state.sensitivityAvailable) viewModel::openSensitivity else null,
@@ -313,7 +317,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                 naming?.let { event ->
                     NameEventDialog(
                         event,
-                        onSave = { name -> viewModel.setFavourite(event, favourite = true, name = name) },
+                        onSave = { name -> viewModel.setName(event, name) },
                         onDismiss = { naming = null },
                     )
                 }
@@ -337,6 +341,17 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     )
                 }
 
+                TagDialogs(
+                    viewModel.tagging,
+                    filterKinds,
+                    state.filter,
+                    filterOpen = filtering,
+                    count = { tag -> state.events.count(TagFilter(setOf(tag))::shows) },
+                    onToggleFilter = viewModel::toggleFilterTag,
+                    onClearFilter = viewModel::clearFilter,
+                    onCloseFilter = { filtering = false },
+                    onApplied = viewModel::clearSelection,
+                )
                 share?.let { step -> EventShareSheet(viewModel.sharing, step, state.loudness, position) }
                 sensitivity?.let { sheet ->
                     SensitivitySheet(
@@ -403,16 +418,14 @@ private fun SleepAppBar(
 }
 
 /**
- * The app bar of selection mode, with buttons that end the selection, share the events, keep them
- * as favourites or hide them.
+ * The app bar of selection mode, with buttons that end the selection, share the events, open the
+ * tag window for them or hide them.
  */
 @Composable
-private fun EventSelectionBar(selected: List<SleepEvent>, onClose: () -> Unit, onShare: () -> Unit, onFavourite: () -> Unit, onHide: () -> Unit) {
+private fun EventSelectionBar(selected: List<SleepEvent>, onClose: () -> Unit, onShare: () -> Unit, onTag: () -> Unit, onHide: () -> Unit) {
     SelectionBar(selected.size, totalLength(selected), onClose) {
         AppBarIcon(R.drawable.ic_share, stringResource(R.string.share_event), onShare)
-        IconButton(onClick = onFavourite, enabled = selected.any { !it.favourite }) {
-            Icon(painterResource(R.drawable.ic_star_border), contentDescription = stringResource(R.string.add_favourite))
-        }
+        AppBarIcon(R.drawable.ic_label_outline, stringResource(R.string.tags_button), onTag)
         IconButton(onClick = onHide, enabled = selected.any { !it.hidden }) {
             Icon(painterResource(R.drawable.ic_visibility_off), contentDescription = stringResource(R.string.hide_event))
         }
@@ -594,9 +607,10 @@ private fun PlaybackMode(cut: Boolean, enabled: Boolean, onCutChange: (Boolean) 
 }
 
 /**
- * The events the [filter] shows, in order; a tap shows one on the timeline, its button plays it
- * alone, a hidden one has a button that unhides it, and its menu shares it, hides it, opens the sensitivity around it while [onSensitivity]
- * is given, and for a speech event corrects its text or marks it as not speech. The event at the
+ * The events the [filter] shows, in order, each with its tags; a tap shows one on the timeline, its
+ * button plays it alone, its tag button opens its tag window, a hidden one has a button that
+ * unhides it, and its menu names it, shares it, hides it, opens the sensitivity around it while
+ * [onSensitivity] is given, and for a speech event corrects its text or marks it as not speech. The event at the
  * playhead is highlighted and scrolled into view.
  *
  * A long press selects an event, which starts selection mode: while any is selected, a tap selects
@@ -606,7 +620,7 @@ private fun PlaybackMode(cut: Boolean, enabled: Boolean, onCutChange: (Boolean) 
 private fun EventList(
     sleep: SleepSummary?,
     events: List<SleepEvent>,
-    filter: EventFilter,
+    filter: TagFilter,
     timeline: SleepTimeline,
     currentEventId: Long?,
     playingEventId: Long?,
@@ -615,7 +629,8 @@ private fun EventList(
     onSelect: (SleepEvent) -> Unit,
     onTogglePlay: (SleepEvent) -> Unit,
     onHide: (SleepEvent, Boolean) -> Unit,
-    onFavourite: (SleepEvent, Boolean) -> Unit,
+    tags: List<TagEntity>,
+    onTags: (SleepEvent) -> Unit,
     onName: (SleepEvent) -> Unit,
     onShare: (SleepEvent) -> Unit,
     onSensitivity: ((SleepEvent) -> Unit)?,
@@ -661,7 +676,8 @@ private fun EventList(
                 onSelect = onSelect,
                 onTogglePlay = onTogglePlay,
                 onHide = onHide,
-                onFavourite = onFavourite,
+                tags = tags,
+                onTags = onTags,
                 onName = onName,
                 onShare = onShare,
                 onSensitivity = onSensitivity,
@@ -678,9 +694,7 @@ private fun EventList(
             item(key = "empty") {
                 val empty = when {
                     !sleep.eventsFound -> R.string.finding_events
-                    filter == EventFilter.Hidden -> R.string.no_hidden_events
-                    filter == EventFilter.Favourites -> R.string.no_favourites
-                    filter != EventFilter.All -> R.string.no_events_filter
+                    filter.chosen.isNotEmpty() -> R.string.no_events_filter
                     else -> R.string.no_events
                 }
                 Text(
@@ -709,7 +723,8 @@ private fun EventRow(
     onSelect: (SleepEvent) -> Unit,
     onTogglePlay: (SleepEvent) -> Unit,
     onHide: (SleepEvent, Boolean) -> Unit,
-    onFavourite: (SleepEvent, Boolean) -> Unit,
+    tags: List<TagEntity>,
+    onTags: (SleepEvent) -> Unit,
     onName: (SleepEvent) -> Unit,
     onShare: (SleepEvent) -> Unit,
     onSensitivity: ((SleepEvent) -> Unit)?,
@@ -758,42 +773,50 @@ private fun EventRow(
             .padding(start = ROW_START, end = 4.dp),
     ) {
         Spacer(Modifier.width(BAR_WIDTH + 12.dp))
-        Column(Modifier.weight(1f).padding(vertical = 8.dp).alpha(if (event.hidden) 0.6f else 1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+            Column(Modifier.alpha(if (event.hidden) 0.6f else 1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(R.string.event_heading, time, formatEventLength(resources, event.end - event.start)),
+                        style = MaterialTheme.typography.titleSmall.merge(Numbers),
+                    )
+                    if (event.hidden) HiddenTag()
+                }
+                EventTagLabels(event, tags)
+                event.name?.let { name ->
+                    Text(name, style = MaterialTheme.typography.labelLarge, color = colors.primary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
                 Text(
-                    stringResource(R.string.event_heading, time, formatEventLength(resources, event.end - event.start)),
-                    style = MaterialTheme.typography.titleSmall.merge(Numbers),
+                    stringResource(R.string.event_details, kindName(event.kindId, event.kindName), formatPosition(event.start)),
+                    style = MaterialTheme.typography.bodySmall.merge(Numbers),
+                    color = colors.onSurfaceVariant,
                 )
-                if (event.favourite) FavouriteStar()
-                if (event.hidden) HiddenTag()
+                TranscriptLine(
+                    event,
+                    transcriptExpanded,
+                    onToggleTranscript,
+                    modelChange,
+                    onRerun = onRerun,
+                )
+                recognisingWith?.let { RecognisingLine(it) }
             }
-            event.name?.let { name ->
-                Text(name, style = MaterialTheme.typography.labelLarge, color = colors.primary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            // Below the text rather than beside the buttons, which leave the text no room for it.
+            if (event.hidden && selection == null) {
+                // Moved left by its padding, so its icon lines up with the text above.
+                TextButton(
+                    onClick = { onHide(event, false) },
+                    contentPadding = ButtonDefaults.TextButtonWithIconContentPadding,
+                    modifier = Modifier.offset(x = -ButtonDefaults.TextButtonWithIconContentPadding.calculateLeftPadding(LayoutDirection.Ltr)),
+                ) {
+                    Icon(painterResource(R.drawable.ic_visibility), contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.unhide_event))
+                }
             }
-            Text(
-                stringResource(R.string.event_details, kindName(event.kindId, event.kindName), formatPosition(event.start)),
-                style = MaterialTheme.typography.bodySmall.merge(Numbers),
-                color = colors.onSurfaceVariant,
-            )
-            TranscriptLine(
-                event,
-                transcriptExpanded,
-                onToggleTranscript,
-                modelChange,
-                onRerun = onRerun,
-            )
-            recognisingWith?.let { RecognisingLine(it) }
         }
         if (selection != null) {
             Checkbox(checked = selection, onCheckedChange = { onToggleSelection(event) }, modifier = Modifier.padding(end = 4.dp))
             return@Row
-        }
-        if (event.hidden) {
-            TextButton(onClick = { onHide(event, false) }) {
-                Icon(painterResource(R.drawable.ic_visibility), contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.unhide_event))
-            }
         }
         IconButton(onClick = { onTogglePlay(event) }) {
             Icon(
@@ -801,11 +824,17 @@ private fun EventRow(
                 contentDescription = stringResource(if (playing) R.string.pause_event else R.string.play_event),
             )
         }
+        // Filled in the primary colour while the event has tags of the user, outlined otherwise.
+        IconButton(onClick = { onTags(event) }) {
+            Icon(
+                painterResource(if (event.tagIds.isEmpty()) R.drawable.ic_label_outline else R.drawable.ic_label),
+                contentDescription = stringResource(R.string.tags_button),
+                tint = if (event.tagIds.isEmpty()) LocalContentColor.current else colors.primary,
+            )
+        }
         MoreMenu(
             listOfNotNull(
-                MenuEntry(R.string.add_favourite, R.drawable.ic_star_border) { onFavourite(event, true) }.takeUnless { event.favourite },
-                MenuEntry(R.string.remove_favourite, R.drawable.ic_star) { onFavourite(event, false) }.takeIf { event.favourite },
-                MenuEntry(R.string.name_event_menu, R.drawable.ic_label) { onName(event) },
+                MenuEntry(R.string.name_event_menu, R.drawable.ic_title) { onName(event) },
                 MenuEntry(R.string.share_event, R.drawable.ic_share) { onShare(event) },
                 MenuEntry(R.string.hide_event, R.drawable.ic_visibility_off) { onHide(event, true) }.takeUnless { event.hidden },
                 onSensitivity?.let { MenuEntry(R.string.sensitivity_here, R.drawable.ic_tune) { it(event) } },

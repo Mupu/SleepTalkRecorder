@@ -23,7 +23,7 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 | `readiness` | Whether the phone lets a whole night be recorded: the `Requirement`s it misses, the `VendorStep`s of its maker, and the `SystemPage`s that fix them | only in `PhoneReadiness` |
 | `whatsnew` | The changelogs bundled into the app: their `Changelog` parser, the `BundledChangelogs` of each app language and `WhatsNew`, which decides whether an update brought news the user has not seen | only in `BundledChangelogs.fromAssets` (assets) |
 | `update` | The app's updates from its releases: which release is an update (`Release`), when one is downloaded and installed (`UpdatePolicy`), and the `Updater` that checks, downloads, verifies and installs it | only in `AndroidUpdates` (HTTP, package manager, `PackageInstaller`) |
-| `ui` | Navigation, one sub-package per screen (`home`, `library`, `sleep`, `stats`, `settings`, `setup`, `whatsnew`), shared `components`, `format`, `share` (the share step and the selection of events both the sleep screen and the library use) and `theme` | Compose |
+| `ui` | Navigation, one sub-package per screen (`home`, `library`, `sleep`, `stats`, `settings`, `setup`, `whatsnew`), shared `components`, `format`, `share` (the share step and the selection of events both the sleep screen and the library use), `tags` (the tag filter, the tag window and their dialogs, which both use too) and `theme` | Compose |
 
 The root package holds `MainActivity`, the only activity, and `SleepTalkApplication` with the
 `AppContainer`, which wires the shared objects by hand: the database with the repository and stores, the
@@ -31,7 +31,7 @@ The root package holds `MainActivity`, the only activity, and `SleepTalkApplicat
 automatic deletion scheduled, starts the search for events of finished sleeps, schedules their
 speech recognition and owns the `Updater`. Logic that can be tested without a device
 (`time`, `detection`, the WAV writer, the recording session, level computation, the sleep
-timeline and its audio stream, the cut plan, the stretches events are shared with and their caption, the selection of events, the timeline view and the event filter of the sleep screen, the
+timeline and its audio stream, the cut plan, the stretches events are shared with and their caption, the selection of events, the timeline view, the tag filter and the tag window's choice, the
 sensitivity sheet's re-scan, the numbers of the stats screen, the settings,
 which sleeps automatic deletion removes, the model downloads and states, the transcript filter,
 the speech recognition run, which transcript each event shows and which results of models it compares, reading the changelogs, and finding,
@@ -184,7 +184,7 @@ Next to the chunk files lies `features.bin`, the recording's feature track (see
 [Finding events](#finding-events)). It is flushed before the WAV files at every flush, so it always
 covers the samples the database counts as saved.
 
-Room (`SleepDatabase`) holds four tables:
+Room (`SleepDatabase`) holds five tables:
 
 - `sleep`: start and end instant (the end is null while the sleep is recorded) and its name: the
   kind (night or nap) and the date it is named after, given by the sleep windows when it started.
@@ -195,16 +195,19 @@ Room (`SleepDatabase`) holds four tables:
 - `event_kind`: the kinds of *event*, as data rather than a list in code: an id that annotations
   refer to, the user's name (null for the kinds the app ships, which it names in the app
   language), a colour (a theme colour role such as `primary`, so it follows light and dark mode,
-  or a fixed `#RRGGBB`), and whether the sleep screen offers a filter for the kind. The database
+  or a fixed `#RRGGBB`), and whether the tag filter offers the kind as a system tag. The database
   adds the app's kinds that are missing each time it opens, so a new app version can ship new
-  kinds; v1 ships the plain event and the speech event (tertiary colour, with a filter).
+  kinds; v1 ships the plain event and the speech event (tertiary colour), both offered.
+- `tag`: the tags the user sorts events with: Favourite, which the app provides with the fixed id
+  1 and names in its language (the database adds it each time it opens if it is missing), and the
+  user's own, with a name that is unique whatever its case.
 - `annotation`: every result about a stretch of a sleep, with its origin. The stretch is given in
   milliseconds of the sleep's audio (the playing axis, see [Time model](#time-model)), so it does
   not depend on the detector's hop size. The `type` says what the annotation states (`EVENT` with
   a kind, `SENSITIVITY` with a start threshold in `value`: the one the detector chose for the
   sleep, or one the user set for the stretch,
   `MICROPHONE_UNAVAILABLE` from the recorder, `TRANSCRIPT` with the kind speech recognition or
-  the user gives an event and its words in `text`, `HIDDEN` from the user over an event they hid, `FAVOURITE` from the user over an event they keep, with the name they gave it in `text`), and `origin` (`DEVICE`, `SERVER` or `USER`),
+  the user gives an event and its words in `text`, `HIDDEN` from the user over an event they hid, `TAG` from the user over an event they gave the tag `tag_id`, `NAME` from the user with the name they gave an event in `text`), and `origin` (`DEVICE`, `SERVER` or `USER`),
   `producer` and `producer_version` say who stated it. Gaps between recordings take no time on
   this axis and need no annotation: they follow from the recordings' start instants and lengths.
 
@@ -220,19 +223,40 @@ longer found hides nothing until the event is found again. Hidden events stay in
 in its speech recognition, but are left out of the counts the library, the sleep screen and the
 stats show.
 
-A favourite follows the same rule: an event is a favourite while a `FAVOURITE` mark overlaps it,
-and its name is that of the latest such mark. Hiding an event removes its favourite marks and
-making it a favourite removes its hidden marks, so an event is never both. Automatic deletion
-keeps a sleep that has favourites (`SleepSummary.favouriteCount`). The library's second tab lists
-the favourites of all sleeps under their sleep, newest first (`SleepRepository.favourites`), and
-opening one opens its sleep at the event, paused, while its play button also plays the event on its own
+Tags and names follow the same rule: an event has a tag while a `TAG` mark of it overlaps the
+event (`SleepEvent.tagIds`), and its name is that of the latest `NAME` mark that overlaps it.
+Deleting an own tag deletes its marks through the foreign key. Tags and hiding are independent:
+a hidden event keeps its tags. *System tags* are not stored but follow from the event
+(`SleepEvent.tags`, `EventTag.System`): named, hidden, each kind the filter offers and murmur;
+a new kind of system tag is one more subtype there. Automatic deletion keeps a sleep with an
+event that has a tag or a name (`SleepSummary.taggedCount`, hidden events included) while
+"Keep tagged sleeps" is on, which it is by default. Version 1 had a `FAVOURITE` mark with the
+name in its `text`; the migration to version 2 (`Migration1To2`) turned each into a `TAG` mark of
+Favourite and, with a name, a `NAME` mark over the same stretch.
+
+The library's second tab lists the tagged and named events of all sleeps under their sleep,
+newest first (`SleepRepository.taggedEvents`), with the same tag filter as the sleep screen, and
+opening one opens its sleep at the event, paused, with the hidden events listed if it is hidden,
+while its play button also plays the event on its own
 and its share button opens the event's share step over the library, so sharing leaves the user
-there: `FavouriteShare` reads the sleep with a `SleepViewModel` of its own, which it lets go of once
-the step closes (see [Sharing an event](#sharing-an-event)). A long press on a favourite starts
+there: `TaggedShare` reads the sleep with a `SleepViewModel` of its own, which it lets go of once
+the step closes (see [Sharing an event](#sharing-an-event)). A long press on an event starts
 selection mode there as on the sleep screen, and the selection may span several sleeps; its app
-bar shares the selected favourites or removes them from the favourites, which a snackbar undoes.
-`LibraryViewModel.shareSelected` decides how: a single selected favourite gets that same step,
+bar shares the selected events or opens the tag window for them.
+`LibraryViewModel.shareSelected` decides how: a single selected event gets that same step,
 several the step of several events, which the library holds itself, over the library too.
+
+Both screens edit tags through a `TagEditing` of their `ViewModel` (package `ui.tags`). Its tag
+window shows every assignable tag for one event or the selected ones as on, off or a dash for
+some (`TagChoices`); a tap turns empty into ticked and ticked into empty, and a dash into ticked,
+after which it never comes back, since it only means "untouched, on some". OK gives the ticked
+tags to all events and takes the cleared ones from all, leaving untouched tags as they were. The
+changes it applied are stored (`Settings.tagChanges`) and the window opens with them applied to
+the tags all its events have or none has (a tag only some have always opens as a dash), so
+tagging the next event the same way takes the tag button and OK; it keeps remembering a change
+the user left untouched, even where it did not apply. New tags are made, and own tags deleted
+after a question that names how many events lose them, from both the tag window and the filter
+window; a deleted tag leaves an open tag window and the remembered changes at once.
 
 The schema is exported to `app/schemas/`. Data derived from a sleep or a recording goes into
 tables of its own that reference it by foreign key, so the `sleep` and `recording` tables stay
@@ -487,13 +511,16 @@ start of a recording and at a stretch in which the microphone was unavailable
 microphone is played around an event.
 
 *Cut playback*, the default, plays the events the list shows in this way, one after the other.
-The list's filter chips exclude each other: "All" lists every event that is not hidden, "Speech
-only" (one chip per event kind that has a filter) those of the kind that are not hidden, and
-"Favourites" only the favourites, and "Hidden" only the hidden events, so they can be gone
-through by ear and unhidden with the button on their row. Hiding is undone from a snackbar. A line
-under the chips names how many events the list shows and how long they last together, without
-lead-in and tail; the line under the app bar names the same for all events of the sleep that are
-not hidden, whatever the filter, as the library does.
+The list's filter (`TagFilter`) is a choice of tags that combine with OR, made in the filter
+window, where the user's tags are open and the system tags collapsed and set apart in the tertiary
+colour; the chosen tags show as pills that wrap onto more lines, and a tap on one takes it out.
+"All" before the filter button is selected while no tag is chosen and takes every chosen tag out.
+With nothing chosen the list shows every event that is not hidden; hidden events show only while
+the system tag hidden is chosen, so they can be gone through by ear and unhidden with the button
+on their row. Hiding is undone from a snackbar. A line under the pills names how many events the
+list shows and how long they last together, without lead-in and tail; the line under the app bar
+names the same for all events of the sleep that are not hidden, whatever the filter, as the
+library does.
 `CutPlan` joins the stretches of events that overlap, so close events play without a jump, and
 keeps stretches apart that only touch where a recording starts. While playing, the player jumps
 from the end of a stretch to 200 ms before the next (ExoPlayer starts a seeked WAV stream at its
@@ -512,10 +539,10 @@ off, its button on again.
 
 A long press on an event row starts selection mode: while any event is selected, a tap selects
 an event or takes it out, and an app bar of its own names how many are selected and how long they
-last together, with buttons that share, keep as favourites or hide them all; Back ends it.
+last together, with buttons that share, tag or hide them all; Back ends it.
 `EventSelection` keeps the selected ids, so a selection survives a change of filter, and an event
 that a new search no longer finds leaves it. Event ids are unique across all sleeps, so the
-library's favourites tab selects with it as well.
+library's tagged tab selects with it as well.
 
 The buttons left and right of the play button step to the previous and the next listed event, in
 full and in cut playback, to the start of its lead-in as cut playback plays it; playback plays on
@@ -535,7 +562,7 @@ plays the stretch on the sleep's player to listen to it.
 The step shares the stretch as a video by default, or as an audio file. WhatsApp, the main
 target, drops a text sent along with an audio file but shows it as the caption of a video, so a
 video carries a caption (`EXTRA_TEXT`) and an audio file none. The step's checkboxes choose what
-the caption names: the favourite's name, the date and time, the transcript, the sleep and the
+the caption names: the event's name, the date and time, the transcript, the sleep and the
 length, each where the event has it; the choice is a setting, so the next share starts with it.
 
 `EventShares` reads the stretch's samples from the chunk files, fades them in and out like cut
@@ -569,7 +596,7 @@ larger, let the name and transcript wrap onto more lines, and show the number la
 right.
 
 The step lives in the package `ui.share`, apart from the screens that open it. `EventSharing`
-holds it and takes the events with their sleeps (`ShareItem`), so favourites selected in the
+holds it and takes the events with their sleeps (`ShareItem`), so tagged events selected in the
 library may come from several sleeps: every event carries its own sleep's audio (`EventAudio`),
 its stretch, lead-in and tail stop at that sleep's edges and gaps, and its file is read from that
 sleep's chunk files, read anew when the step opens. An event that its sleep's readable audio no
@@ -577,7 +604,7 @@ longer reaches (a chunk file went missing) is left out, and a share with none le
 failed. `EventSharing.open` gives
 one event the movable stretch and several one lead-in and tail. The sleep screen's
 `SleepViewModel` holds one with the sleep's player, which listens to a single stretch; the
-`LibraryViewModel` holds one without a player, for several favourites, and its step offers no
+`LibraryViewModel` holds one without a player, for several tagged events, and its step offers no
 listening.
 
 Each file is named after its event's local date and time (`SleepTalk 2026-11-08 22-55-41.mp4`), of

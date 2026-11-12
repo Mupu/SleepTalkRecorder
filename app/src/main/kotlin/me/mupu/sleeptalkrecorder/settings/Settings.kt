@@ -90,6 +90,15 @@ object Settings {
         Duration.ofDays(30),
         Duration.ofDays(1)..Duration.ofDays(365),
     )
+
+    /** Whether automatic deletion keeps sleeps with an event that has a tag of the user or a name. */
+    val keepTagged = booleanSetting("keep_tagged", true)
+
+    /**
+     * The tags the tag window gave and took away when its OK was last pressed, as `TagChanges`
+     * writes them; the window opens with them applied.
+     */
+    val tagChanges = textSetting("tag_changes")
 }
 
 /** The app's appearance. */

@@ -1,5 +1,6 @@
 package me.mupu.sleeptalkrecorder.data
 
+import android.database.sqlite.SQLiteConstraintException
 import android.database.sqlite.SQLiteException
 import android.util.Log
 import androidx.room.withTransaction
@@ -93,7 +94,7 @@ class SleepRepository(
     /** How far speech recognition got through a sleep's events; published only when it changed. */
     fun transcriptionCount(sleepId: Long): Flow<TranscriptionCount> = dao.transcriptionCount(sleepId).distinctUntilChanged()
 
-    /** The event kinds the sleep screen offers a filter for. */
+    /** The event kinds the tag filter offers as system tags. */
     fun filterKinds(): Flow<List<EventKindEntity>> = dao.filterKinds()
 
     /** The stretches of a sleep's audio in which the microphone was unavailable, in order. */
@@ -234,8 +235,6 @@ class SleepRepository(
         database.withTransaction {
             dao.deleteHidden(sleepId, event.start, event.end)
             if (hidden) {
-                // A hidden event is no favourite: one is kept to be heard again, the other skipped.
-                dao.deleteFavourites(sleepId, event.start, event.end)
                 dao.insertAnnotations(
                     listOf(
                         AnnotationEntity(
@@ -251,51 +250,81 @@ class SleepRepository(
         }
     }
 
+    /** Favourite and the user's own tags, Favourite first. */
+    fun tags(): Flow<List<TagEntity>> = dao.tags()
+
     /**
-     * Keeps [event] as a favourite with the [name] the user gave it (null for none), or, with
-     * [favourite] false, removes every favourite mark that overlaps it. A favourite is shown again
-     * if it was hidden. Marks are the user's, so neither a new search for events nor speech
-     * recognition removes them.
-     *
-     * Returns the favourite marks it replaced, which [restoreFavourites] puts back.
+     * Makes an own tag with [name], trimmed; returns its id, or null if the name is blank or
+     * another tag already has it, whatever its case.
      */
-    suspend fun setFavourite(sleepId: Long, event: SleepEvent, favourite: Boolean, name: String?): List<AnnotationEntity> =
+    suspend fun createTag(name: String): Long? {
+        val trimmed = name.trim().ifBlank { return null }
+        return try {
+            dao.insertTag(TagEntity(type = TagType.OWN, name = trimmed))
+        } catch (_: SQLiteConstraintException) {
+            null
+        }
+    }
+
+    /** Deletes the own tag [tagId], which takes it from every event; Favourite is never deleted. */
+    suspend fun deleteTag(tagId: Long) = dao.deleteTag(tagId)
+
+    /** How many events of all sleeps have the tag [tagId], which deleting it takes it from. */
+    suspend fun taggedEventCount(tagId: Long): Int = dao.taggedEventCount(tagId)
+
+    /**
+     * Gives each of [events] the tags [added] it lacks, with a mark of the user over its stretch,
+     * and takes the tags [removed] from it by removing every mark of them that overlaps it. Marks
+     * are the user's, so neither a new search for events nor speech recognition removes them.
+     */
+    suspend fun changeTags(events: List<SleepEventOf>, added: Set<Long>, removed: Set<Long>) {
         database.withTransaction {
-            val replaced = dao.favourites(sleepId, event.start, event.end)
-            dao.deleteFavourites(sleepId, event.start, event.end)
-            if (favourite) {
-                dao.deleteHidden(sleepId, event.start, event.end)
+            for ((sleepId, event) in events) {
+                for (tagId in removed) dao.deleteTagMarks(sleepId, tagId, event.start, event.end)
                 dao.insertAnnotations(
-                    listOf(
+                    (added - event.tagIds).map { tagId ->
                         AnnotationEntity(
                             sleepId = sleepId,
-                            type = AnnotationType.FAVOURITE,
+                            type = AnnotationType.TAG,
                             start = event.start,
                             end = event.end,
-                            text = name?.trim()?.ifBlank { null },
                             origin = AnnotationOrigin.USER,
-                        ),
-                    ),
+                            tagId = tagId,
+                        )
+                    },
                 )
             }
-            replaced
         }
+    }
 
-    /** Undoes [setFavourite] on [event]: its favourite marks become the [previous] ones again. */
-    suspend fun restoreFavourites(sleepId: Long, event: SleepEvent, previous: List<AnnotationEntity>) {
+    /** Names [event] [name], trimmed, in place of the names that overlap it; a blank name takes its name away. */
+    suspend fun setName(sleepId: Long, event: SleepEvent, name: String) {
         database.withTransaction {
-            dao.deleteFavourites(sleepId, event.start, event.end)
-            dao.insertAnnotations(previous.map { it.copy(id = 0) })
+            dao.deleteNames(sleepId, event.start, event.end)
+            val trimmed = name.trim().ifBlank { return@withTransaction }
+            dao.insertAnnotations(
+                listOf(
+                    AnnotationEntity(
+                        sleepId = sleepId,
+                        type = AnnotationType.NAME,
+                        start = event.start,
+                        end = event.end,
+                        text = trimmed,
+                        origin = AnnotationOrigin.USER,
+                    ),
+                ),
+            )
         }
     }
 
     /**
-     * The favourites of all sleeps with the sleep each belongs to, the newest sleep first, each
-     * with the kind and words of its winning transcript like [events].
+     * The events of all sleeps that have a tag of the user or a name, hidden ones too, with the
+     * sleep each belongs to, the newest sleep first, each with the kind and words of its winning
+     * transcript like [events].
      */
-    fun favourites(): Flow<List<SleepEventOf>> = combine(
-        dao.favouriteEvents(),
-        dao.favouriteTranscripts(),
+    fun taggedEvents(): Flow<List<SleepEventOf>> = combine(
+        dao.taggedEvents(),
+        dao.taggedTranscripts(),
         dao.kinds(),
         activeModel,
     ) { events, transcripts, kinds, active ->

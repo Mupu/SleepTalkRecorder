@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.11.0] - 2026-11-12
+
+### Hinzugefügt
+
+- Sortiere Ereignisse mit Tags. Der Tag-Knopf zwischen dem Abspielknopf eines Ereignisses und seinem ⋮-Menü, oder in der Leiste mehrerer ausgewählter Ereignisse, öffnet die Tags des Ereignisses: Favorit und Tags, die du selbst anlegst, angehakt, leer oder mit Strich, wenn nur manche der ausgewählten Ereignisse ihn haben. Das Fenster öffnet mit deinen letzten Änderungen angehakt, sodass du das nächste Ereignis mit dem Knopf und OK genauso taggst. Der Filterknopf über den Ereignissen wählt beliebige deiner Tags und der automatischen (Sprache, Ereignis, Murmeln, Benannt, Ausgeblendet); die gewählten erscheinen als Pillen, die ein Tippen entfernt, die Liste zeigt die Ereignisse mit einem davon, und „Alle“ zeigt wieder jedes Ereignis. Deine Favoriten wurden zum Tag Favorit und behalten ihre Namen, die ein Ereignis nicht mehr zum Favoriten machen. Der Tab „Getaggt“ der Bibliothek listet jedes Ereignis mit einem deiner Tags oder einem Namen, mit demselben Filter. „Getaggte Schlafzeiten behalten“ beim automatischen Löschen behält solche Schlafzeiten, wie bisher die mit Favoriten.
+
 ## [0.10.1] - 2026-11-11
 
 ### Behoben

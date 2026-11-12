@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.11.0] - 2026-11-12
+
+### Added
+
+- Sort events with tags. The tag button between an event's play button and its ⋮ menu, or in the bar of several selected events, opens the event's tags: Favourite and tags you make yourself, ticked, empty, or a dash when only some of the selected events have one. The window opens with your last changes ticked, so tagging the next event the same way takes the button and OK. The filter button above the events chooses any of your tags and the automatic ones (speech, plain event, murmur, named, hidden); the chosen ones show as pills that a tap removes, the list shows the events with any of them, and "All" shows every event again. Your favourites became the tag Favourite and keep their names, which no longer make an event a favourite. The library's "Tagged" tab lists every event with one of your tags or a name, with the same filter. "Keep tagged sleeps" under automatic deletion keeps such sleeps, as favourites were kept before.
+
 ## [0.10.1] - 2026-11-11
 
 ### Fixed

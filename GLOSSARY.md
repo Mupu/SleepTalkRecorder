@@ -36,9 +36,21 @@ _Avoid_: Voice line, clip, utterance, detection
 An event the user marked as not interesting; it stays in the sleep but is skipped and greyed out like silence.
 _Avoid_: Deleted event, false positive
 
+**Tag**:
+A label the user gives events to sort them: Favourite or one of their own, which they create and delete. A tag belongs to a stretch of the sleep, so it keeps to its event when the event is found again. A filter of tags lists the events with any of them; a sleep with a tagged or named event is kept from automatic deletion while the user keeps tagged sleeps.
+_Avoid_: Label, category, folder
+
 **Favourite**:
-An event the user keeps to hear again, optionally with a name they gave it; it is never hidden, and a sleep with favourites is not deleted automatically.
+The tag the app provides: it works like the user's own tags but cannot be deleted. Events are kept as favourites to hear them again.
 _Avoid_: Bookmark, starred event
+
+**System tag**:
+A tag the app sets on its own and the filter offers beside the user's: named, hidden, each event kind and murmur. It follows from the event and can be filtered by, but neither given nor taken away.
+_Avoid_: Automatic label, smart tag
+
+**Name**:
+A short title the user gives an event, shown above its words and in what is shared; a named event has the system tag named.
+_Avoid_: Title, caption
 
 **Speech event**:
 An event in which transcription found words or wordless murmuring; the mark is a guess layered on top of the event and never hides or removes it. The user can turn a speech event back into a plain event, and mark any event as speech.

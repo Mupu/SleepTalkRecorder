@@ -148,6 +148,13 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenWhats
                         dialogTitle = stringResource(R.string.settings_auto_delete_dialog_title),
                         onChange = { viewModel.set(Settings.autoDeleteAfter, it) },
                     )
+                    SwitchSetting(
+                        icon = R.drawable.ic_label,
+                        label = stringResource(R.string.settings_keep_tagged),
+                        hint = stringResource(R.string.settings_keep_tagged_hint),
+                        checked = settings.keepTagged,
+                        onCheckedChange = { viewModel.set(Settings.keepTagged, it) },
+                    )
                 }
             }
 

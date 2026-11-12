@@ -27,8 +27,8 @@ class SleepRetentionTest {
         eventsFound = end != null,
     )
 
-    private fun expiredIds(keep: Duration, today: String, vararg sleeps: SleepSummary) =
-        SleepRetention(keep).expired(sleeps.toList(), LocalDate.parse(today)).map { it.id }
+    private fun expiredIds(keep: Duration, today: String, vararg sleeps: SleepSummary, keepTagged: Boolean = true) =
+        SleepRetention(keep, keepTagged).expired(sleeps.toList(), LocalDate.parse(today)).map { it.id }
 
     @Test
     fun `a sleep is kept for the given days after the day it is named after and deleted the day after`() {
@@ -88,9 +88,10 @@ class SleepRetentionTest {
     }
 
     @Test
-    fun `a sleep with favourites is never deleted`() {
-        val kept = sleep(1, "2026-10-01T23:00", "2026-10-02T07:00").copy(favouriteCount = 1)
+    fun `a sleep with tagged events is kept while tagged sleeps are kept, and deleted otherwise`() {
+        val tagged = sleep(1, "2026-10-01T23:00", "2026-10-02T07:00").copy(taggedCount = 1)
 
-        assertEquals(emptyList<Long>(), expiredIds(Duration.ofDays(1), "2026-11-09", kept))
+        assertEquals(emptyList<Long>(), expiredIds(Duration.ofDays(1), "2026-11-09", tagged))
+        assertEquals(listOf(1L), expiredIds(Duration.ofDays(1), "2026-11-09", tagged, keepTagged = false))
     }
 }

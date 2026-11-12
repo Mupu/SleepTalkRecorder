@@ -43,7 +43,7 @@ fun cardShapes(count: Int): List<CardShape> = when (count) {
 }
 
 /**
- * The still picture of a shared event's video in one of the [CardShape]s: the favourite's name,
+ * The still picture of a shared event's video in one of the [CardShape]s: the event's name,
  * or the event's kind without one, top left in bold, the date and clock time with the transcript
  * below them bottom right, and for an event shared with others its number in a disc top right, the
  * number its caption line starts with.

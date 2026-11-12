@@ -75,7 +75,7 @@ data class EventKindEntity(
     val name: String?,
     /** The colour events of this kind are drawn in. */
     val color: KindColor,
-    /** Whether the sleep screen offers a filter that shows only events of this kind. */
+    /** Whether the tag filter offers the kind as a system tag ([EventTag.System.Kind]). */
     @ColumnInfo(name = "has_filter") val hasFilter: Boolean,
 )
 
@@ -111,12 +111,40 @@ enum class AnnotationType {
     HIDDEN,
 
     /**
-     * The user keeps the events over the stretch as favourites, with the name they gave them
-     * ([AnnotationEntity.text], null without one). Like a hidden mark, it counts for every event
-     * that overlaps it; an event is never a favourite and hidden at once.
+     * The user gave the events over the stretch the tag [AnnotationEntity.tagId]. Like a hidden
+     * mark, it counts for every event that overlaps it, so the tag keeps to its event when a later
+     * search finds it with slightly different bounds.
      */
-    FAVOURITE,
+    TAG,
+
+    /**
+     * The user named the events over the stretch ([AnnotationEntity.text]). Like a hidden mark, it
+     * counts for every event that overlaps it; the latest such mark gives the name.
+     */
+    NAME,
 }
+
+/** Whether a [TagEntity] is the one the app provides or one of the user's own. */
+enum class TagType {
+    /** Favourite: provided by the app, assignable like an own tag but never deleted. */
+    FAVOURITE,
+
+    /** A tag the user created and can delete. */
+    OWN,
+}
+
+/**
+ * A tag the user sorts events with: Favourite or one of their own. Tags are given to events by
+ * [AnnotationType.TAG] annotations, which go with their tag when it is deleted. The tags the app
+ * sets on its own (system tags, see [EventTag.System]) are not stored but follow from the event.
+ */
+@Entity(tableName = "tag", indices = [Index("name", unique = true)])
+data class TagEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val type: TagType,
+    /** The user's name, unique whatever its case; null for Favourite, which the app names in its language. */
+    @ColumnInfo(collate = ColumnInfo.NOCASE) val name: String?,
+)
 
 /** Where an annotation comes from. */
 enum class AnnotationOrigin {
@@ -160,10 +188,16 @@ data class Producer(
             onDelete = ForeignKey.CASCADE,
         ),
         ForeignKey(entity = EventKindEntity::class, parentColumns = ["id"], childColumns = ["kind_id"]),
+        ForeignKey(
+            entity = TagEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["tag_id"],
+            onDelete = ForeignKey.CASCADE,
+        ),
     ],
-    // Annotations are looked up by sleep, type and stretch: an event's transcripts and hidden
+    // Annotations are looked up by sleep, type and stretch: an event's transcripts and the user's
     // marks, which the sleep screen, the library and speech recognition ask for every event.
-    indices = [Index("sleep_id", "type", "start_ms", "end_ms"), Index("kind_id")],
+    indices = [Index("sleep_id", "type", "start_ms", "end_ms"), Index("kind_id"), Index("tag_id")],
 )
 data class AnnotationEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -180,6 +214,8 @@ data class AnnotationEntity(
     /** A text whose meaning depends on [type]. */
     val text: String? = null,
     val origin: AnnotationOrigin,
+    /** The tag an [AnnotationType.TAG] annotation gives its stretch. */
+    @ColumnInfo(name = "tag_id") val tagId: Long? = null,
     /** The analysis or model that made it; null for the user. */
     @Embedded val producer: Producer? = null,
 ) {
@@ -212,8 +248,11 @@ data class SleepSummary(
     @ColumnInfo(name = "event_ms") val eventMillis: Long,
     /** Whether its events have been found, which happens right after the stop. */
     @ColumnInfo(name = "events_found") val eventsFound: Boolean,
-    /** How many of its events the user keeps as favourites; automatic deletion keeps such a sleep. */
-    @ColumnInfo(name = "favourite_count") val favouriteCount: Int = 0,
+    /**
+     * How many of its events have a tag of the user or a name, hidden ones included; automatic
+     * deletion keeps such a sleep while the user keeps tagged sleeps.
+     */
+    @ColumnInfo(name = "tagged_count") val taggedCount: Int = 0,
 ) {
     /** Whether the sleep is still being recorded. */
     val isRunning: Boolean get() = endedAt == null
@@ -241,9 +280,9 @@ data class SleepEvent(
     @ColumnInfo(name = "transcript_producer") val transcriptProducer: String? = null,
     /** Whether the user hid the event: a [AnnotationType.HIDDEN] annotation overlaps its stretch. */
     val hidden: Boolean = false,
-    /** Whether the user keeps it as a favourite: a [AnnotationType.FAVOURITE] annotation overlaps it. */
-    val favourite: Boolean = false,
-    /** The name the user gave the favourite; null without one or when it is no favourite. */
+    /** The ids of the user's tags it has, Favourite among them: those of the [AnnotationType.TAG] marks that overlap it. */
+    @ColumnInfo(name = "tag_ids") val tagIds: Set<Long> = emptySet(),
+    /** The name the user gave it: that of the latest [AnnotationType.NAME] mark that overlaps it; null without one. */
     val name: String? = null,
     /**
      * What each analysis made of the event, one result per model, the one that wins first; also
@@ -263,9 +302,9 @@ data class SleepEvent(
         transcriptOrigin: AnnotationOrigin?,
         transcriptProducer: String?,
         hidden: Boolean,
-        favourite: Boolean,
+        tagIds: Set<Long>,
         name: String?,
-    ) : this(id, start, end, kindId, kindName, kindColor, transcript, transcriptOrigin, transcriptProducer, hidden, favourite, name, emptyList())
+    ) : this(id, start, end, kindId, kindName, kindColor, transcript, transcriptOrigin, transcriptProducer, hidden, tagIds, name, emptyList())
 
     /** Whether the user corrected the transcript or said the event is not speech. */
     val corrected: Boolean get() = transcriptOrigin == AnnotationOrigin.USER
@@ -279,6 +318,18 @@ data class SleepEvent(
 
     /** Whether this is a speech event: one with words, or a murmur without them. */
     val isSpeech: Boolean get() = kindId == EventKinds.SPEECH
+
+    /**
+     * Every tag it has: the user's, and the system tags that follow from it, each listed in
+     * [EventTag.System]. A filter that lists tags shows the event when it has one of them.
+     */
+    val tags: Set<EventTag> get() = buildSet {
+        tagIds.mapTo(this) { EventTag.Stored(it) }
+        if (name != null) add(EventTag.System.Named)
+        if (hidden) add(EventTag.System.Hidden)
+        add(EventTag.System.Kind(kindId))
+        if (isSpeech && transcript == null) add(EventTag.System.Murmur)
+    }
 
     /** The stretch of the sleep's audio the event takes. */
     val stretch: Stretch get() = Stretch(start, end)

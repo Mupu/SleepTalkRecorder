@@ -97,13 +97,7 @@
     <string name="event_details">%1$s · Pos %2$s</string>
     <string name="kind_event">Event</string>
     <string name="kind_speech">Speech</string>
-    <string name="filter_all">All</string>
-    <!-- The filter chip of an event kind: "Speech only". -->
-    <string name="filter_kind_only">%1$s only</string>
     <string name="no_events_filter">No events for this filter.</string>
-    <!-- The filter chip that lists only the hidden events. -->
-    <string name="filter_hidden">Hidden</string>
-    <string name="no_hidden_events">No hidden events.</string>
     <!-- The tag of a hidden event in the list. -->
     <string name="hidden_tag">hidden</string>
     <string name="hide_event">Hide</string>
@@ -300,6 +294,8 @@
     <!-- %1$d and %2$d are the fewest and most days allowed. -->
     <string name="settings_auto_delete_days_range">Allowed: %1$d to %2$d</string>
     <!-- Follows settings_auto_delete_on: "Sleeps are deleted after 30 days". -->
+    <string name="settings_keep_tagged">Keep tagged sleeps</string>
+    <string name="settings_keep_tagged_hint">Sleeps with a tagged or named event are not deleted</string>
     <plurals name="settings_auto_delete_after_days">
         <item quantity="one">%d day</item>
         <item quantity="other">%d days</item>
@@ -454,23 +450,48 @@
     <string name="setup_updates_install_why">Allow it for %1$s, and updates install without asking each time. Without it, Android asks before every update.</string>
     <string name="setup_updates_never_recording">An update never installs during a recording.</string>
 
-    <!-- Favourites -->
-    <string name="filter_favourites">Favourites</string>
-    <string name="favourite">Favourite</string>
-    <string name="add_favourite">Add to favourites</string>
-    <string name="remove_favourite">Remove from favourites</string>
-    <string name="favourite_removed">Removed from favourites</string>
-    <plurals name="favourites_removed">
-        <item quantity="one">Removed from favourites</item>
-        <item quantity="other">%d removed from favourites</item>
+    <!-- Tags -->
+    <!-- The button that opens the tag filter of an event list. -->
+    <string name="tag_filter">Filter</string>
+    <!-- The button before the filter that lists every event that is not hidden. -->
+    <string name="tag_filter_all">All</string>
+    <string name="tag_filter_title">Show events with</string>
+    <string name="tag_filter_hint">Any of the chosen tags. Hidden events only show with Hidden.</string>
+    <!-- Content description of a chosen tag above the list; tapping it removes it from the filter. -->
+    <string name="tag_filter_remove">Remove %1$s from the filter</string>
+    <string name="tag_filter_clear">Clear</string>
+    <!-- The tags the user gives events: Favourite and their own. -->
+    <string name="tags_mine">My tags</string>
+    <!-- The tags the app sets on its own. -->
+    <string name="tags_automatic">Automatic</string>
+    <string name="tag_favourite">Favourite</string>
+    <string name="tag_named">Named</string>
+    <string name="tag_hidden">Hidden</string>
+    <string name="tag_murmur">Murmur</string>
+    <string name="tag_new">New tag</string>
+    <string name="tag_name">Name</string>
+    <string name="tag_name_taken">There is a tag with this name already.</string>
+    <!-- The button between an event's play button and its menu that opens the tag window. -->
+    <string name="tags_button">Tags</string>
+    <plurals name="tags_title">
+        <item quantity="one">Tags of the event</item>
+        <item quantity="other">Tags of %d events</item>
     </plurals>
+    <string name="tags_hint">The window opens with your last changes.</string>
+    <string name="tag_delete">Delete tag</string>
+    <!-- Title of the question before a tag is deleted: "Delete the tag Laughing?". -->
+    <string name="tag_delete_title">Delete the tag %1$s?</string>
+    <plurals name="tag_delete_text">
+        <item quantity="one">One event loses this tag.</item>
+        <item quantity="other">%d events lose this tag.</item>
+    </plurals>
+    <string name="tag_delete_unused">No event has this tag.</string>
     <string name="name_event_menu">Name</string>
     <string name="name_event">Name this event</string>
-    <string name="name_event_hint">Naming it keeps it as a favourite. Leave it empty for no name.</string>
-    <string name="no_favourites">No favourites in this sleep.</string>
+    <string name="name_event_hint">Leave it empty for no name.</string>
     <string name="library_tab_sleeps">Sleeps</string>
-    <string name="library_tab_favourites">Favourites</string>
-    <string name="library_no_favourites">No favourites yet. Add an event to them in its ⋮ menu.</string>
+    <string name="library_tab_tagged">Tagged</string>
+    <string name="library_no_tagged">No tagged events yet. Tag an event with the tag button in its row, or name it.</string>
 
     <!-- Export for analysis -->
     <string name="settings_analysis">Analysis</string>
@@ -484,7 +505,7 @@
 
     <!-- Sharing an event -->
     <string name="share_event">Share</string>
-    <string name="share_favourite">Share this event</string>
+    <string name="share_tagged">Share this event</string>
     <!-- Title of the share step: "Share the event at 03:14:07". -->
     <string name="share_title">Share the event at %1$s</string>
     <!-- The stretch that is shared: "03:14:05–03:14:09 · 4.0 s". -->

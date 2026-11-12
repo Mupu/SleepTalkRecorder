@@ -5,7 +5,7 @@ import java.time.Duration
 
 /**
  * The events selected together, by id, which is unique across all sleeps: on the sleep screen or
- * among the library's favourites. Selection mode lasts while any of them is still listed; ids of
+ * among the library's tagged events. Selection mode lasts while any of them is still listed; ids of
  * events that are no longer listed select nothing.
  */
 data class EventSelection(val ids: Set<Long> = emptySet()) {

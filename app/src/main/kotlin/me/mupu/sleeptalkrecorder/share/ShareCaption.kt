@@ -2,7 +2,7 @@ package me.mupu.sleeptalkrecorder.share
 
 /** What a shared event's caption can name; the user picks them in the share step. */
 enum class CaptionItem {
-    /** The favourite's name, for an event that has one. */
+    /** The name the user gave the event, for an event that has one. */
     NAME,
 
     /** The local date and clock time the event began. */
@@ -41,7 +41,7 @@ enum class ShareFormat {
  * null where the event has nothing to say.
  */
 data class EventLabels(
-    /** The favourite's name. */
+    /** The name the user gave the event. */
     val name: String?,
     /** The name of the event's kind, "Speech" or "Event", which the card shows when it has no [name]. */
     val kind: String,

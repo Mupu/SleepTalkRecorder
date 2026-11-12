@@ -19,8 +19,8 @@ import kotlinx.coroutines.flow.first
 
 /**
  * Automatic deletion of old sleeps: while [Settings.autoDelete] is on, WorkManager runs
- * [AutoDeleteWorker] once a day, and once more right after the setting or its days change, so a
- * shorter time takes effect at once instead of on the next daily run.
+ * [AutoDeleteWorker] once a day, and once more right after the setting, its days or whether
+ * tagged sleeps are kept change, so a change takes effect at once instead of on the next daily run.
  */
 object AutoDeletion {
 
@@ -34,7 +34,7 @@ object AutoDeletion {
     suspend fun followSettings(context: Context, settings: SettingsStore) {
         val workManager = WorkManager.getInstance(context)
 
-        combine(settings.flow(Settings.autoDelete), settings.flow(Settings.autoDeleteAfter)) { on, _ -> on }
+        combine(settings.flow(Settings.autoDelete), settings.flow(Settings.autoDeleteAfter), settings.flow(Settings.keepTagged)) { on, _, _ -> on }
             .collect { on ->
                 if (on) {
                     // The worker reads the settings when it runs, so a scheduled request stays valid.
@@ -72,7 +72,7 @@ class AutoDeleteWorker(context: Context, params: WorkerParameters) : CoroutineWo
         if (!settings.flow(Settings.autoDelete).first()) return Result.success()
 
         val zone = ZoneId.systemDefault()
-        val retention = SleepRetention(settings.flow(Settings.autoDeleteAfter).first())
+        val retention = SleepRetention(settings.flow(Settings.autoDeleteAfter).first(), settings.flow(Settings.keepTagged).first())
         for (sleep in retention.expired(repository.sleeps().first(), LocalDate.now(zone))) {
             repository.deleteSleep(sleep.id)
         }

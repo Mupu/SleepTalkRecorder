@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import me.mupu.sleeptalkrecorder.data.AnnotationOrigin
 import me.mupu.sleeptalkrecorder.data.EventKindEntity
 import me.mupu.sleeptalkrecorder.data.EventKinds
+import me.mupu.sleeptalkrecorder.data.EventTag
 import me.mupu.sleeptalkrecorder.data.SleepEvent
+import me.mupu.sleeptalkrecorder.data.SleepEventOf
 import me.mupu.sleeptalkrecorder.data.SleepRepository
 import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.data.TranscriptResult
@@ -31,6 +33,8 @@ import me.mupu.sleeptalkrecorder.transcription.Transcriptions
 import me.mupu.sleeptalkrecorder.ui.share.EventSelection
 import me.mupu.sleeptalkrecorder.ui.share.EventSharing
 import me.mupu.sleeptalkrecorder.ui.share.ShareItem
+import me.mupu.sleeptalkrecorder.ui.tags.TagEditing
+import me.mupu.sleeptalkrecorder.ui.tags.TagFilter
 import java.time.Duration
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -48,6 +52,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -60,7 +65,7 @@ class SleepViewModel(
     private val player: SleepPlayer,
     private val transcriptions: Transcriptions,
     private val shares: EventShares,
-    /** The event to jump to once the sleep is loaded, as when a favourite is opened; null for none. */
+    /** The event to jump to once the sleep is loaded, as when a tagged event is opened; null for none. */
     openEventId: Long? = null,
     /** What happens with [openEventId] once playback stands there. */
     openAction: OpenEventAction = OpenEventAction.SHOW,
@@ -73,7 +78,7 @@ class SleepViewModel(
     private val analysis = MutableStateFlow<Pair<SleepTrack, Detection>?>(null)
 
     /** Which events the list shows and cut playback plays. */
-    private val filter = MutableStateFlow<EventFilter>(EventFilter.All)
+    private val filter = MutableStateFlow(TagFilter())
 
     /** Where the user is dragging the timeline to; null when not dragging. */
     private val scrubPosition = MutableStateFlow<Duration?>(null)
@@ -81,7 +86,7 @@ class SleepViewModel(
     /** The event last played on its own; it is playing while the player plays a stretch. */
     private val eventPlayed = MutableStateFlow<Long?>(null)
 
-    /** The events selected for sharing, keeping or hiding together; selection mode while any is. */
+    /** The events selected for sharing, tagging or hiding together; selection mode while any is. */
     private val selection = MutableStateFlow(EventSelection())
 
     /** Whether cut playback is chosen; it is the default, because it is what the app is for. */
@@ -131,7 +136,7 @@ class SleepViewModel(
                 if (timeline == null) event.stretch else timeline.withLeadInAndTail(event.stretch, leadIn, tail, unavailable)
             },
         )
-    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, ListedEvents(EventFilter.All, emptyList(), emptyList()))
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, ListedEvents(TagFilter(), emptyList(), emptyList()))
 
     /** What cut playback plays; null while full playback is chosen or the audio is still being read. */
     private val cutPlan = combine(listed, timeline, cut) { listed, timeline, cut ->
@@ -141,12 +146,15 @@ class SleepViewModel(
     init {
         viewModelScope.launch { cutPlan.collect(player::setCutPlan) }
 
-        // A favourite opened from the library: once the audio and the events are read, playback jumps
-        // to it, and plays it on its own or opens its share step when those buttons opened it.
+        // A tagged event opened from the library: once the audio and the events are read, the list
+        // shows it, also when it is hidden, and playback jumps to it, and plays it on its own or
+        // opens its share step when those buttons opened it.
         if (openEventId != null) {
             viewModelScope.launch {
                 timeline.first { it != null }
                 val event = sleepAndEvents.first { (_, events, _) -> events.any { it.id == openEventId } }.second.first { it.id == openEventId }
+                // A hidden event is listed, and so played, only while hidden events are chosen.
+                if (event.hidden) filter.value = TagFilter(setOf(EventTag.System.Hidden))
                 when (openAction) {
                     OpenEventAction.SHOW -> seekToEvent(event)
                     OpenEventAction.PLAY -> togglePlayEvent(event)
@@ -196,7 +204,7 @@ class SleepViewModel(
         .filter { (run, outcome) -> run.sleepId == sleepId && outcome != TranscriptionRunner.Outcome.FINISHED }
         .map { (run, _) -> run }
 
-    /** The event kinds the event list can be filtered by. */
+    /** The event kinds the tag filter offers as system tags. */
     val filterKinds: StateFlow<List<EventKindEntity>> =
         repository.filterKinds().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -369,9 +377,32 @@ class SleepViewModel(
         return timeline.withLeadInAndTail(event.stretch, leadIn.value, tail.value, unavailable.value)
     }
 
-    /** Lists, and so plays, the events [filter] shows. */
-    fun setFilter(filter: EventFilter) {
-        this.filter.value = filter
+    /** Chooses [tag] in the filter, or takes it out, which changes the events listed and so played. */
+    fun toggleFilterTag(tag: EventTag) {
+        filter.update { it.toggle(tag) }
+    }
+
+    /** Lists every event that is not hidden again. */
+    fun clearFilter() {
+        filter.value = TagFilter()
+    }
+
+    /** The user's tags and the tag window of the sleep's events; a deleted tag leaves the filter. */
+    val tagging = TagEditing(viewModelScope, repository, settings, onDeleted = { id -> filter.update { it.without(id) } })
+
+    /** Opens the tag window for [event]. */
+    fun openTags(event: SleepEvent) {
+        tagging.open(listOf(SleepEventOf(sleepId, event)))
+    }
+
+    /** Opens the tag window for the selected events; selection mode ends once its choice is applied. */
+    fun tagSelected() {
+        tagging.open(selectedEvents().map { SleepEventOf(sleepId, it) })
+    }
+
+    /** Names [event] [name]; a blank name takes its name away. */
+    fun setName(event: SleepEvent, name: String) {
+        viewModelScope.launch { repository.setName(sleepId, event, name) }
     }
 
     /**
@@ -408,13 +439,6 @@ class SleepViewModel(
     /** The selected events of the sleep, in order. */
     private fun selectedEvents(): List<SleepEvent> = selection.value.of(sleepAndEvents.value.second)
 
-    /** Keeps the selected events as favourites, each with the name it has, and ends selection mode. */
-    fun favouriteSelected() {
-        val events = selectedEvents().filterNot { it.favourite }
-        clearSelection()
-        viewModelScope.launch { for (event in events) repository.setFavourite(sleepId, event, true, event.name) }
-    }
-
     /** Hides the selected events, which a snackbar undoes, and ends selection mode. */
     fun hideSelected() {
         val events = selectedEvents().filterNot { it.hidden }
@@ -429,27 +453,6 @@ class SleepViewModel(
     fun shareSelected() {
         val timeline = timeline.value ?: return
         sharing.open(selectedEvents().map { shareItem(it, timeline) })
-    }
-
-    private val favouriteRemovedChannel = Channel<FavouriteRemoved>(Channel.BUFFERED)
-
-    /** Each event the user removed from the favourites, once it is stored, so that can be undone. */
-    val favouriteRemoved: Flow<FavouriteRemoved> = favouriteRemovedChannel.receiveAsFlow()
-
-    /**
-     * Keeps [event] as a favourite ([favourite] true) with [name], which shows it again if it was
-     * hidden, or removes it from the favourites, reported once through [favouriteRemoved].
-     */
-    fun setFavourite(event: SleepEvent, favourite: Boolean, name: String? = event.name) {
-        viewModelScope.launch {
-            val previous = repository.setFavourite(sleepId, event, favourite, name)
-            if (!favourite) favouriteRemovedChannel.send(FavouriteRemoved(event, previous))
-        }
-    }
-
-    /** Makes the event of [change] a favourite again, with the name it had. */
-    fun undoFavouriteRemoval(change: FavouriteRemoved) {
-        viewModelScope.launch { repository.restoreFavourites(sleepId, change.event, change.previous) }
     }
 
     private val speechMarkedChannel = Channel<SpeechMarked>(Channel.BUFFERED)
@@ -647,4 +650,4 @@ private data class PlaybackControls(
 )
 
 /** The events the list shows, and the stretch around each that cut playback plays, in the same order. */
-private data class ListedEvents(val filter: EventFilter, val events: List<SleepEvent>, val played: List<Stretch>)
+private data class ListedEvents(val filter: TagFilter, val events: List<SleepEvent>, val played: List<Stretch>)
