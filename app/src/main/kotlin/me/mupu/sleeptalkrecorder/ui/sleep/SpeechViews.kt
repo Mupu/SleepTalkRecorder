@@ -260,13 +260,14 @@ internal fun TranscriptLine(
     }
 }
 
-/** One model's [result] of an event, with the model's name below. */
+/** One model's [result] of an event, with the model's name below, and that it is the new way's when it is. */
 @Composable
 private fun ModelResult(result: TranscriptResult, modifier: Modifier = Modifier) {
     Column(modifier) {
         ResultText(result.text, result.kindId)
+        val model = result.producer?.let(::modelName).orEmpty()
         Text(
-            result.producer?.let(::modelName).orEmpty(),
+            if (result.newWay) stringResource(R.string.result_new_way, model) else model,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -384,7 +385,7 @@ internal fun CorrectTranscriptDialog(event: SleepEvent, onSave: (String?, List<T
     var deleted by remember(event.id) { mutableStateOf(emptySet<Long>()) }
     val results = event.results.takeIf { it.size > 1 }.orEmpty().filter { it.annotationId !in deleted }
     // Until the user writes, the field shows the transcript the event would show, which deleting a result can change.
-    val shown = if (event.corrected) event.transcript else results.firstOrNull()?.text ?: event.transcript
+    val shown = if (event.corrected) event.transcript else results.firstOrNull { !it.newWay }?.text ?: event.transcript
     val text = written ?: shown.orEmpty()
 
     AlertDialog(
@@ -408,8 +409,9 @@ internal fun CorrectTranscriptDialog(event: SleepEvent, onSave: (String?, List<T
                             if (result.text != null) {
                                 TextButton(onClick = { written = result.text }) { Text(stringResource(R.string.use_result)) }
                             }
-                            // The last result stays, or the event would wait for speech recognition again.
-                            if (results.size > 1) {
+                            // The last own result stays, or the event would wait for speech recognition
+                            // again; the new way's results belong to its own events and stay too.
+                            if (!result.newWay && results.count { !it.newWay } > 1) {
                                 IconButton(onClick = { deleted = deleted + result.annotationId }) {
                                     Icon(painterResource(R.drawable.ic_delete), contentDescription = stringResource(R.string.delete_result))
                                 }

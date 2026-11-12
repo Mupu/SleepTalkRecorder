@@ -4,6 +4,7 @@ import me.mupu.sleeptalkrecorder.data.TranscriptionCount
 import me.mupu.sleeptalkrecorder.models.ModelLibrary
 import me.mupu.sleeptalkrecorder.models.ModelState
 import me.mupu.sleeptalkrecorder.models.ModelStatus
+import me.mupu.sleeptalkrecorder.models.SoundModel
 import me.mupu.sleeptalkrecorder.models.TranscriptionModel
 import me.mupu.sleeptalkrecorder.settings.Settings
 import me.mupu.sleeptalkrecorder.settings.SettingsStore
@@ -170,6 +171,14 @@ class Transcriptions(
     /** The installed models, in catalogue order. */
     val installedModels: Flow<List<ModelStatus>> = models.models.map { list -> list.filter { it.state == ModelState.Installed } }
 
+    /** Whether the sound models the second way of finding events needs by default are installed. */
+    val soundModelsReady: Flow<Boolean> = models.soundModels.map { list ->
+        list.filter { it.model in SoundModel.RECOMMENDED }.all { it.state == ModelState.Installed }
+    }
+
+    /** How far the second way of finding events is with [sleepId]; null while it does not work on it. */
+    fun newWayProgress(sleepId: Long): Flow<NewWayProgress?> = runner.newWayProgress.map { it?.takeIf { progress -> progress.sleepId == sleepId } }
+
     /** Where speech recognition stands for [sleepId], whose events are counted in [count]. */
     fun status(sleepId: Long, count: Flow<TranscriptionCount>): Flow<TranscriptionStatus> = combine(
         count,
@@ -194,6 +203,16 @@ class Transcriptions(
     suspend fun runNow(sleepId: Long) {
         resume()
         scheduler.run(TranscriptionRequest.Sleep(sleepId))
+    }
+
+    /**
+     * Lets the second way of finding events search [sleepId] again from its start now, with the
+     * current settings, once the first way's events wait for nothing, and recognises its events
+     * that are new then; every paused sleep goes on as well.
+     */
+    suspend fun searchAgain(sleepId: Long) {
+        resume()
+        scheduler.run(TranscriptionRequest.Sleep(sleepId, onlyPending = true, searchAgain = true))
     }
 
     /** Pauses speech recognition of [sleepId] before its next event, until the next run the settings start. */

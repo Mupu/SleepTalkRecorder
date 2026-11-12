@@ -1,5 +1,7 @@
 package me.mupu.sleeptalkrecorder.data
 
+import me.mupu.sleeptalkrecorder.detection.FoundBy
+
 /** The tag the app provides; the database adds it each time it opens if it is missing. */
 object Tags {
 
@@ -30,5 +32,20 @@ sealed interface EventTag {
 
         /** The event is of the kind [kindId], such as speech, murmur or noise. */
         data class Kind(val kindId: String) : System
+
+        /**
+         * The second way of finding events sorted the event as background. Such an event is left
+         * out of the list unless this tag is chosen ([SleepEvent.background]).
+         */
+        data object Background : System
+
+        /** The second way of finding events could not tell whether the event is human or background. */
+        data object Unsure : System
+
+        /** What in the second way of finding events found the event: loudness, listening or both. */
+        data class Found(val by: FoundBy) : System
+
+        /** In a comparison of both ways of finding events, which of them found the event. */
+        data class Ways(val found: WaysFound) : System
     }
 }

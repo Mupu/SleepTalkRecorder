@@ -1,10 +1,14 @@
 package me.mupu.sleeptalkrecorder.settings
 
+import me.mupu.sleeptalkrecorder.data.EventWay
+import me.mupu.sleeptalkrecorder.detection.SearchSettings
+import me.mupu.sleeptalkrecorder.models.SoundModel
 import me.mupu.sleeptalkrecorder.models.TranscriptionModel
 import me.mupu.sleeptalkrecorder.share.CaptionItem
 import me.mupu.sleeptalkrecorder.time.SleepWindows
 import java.time.Duration
 import java.time.LocalTime
+import kotlinx.coroutines.flow.first
 
 /**
  * Every setting the app stores in its [SettingsStore]. A new setting is one more declaration here;
@@ -99,7 +103,41 @@ object Settings {
      * writes them; the window opens with them applied.
      */
     val tagChanges = textSetting("tag_changes")
+
+    /** Which way's events the sleep screen shows: the first way's by default during the test phase of the second. */
+    val eventWay = enumSetting("event_way", EventWay.OLD)
+
+    /** Whether the settings show the developer settings and the sleep screen what the second way of finding events knows. */
+    val developerMode = booleanSetting("developer_mode", false)
+
+    /** The second way's loudness sensitivity ([SearchSettings.sensitivity]); a developer setting, like those below. */
+    val searchSensitivity = floatSetting("search_sensitivity", SearchSettings().sensitivity, 0f..1f)
+
+    /** Whether the second way's listening pass runs ([SearchSettings.listening]). */
+    val searchListening = booleanSetting("search_listening", SearchSettings().listening)
+
+    /** The listening pass's threshold ([SearchSettings.listeningThreshold]). */
+    val listeningThreshold = floatSetting("search_listening_threshold", SearchSettings().listeningThreshold, 0.02f..0.6f)
+
+    /** The human score below which a candidate can be background ([SearchSettings.backgroundThreshold]). */
+    val backgroundThreshold = floatSetting("search_background_threshold", SearchSettings().backgroundThreshold, 0f..0.5f)
+
+    /** Whether the onset rule votes on background ([SearchSettings.onsetVote]). */
+    val onsetVote = booleanSetting("search_onset_vote", SearchSettings().onsetVote)
+
+    /** The model that sorts the second way's candidates ([SearchSettings.sortingModel]). */
+    val sortingModel = enumSetting("search_sorting_model", SoundModel.CED_MINI, SoundModel.SORTERS)
 }
+
+/** The second way's settings as they are stored now, which the next search of a sleep uses. */
+suspend fun SettingsStore.searchSettings(): SearchSettings = SearchSettings(
+    sensitivity = flow(Settings.searchSensitivity).first(),
+    listening = flow(Settings.searchListening).first(),
+    listeningThreshold = flow(Settings.listeningThreshold).first(),
+    backgroundThreshold = flow(Settings.backgroundThreshold).first(),
+    onsetVote = flow(Settings.onsetVote).first(),
+    sortingModel = flow(Settings.sortingModel).first().id,
+)
 
 /** The app's appearance. */
 enum class ThemeMode {

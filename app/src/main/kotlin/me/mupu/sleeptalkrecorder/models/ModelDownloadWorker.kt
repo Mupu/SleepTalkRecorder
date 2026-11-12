@@ -33,13 +33,13 @@ class WorkManagerDownloads(context: Context) : ModelDownloads {
 
     private val workManager = WorkManager.getInstance(context)
 
-    override val states: Flow<Map<TranscriptionModel, ModelState>> = combine(
-        TranscriptionModel.entries.map { model ->
+    override val states: Flow<Map<DownloadableModel, ModelState>> = combine(
+        DownloadableModel.all.map { model ->
             workManager.getWorkInfosForUniqueWorkFlow(workName(model)).map { infos -> model to infos.lastOrNull()?.let(::stateOf) }
         },
     ) { states -> states.mapNotNull { (model, state) -> state?.let { model to it } }.toMap() }
 
-    override fun start(model: TranscriptionModel) {
+    override fun start(model: DownloadableModel) {
         val request = OneTimeWorkRequestBuilder<ModelDownloadWorker>()
             .setInputData(workDataOf(ModelDownloadWorker.KEY_MODEL to model.name))
             .setConstraints(Constraints(requiredNetworkType = NetworkType.CONNECTED))
@@ -48,7 +48,7 @@ class WorkManagerDownloads(context: Context) : ModelDownloads {
         workManager.enqueueUniqueWork(workName(model), ExistingWorkPolicy.KEEP, request)
     }
 
-    override fun cancel(model: TranscriptionModel) {
+    override fun cancel(model: DownloadableModel) {
         workManager.cancelUniqueWork(workName(model))
     }
 
@@ -66,17 +66,18 @@ class WorkManagerDownloads(context: Context) : ModelDownloads {
         WorkInfo.State.SUCCEEDED, WorkInfo.State.CANCELLED -> null
     }
 
-    private fun workName(model: TranscriptionModel) = "model-download-${model.id}"
+    private fun workName(model: DownloadableModel) = "model-download-${model.id}"
 }
 
 /**
  * Downloads one model with [ModelInstaller], as a foreground service with a progress notification
- * while it can be one, and activates it once it is installed.
+ * while it can be one. A transcription model becomes active once it is installed unless another
+ * is; either kind lets waiting work run, which may have waited for it.
  */
 class ModelDownloadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val model = TranscriptionModel.entries.find { it.name == inputData.getString(KEY_MODEL) } ?: return Result.failure()
+        val model = DownloadableModel.named(inputData.getString(KEY_MODEL)) ?: return Result.failure()
         val container = (applicationContext as SleepTalkApplication).container
         val installer = container.modelInstaller
         val notifications = ModelDownloadNotifications(applicationContext, id)
@@ -115,7 +116,7 @@ class ModelDownloadWorker(context: Context, params: WorkerParameters) : Coroutin
             return if (runAttemptCount + 1 < MAX_ATTEMPTS) Result.retry() else failure(DownloadFailure.NETWORK)
         }
 
-        container.modelLibrary.installed(model)
+        if (model is TranscriptionModel) container.modelLibrary.installed(model)
         container.scheduleTranscription()
         return Result.success()
     }
@@ -147,13 +148,13 @@ private class ModelDownloadNotifications(private val context: Context, private v
         channelDescription = R.string.notification_channel_model_description,
     )
 
-    fun foregroundInfo(model: TranscriptionModel, percent: Long?) = progress.foregroundInfo(notification(model, percent))
+    fun foregroundInfo(model: DownloadableModel, percent: Long?) = progress.foregroundInfo(notification(model, percent))
 
-    fun show(model: TranscriptionModel, percent: Long) {
+    fun show(model: DownloadableModel, percent: Long) {
         progress.show(notification(model, percent))
     }
 
-    private fun notification(model: TranscriptionModel, percent: Long?): Notification {
+    private fun notification(model: DownloadableModel, percent: Long?): Notification {
         val texts = progress.texts
         val cancel = WorkManager.getInstance(context).createCancelPendingIntent(workId)
         return progress.build {

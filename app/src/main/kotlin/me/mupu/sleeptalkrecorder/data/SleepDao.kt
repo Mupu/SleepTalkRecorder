@@ -162,6 +162,95 @@ interface SleepDao {
     )
     fun events(sleepId: Long): Flow<List<SleepEvent>>
 
+    /**
+     * The events the second way found in a sleep, in order, like [events] gives the first way's,
+     * each with its human score and how it was sorted ([Sorting.decode]).
+     */
+    @Query(
+        """
+        SELECT event.id, event.start_ms, event.end_ms, kind.id AS kind_id, kind.name AS kind_name,
+            kind.color AS kind_color, NULL AS transcript, NULL AS transcript_origin,
+            NULL AS transcript_producer, $IS_HIDDEN AS hidden, $TAG_IDS AS tag_ids, $EVENT_NAME AS name,
+            event.value AS score, event.text AS sorting
+        FROM annotation AS event
+        JOIN event_kind AS kind ON kind.id = event.kind_id
+        WHERE event.sleep_id = :sleepId AND event.type = 'CANDIDATE'
+        ORDER BY event.start_ms, event.id
+        """,
+    )
+    fun candidates(sleepId: Long): Flow<List<CandidateRow>>
+
+    /** The stretches of the second way's events of a sleep, in order. */
+    @Query("SELECT start_ms AS start, end_ms AS `end` FROM annotation WHERE sleep_id = :sleepId AND type = 'CANDIDATE' ORDER BY start_ms, id")
+    suspend fun candidateStretches(sleepId: Long): List<Stretch>
+
+    /** The stretches of the first way's events of a sleep that have a transcript of the phone, in order. */
+    @Query(
+        """
+        SELECT start_ms AS start, end_ms AS `end` FROM annotation AS event WHERE sleep_id = :sleepId AND type = 'EVENT'
+            AND $HAS_DEVICE_TRANSCRIPT
+        ORDER BY start_ms, id
+        """,
+    )
+    suspend fun transcribedEventStretches(sleepId: Long): List<Stretch>
+
+    /** The mark of the second way's search of a sleep by [producer] ([AnnotationType.SEARCH]); null until it began. */
+    @Query("SELECT * FROM annotation WHERE sleep_id = :sleepId AND type = 'SEARCH' AND producer = :producer ORDER BY id DESC LIMIT 1")
+    suspend fun searchMark(sleepId: Long, producer: String): AnnotationEntity?
+
+    /** [searchMark] as it changes. */
+    @Query("SELECT * FROM annotation WHERE sleep_id = :sleepId AND type = 'SEARCH' AND producer = :producer ORDER BY id DESC LIMIT 1")
+    fun searchMarkFlow(sleepId: Long, producer: String): Flow<AnnotationEntity?>
+
+    /** The ids of finished sleeps the second way, [producer] [version], has not searched to their end, the latest first. */
+    @Query(
+        """
+        SELECT id FROM sleep WHERE ended_at IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM annotation WHERE annotation.sleep_id = sleep.id AND type = 'SEARCH'
+            AND producer = :producer AND producer_version = :version AND value = 1
+        )
+        ORDER BY started_at DESC
+        """,
+    )
+    suspend fun sleepsNotSearched(producer: String, version: String?): List<Long>
+
+    /** The ids of finished sleeps the second way, [producer] [version], searched to their end, the latest first. */
+    @Query(
+        """
+        SELECT id FROM sleep WHERE ended_at IS NOT NULL AND EXISTS (
+            SELECT 1 FROM annotation WHERE annotation.sleep_id = sleep.id AND type = 'SEARCH'
+            AND producer = :producer AND producer_version = :version AND value = 1
+        )
+        ORDER BY started_at DESC
+        """,
+    )
+    suspend fun sleepsSearched(producer: String, version: String?): List<Long>
+
+    /** The phone's transcripts of the second way's events of a sleep ([AnnotationType.CANDIDATE_TRANSCRIPT]). */
+    @Query("SELECT * FROM annotation WHERE sleep_id = :sleepId AND type = 'CANDIDATE_TRANSCRIPT' ORDER BY id")
+    suspend fun candidateTranscripts(sleepId: Long): List<AnnotationEntity>
+
+    /** [candidateTranscripts] as they change. */
+    @Query("SELECT * FROM annotation WHERE sleep_id = :sleepId AND type = 'CANDIDATE_TRANSCRIPT' ORDER BY id")
+    fun candidateTranscriptFlow(sleepId: Long): Flow<List<AnnotationEntity>>
+
+    /** Removes the transcripts of the second way's events by [producerId] over exactly one stretch, before a new one is stored. */
+    @Query(
+        """
+        DELETE FROM annotation WHERE sleep_id = :sleepId AND type = 'CANDIDATE_TRANSCRIPT' AND origin = :origin
+            AND producer IS :producerId AND start_ms = :start AND end_ms = :end
+        """,
+    )
+    suspend fun deleteCandidateTranscripts(sleepId: Long, start: Duration, end: Duration, origin: AnnotationOrigin, producerId: String?)
+
+    /** Removes the second way's events that start at or after [from], before that part is stored again. */
+    @Query("DELETE FROM annotation WHERE sleep_id = :sleepId AND type = 'CANDIDATE' AND producer = :producerId AND start_ms >= :from")
+    suspend fun deleteCandidatesFrom(sleepId: Long, producerId: String, from: Duration)
+
+    /** Removes the marks of the second way's search of a sleep. */
+    @Query("DELETE FROM annotation WHERE sleep_id = :sleepId AND type = 'SEARCH' AND producer = :producerId")
+    suspend fun deleteSearchMarks(sleepId: Long, producerId: String)
+
     /** The events of all sleeps, like [events] gives those of one, by sleep and in order. */
     @Query(
         """
@@ -393,6 +482,12 @@ private const val IS_TAGGED = """
 
 /** An event of the sleep [sleepId]. */
 data class SleepEventOf(@ColumnInfo(name = "sleep_id") val sleepId: Long, @Embedded val event: SleepEvent)
+
+/** An event of the second way as stored: the event, its human [score] and its [sorting] text ([Sorting.decode]). */
+data class CandidateRow(@Embedded val event: SleepEvent, val score: Double?, val sorting: String?) {
+    /** The event with how it was sorted. */
+    fun sorted(): SleepEvent = event.copy(sorting = Sorting.decode(sorting, score))
+}
 
 /**
  * A sleep with its recordings and the events that are not hidden. Only the events of a finished

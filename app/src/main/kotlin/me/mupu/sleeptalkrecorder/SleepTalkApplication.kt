@@ -5,11 +5,13 @@ import android.content.Context
 import android.database.sqlite.SQLiteException
 import android.util.Log
 import me.mupu.sleeptalkrecorder.data.AnalysisExport
+import me.mupu.sleeptalkrecorder.data.CandidateTranscripts
 import me.mupu.sleeptalkrecorder.data.RecordingFiles
 import me.mupu.sleeptalkrecorder.data.SleepDatabase
 import me.mupu.sleeptalkrecorder.data.SleepRecordings
 import me.mupu.sleeptalkrecorder.data.SleepRepository
 import me.mupu.sleeptalkrecorder.data.SleepTranscripts
+import me.mupu.sleeptalkrecorder.data.SoundSearches
 import me.mupu.sleeptalkrecorder.models.HttpByteSource
 import me.mupu.sleeptalkrecorder.models.ModelInstaller
 import me.mupu.sleeptalkrecorder.models.ModelLibrary
@@ -22,6 +24,7 @@ import me.mupu.sleeptalkrecorder.retention.AutoDeletion
 import me.mupu.sleeptalkrecorder.settings.AppLanguages
 import me.mupu.sleeptalkrecorder.settings.Settings
 import me.mupu.sleeptalkrecorder.settings.SettingsStore
+import me.mupu.sleeptalkrecorder.settings.searchSettings
 import me.mupu.sleeptalkrecorder.share.EventShares
 import me.mupu.sleeptalkrecorder.transcription.EventAnalysis
 import me.mupu.sleeptalkrecorder.transcription.SherpaTranscriber
@@ -126,12 +129,24 @@ class AppContainer(context: Context) {
 
     private val transcriptStore = SleepTranscripts(database, recordingFiles)
 
-    /** Runs speech recognition over the events of sleeps; jobs of [transcriptionScheduler] call it. */
+    /** The second way of finding events, with the installed sound models and the current developer settings. */
+    private val soundSearches = SoundSearches(
+        sleepRepository,
+        installed = { model -> if (modelLibrary.isInstalled(model)) modelInstaller.modelDirectory(model.id) else null },
+        settings = { settings.searchSettings() },
+    )
+
+    /**
+     * Runs speech recognition over the events of sleeps, and once none of the first way's waits,
+     * the second way's search and its own events; jobs of [transcriptionScheduler] call it.
+     */
     val transcriptionRunner = TranscriptionRunner(
         transcriptStore,
         transcriptionPauses,
         battery = { batteryState(context) },
         onFailure = { message, error -> Log.w("Transcription", message, error) },
+        search = soundSearches,
+        candidates = CandidateTranscripts(database, transcriptStore),
     )
 
     /** Speech recognition as the screens see it. */
@@ -174,12 +189,13 @@ class AppContainer(context: Context) {
         recorder.state,
         playing,
         transcriptionRunner.progress,
+        transcriptionRunner.newWayProgress,
         visible,
-    ) { recording, isPlaying, transcription, isVisible ->
+    ) { recording, isPlaying, transcription, newWay, isVisible ->
         AppActivity(
             recording = recording is RecorderState.Recording || recording == RecorderState.Starting,
             playing = isPlaying,
-            transcribing = transcription != null,
+            transcribing = transcription != null || newWay != null,
             visible = isVisible,
         )
     }.stateIn(scope, SharingStarted.Eagerly, AppActivity(recording = false, playing = false, transcribing = false, visible = false))

@@ -6,6 +6,8 @@ import me.mupu.sleeptalkrecorder.data.AnalysisExport
 import me.mupu.sleeptalkrecorder.data.ExportState
 import me.mupu.sleeptalkrecorder.models.ModelLibrary
 import me.mupu.sleeptalkrecorder.models.ModelStatus
+import me.mupu.sleeptalkrecorder.models.SoundModel
+import me.mupu.sleeptalkrecorder.models.SoundModelStatus
 import me.mupu.sleeptalkrecorder.models.TranscriptionModel
 import me.mupu.sleeptalkrecorder.settings.AppLanguage
 import me.mupu.sleeptalkrecorder.settings.AppLanguages
@@ -52,6 +54,21 @@ data class SettingsUiState(
     /** Whether the active model needs the transcript language, which is only shown then. */
     val needsLanguage: Boolean get() = models.any { it.active && it.model.needsLanguage }
 }
+
+/** The sound models and, in developer mode, the settings of the second way of finding events. */
+data class DetectionUiState(
+    /** Every sound model with its state, in catalogue order. */
+    val soundModels: List<SoundModelStatus>,
+    val developerMode: Boolean,
+    val sensitivity: Float,
+    val listening: Boolean,
+    val listeningThreshold: Float,
+    val backgroundThreshold: Float,
+    val onsetVote: Boolean,
+    val sortingModel: SoundModel,
+    /** The sound model the user asked to delete, until they confirm or cancel. */
+    val deleting: SoundModel?,
+)
 
 /** The updates section of the settings screen. */
 data class UpdatesUiState(
@@ -112,6 +129,38 @@ class SettingsViewModel(
             speech.models, speech.language, speech.mode, speech.deleting,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    private val deletingSound = MutableStateFlow<SoundModel?>(null)
+
+    /** The sound models and the developer settings; null until they are read. */
+    val detection: StateFlow<DetectionUiState?> = combine(
+        combine(models.soundModels, store.flow(Settings.developerMode), deletingSound, ::Triple),
+        combine(store.flow(Settings.searchSensitivity), store.flow(Settings.searchListening), store.flow(Settings.listeningThreshold), ::Triple),
+        combine(store.flow(Settings.backgroundThreshold), store.flow(Settings.onsetVote), store.flow(Settings.sortingModel), ::Triple),
+    ) { (sound, developer, deleting), (sensitivity, listening, listeningThreshold), (backgroundThreshold, onsetVote, sortingModel) ->
+        DetectionUiState(sound, developer, sensitivity, listening, listeningThreshold, backgroundThreshold, onsetVote, sortingModel, deleting)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Downloads the sound model [model]. */
+    fun install(model: SoundModel) = models.install(model)
+
+    /** Stops the download of the sound model [model]. */
+    fun cancelDownload(model: SoundModel) = models.cancel(model)
+
+    /** Asks to confirm deleting the sound model [model]. */
+    fun askDelete(model: SoundModel) {
+        deletingSound.value = model
+    }
+
+    fun confirmDeleteSound() {
+        val model = deletingSound.value ?: return
+        deletingSound.value = null
+        viewModelScope.launch { models.delete(model) }
+    }
+
+    fun cancelDeleteSound() {
+        deletingSound.value = null
+    }
 
     /** The updates section; null until the setting is read. */
     val updates: StateFlow<UpdatesUiState?> = combine(store.flow(Settings.checkForUpdates), updater.state, ::UpdatesUiState)

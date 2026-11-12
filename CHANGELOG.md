@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.12.0] - 2026-11-12
+
+### Added
+
+- A new way of finding events to test beside the old one. Besides the loudness search it listens through the night with a small sound model for quiet human sounds, and sorts everything it finds as human, unsure or background; background is kept but left out of the list unless you filter for it. The ⋮ menu of a sleep switches between the old way (still the default), the new way and a comparison that tags each event by the way that found it (both, only old, only new), for every sleep. Speech recognition still does the old way's events first, as before. After the update, and once speech recognition has nothing left of the old way, the new way searches every sleep once in the background, a quarter of an hour at a time so it goes on where it stopped, as soon as its sound models CED-tiny and CED-mini are downloaded in the settings; then its own events are recognised, and their words appear beside an old event's own as a result of the new way, never in their place; the first start now offers them with the speech model as one download. Developer mode in the settings shows the new way's test settings and, for each of its events, what found it, its human score and its rise.
+
 ## [0.11.1] - 2026-11-12
 
 ### Changed

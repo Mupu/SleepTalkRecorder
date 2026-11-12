@@ -45,7 +45,7 @@ The tag the app provides: it works like the user's own tags but cannot be delete
 _Avoid_: Bookmark, starred event
 
 **System tag**:
-A tag the app sets on its own and the filter offers beside the user's: named, hidden and each event kind (noise, murmur, speech). It follows from the event and can be filtered by, but neither given nor taken away.
+A tag the app sets on its own and the filter offers beside the user's: named, hidden and each event kind (noise, murmur, speech); for the new way's events also background, unsure and which way found an event. It follows from the event and can be filtered by, but neither given nor taken away.
 _Avoid_: Automatic label, smart tag
 
 **Name**:
@@ -71,6 +71,26 @@ _Avoid_: Subtitle, caption
 **Transcription model**:
 The speech recognition model that writes transcripts on the phone; downloaded once, and one installed model is the active one.
 _Avoid_: Engine, AI
+
+**Old way, new way**:
+The two ways events are found during a test phase. The old way is the loudness search alone and lists every event it finds; the new way also listens for quiet human sounds with a sound model and sorts every candidate as human, unsure or background. The sleep screen shows either or a comparison of both.
+_Avoid_: Old detector, pipeline (in the UI)
+
+**Background**:
+An event the new way sorted as not human: hardly human to the sound model, and it swells slowly. It stays in the sleep but is listed only while the filter chooses it.
+_Avoid_: Noise (which is an event kind), false positive
+
+**Unsure**:
+An event the new way could not sort as surely human or surely background; a stronger model could decide it later.
+_Avoid_: Maybe, uncertain event
+
+**Sound model**:
+A model that tells which sounds a stretch of audio holds (CED); the new way listens and sorts with it. Downloaded like a transcription model.
+_Avoid_: Classifier (in the UI), tagger (in the UI)
+
+**Developer mode**:
+A setting that shows the new way's test settings and, for each of its events, what found it, its human score and the rise of its level.
+_Avoid_: Debug mode, expert mode
 
 **Baseline**:
 The background loudness of a sleep at a given moment, tracked over time, against which events are found.

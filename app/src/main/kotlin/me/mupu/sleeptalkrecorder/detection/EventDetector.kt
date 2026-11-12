@@ -77,6 +77,11 @@ class Detection(
     val overrides: List<ThresholdOverride>,
     /** The events in order, not overlapping. */
     val events: List<HopRange>,
+    /**
+     * The stretches above the threshold that make up [events], in order, before close ones were
+     * joined: each event holds one or more of them. The onset rule judges each on its own.
+     */
+    val stretches: List<HopRange> = events,
 ) {
     /**
      * The start threshold at [hop] with [overrides]: that of the newest override covering it, or
@@ -121,8 +126,8 @@ object EventDetector {
         val level = smoothedLevel(speech, hops(params.smoothing))
         val baseline = baseline(speech, params)
         val threshold = automaticThreshold(speech, level, baseline, params)
-        val events = events(level, baseline, threshold, overrides, HopRange(0, level.size), params)
-        return Detection(level, baseline, threshold, overrides, events)
+        val stretches = stretches(level, baseline, threshold, overrides, HopRange(0, level.size), params)
+        return Detection(level, baseline, threshold, overrides, merge(stretches, hops(params.mergeGap)), stretches)
     }
 
     /**
@@ -141,12 +146,12 @@ object EventDetector {
     ): List<HopRange> {
         val margin = hops(RESCAN_MARGIN)
         val scanned = HopRange((range.start - margin).coerceAtLeast(0), (range.end + margin).coerceAtMost(detection.level.size))
-        return events(detection.level, detection.baseline, detection.thresholdDb, overrides, scanned, params)
-            .filter { it.overlaps(range) }
+        val stretches = stretches(detection.level, detection.baseline, detection.thresholdDb, overrides, scanned, params)
+        return merge(stretches, hops(params.mergeGap)).filter { it.overlaps(range) }
     }
 
-    /** The hysteresis, minimum length and merge steps over the hops of [range]. */
-    private fun events(
+    /** The hysteresis and minimum length steps over the hops of [range]: the stretches that make up events once joined. */
+    private fun stretches(
         level: FloatArray,
         baseline: FloatArray,
         automatic: Float,
@@ -164,7 +169,7 @@ object EventDetector {
         val raw = hysteresis(level, baseline, thresholds, range, params)
 
         val minHops = hops(params.minLength)
-        return merge(raw.filter { it.end - it.start >= minHops }, hops(params.mergeGap))
+        return raw.filter { it.end - it.start >= minHops }
     }
 
     /** The speech-band level averaged in power over [hops] hops centred on each hop. */

@@ -10,16 +10,14 @@ package me.mupu.sleeptalkrecorder.models
  * contents, and a download can resume file by file.
  */
 enum class TranscriptionModel(
-    /** The name shown in the settings. */
-    val displayName: String,
+    override val displayName: String,
     /**
      * Whether transcripts need the user's language: true for models that detect the language
      * only among a few given ones, false for models that handle every language they know at once.
      */
     val needsLanguage: Boolean,
-    /** The files the model consists of; all of them make an installed model. */
-    val files: List<ModelFile>,
-) {
+    override val files: List<ModelFile>,
+) : DownloadableModel {
     /**
      * Parakeet TDT 0.6B v3 "Ultra", int8: 25 European languages including German and English in
      * one pass, the default.
@@ -51,25 +49,12 @@ enum class TranscriptionModel(
     ),
     ;
 
-    /** The directory name of the installed files; never changes once a release stored a model. */
-    val id: String = name.lowercase().replace('_', '-')
+    override val id: String = name.lowercase().replace('_', '-')
 
-    /** The size of all files in bytes, which is both the download and the space it takes. */
-    val bytes: Long = files.sumOf { it.bytes }
+    override val bytes: Long = files.sumOf { it.bytes }
 
     companion object {
         /** The model the setup offers and the app uses unless the user picks another. */
         val DEFAULT = PARAKEET_ULTRA
     }
-}
-
-/** One file of a model: where it is downloaded from, its size in bytes and its SHA-256 (hex). */
-data class ModelFile(val name: String, val url: String, val bytes: Long, val sha256: String)
-
-private data class Checked(val name: String, val bytes: Long, val sha256: String)
-
-private infix fun Pair<String, Long>.sha(sha256: String) = Checked(first, second, sha256)
-
-private fun huggingFace(repository: String, commit: String, vararg files: Checked) = files.map {
-    ModelFile(it.name, "https://huggingface.co/$repository/resolve/$commit/${it.name}", it.bytes, it.sha256)
 }

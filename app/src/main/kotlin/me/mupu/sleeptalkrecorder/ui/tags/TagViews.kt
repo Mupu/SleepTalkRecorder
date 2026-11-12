@@ -61,6 +61,8 @@ import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.TagEntity
 import me.mupu.sleeptalkrecorder.data.TagType
 import me.mupu.sleeptalkrecorder.data.Tags
+import me.mupu.sleeptalkrecorder.data.WaysFound
+import me.mupu.sleeptalkrecorder.detection.FoundBy
 import me.mupu.sleeptalkrecorder.ui.sleep.kindName
 
 /** The name of [tag] in the app language: the user's name, or the app's for Favourite. */
@@ -74,6 +76,22 @@ internal fun tagName(tag: EventTag, tags: List<TagEntity>, kinds: List<EventKind
     is EventTag.System.Kind -> kindName(tag.kindId, kinds.firstOrNull { it.id == tag.kindId }?.name)
     EventTag.System.Named -> stringResource(R.string.tag_named)
     EventTag.System.Hidden -> stringResource(R.string.tag_hidden)
+    EventTag.System.Background -> stringResource(R.string.tag_background)
+    EventTag.System.Unsure -> stringResource(R.string.tag_unsure)
+    is EventTag.System.Found -> stringResource(
+        when (tag.by) {
+            FoundBy.LOUDNESS -> R.string.tag_found_loudness
+            FoundBy.LISTENING -> R.string.tag_found_listening
+            FoundBy.BOTH -> R.string.tag_found_both
+        },
+    )
+    is EventTag.System.Ways -> stringResource(
+        when (tag.found) {
+            WaysFound.BOTH -> R.string.tag_ways_both
+            WaysFound.ONLY_OLD -> R.string.tag_ways_only_old
+            WaysFound.ONLY_NEW -> R.string.tag_ways_only_new
+        },
+    )
 }
 
 /**
@@ -92,6 +110,8 @@ fun TagFilterBar(
     onRemove: (EventTag) -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
+    /** The system tags offered beyond the kinds, named and hidden. */
+    extraTags: List<EventTag.System> = emptyList(),
 ) {
     val colors = MaterialTheme.colorScheme
     FlowRow(modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -105,7 +125,7 @@ fun TagFilterBar(
             label = { Text(stringResource(R.string.tag_filter)) },
             leadingIcon = { Icon(painterResource(R.drawable.ic_filter_list), contentDescription = null, modifier = Modifier.size(18.dp)) },
         )
-        val offered = filterTags(tags, kinds)
+        val offered = filterTags(tags, kinds, extraTags)
         // In the order the window lists them; a chosen tag the window no longer offers comes last.
         val chosen = offered.filter { it in filter.chosen } + filter.chosen.filterNot { it in offered }
         for (tag in chosen) {
@@ -155,6 +175,8 @@ fun TagDialogs(
     onCloseFilter: () -> Unit,
     /** Runs once the tag window's choice is stored, as for ending a selection. */
     onApplied: () -> Unit = {},
+    /** The system tags the filter window offers beyond the kinds, named and hidden. */
+    extraTags: List<EventTag.System> = emptyList(),
 ) {
     val tags by editing.tags.collectAsStateWithLifecycle()
     val window by editing.state.collectAsStateWithLifecycle()
@@ -163,7 +185,7 @@ fun TagDialogs(
 
     if (filterOpen) {
         TagFilterWindow(
-            filter, tags, kinds, count,
+            filter, tags, kinds, extraTags, count,
             onToggle = onToggleFilter,
             onClear = onClearFilter,
             onNewTag = { creating = true },
@@ -195,6 +217,7 @@ private fun TagFilterWindow(
     filter: TagFilter,
     tags: List<TagEntity>,
     kinds: List<EventKindEntity>,
+    extraTags: List<EventTag.System>,
     count: ((EventTag) -> Int)?,
     onToggle: (EventTag) -> Unit,
     onClear: () -> Unit,
@@ -232,7 +255,7 @@ private fun TagFilterWindow(
                     automaticOpen = !automaticOpen
                 }
                 if (automaticOpen) {
-                    for (tag in systemTags(kinds)) {
+                    for (tag in systemTags(kinds, extraTags)) {
                         TagRow(tagName(tag, tags, kinds), count = count?.invoke(tag), onClick = { onToggle(tag) }) {
                             Checkbox(checked = tag in filter.chosen, onCheckedChange = null, colors = tertiary)
                         }

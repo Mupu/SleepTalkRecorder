@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.12.0] - 2026-11-12
+
+### Hinzugefügt
+
+- Ein neuer Weg, Ereignisse zu finden, zum Testen neben dem alten. Neben der Suche nach Lautstärke hört er die Nacht mit einem kleinen Geräuschmodell nach leisen menschlichen Geräuschen ab und sortiert alles Gefundene als menschlich, unsicher oder Hintergrund; Hintergrund bleibt erhalten, steht aber nur in der Liste, wenn du danach filterst. Das ⋮-Menü eines Schlafs wechselt für jeden Schlaf zwischen dem alten Weg (weiterhin voreingestellt), dem neuen Weg und einem Vergleich, der jedes Ereignis nach dem Weg taggt, der es fand (beide, nur alter, nur neuer). Die Spracherkennung erledigt weiterhin zuerst die Ereignisse des alten Wegs, wie bisher. Nach dem Update, und sobald die Spracherkennung vom alten Weg nichts mehr offen hat, durchsucht der neue Weg jeden Schlaf einmal im Hintergrund, jeweils eine Viertelstunde am Stück, sodass er dort weitermacht, wo er aufgehört hat, sobald seine Geräuschmodelle CED-tiny und CED-mini in den Einstellungen geladen sind; dann werden seine eigenen Ereignisse erkannt, und ihre Wörter erscheinen neben denen eines alten Ereignisses als Ergebnis des neuen Wegs, nie an ihrer Stelle; der erste Start bietet sie jetzt mit dem Sprachmodell als einen Download an. Der Entwicklermodus in den Einstellungen zeigt die Testeinstellungen des neuen Wegs und bei jedem seiner Ereignisse, was es fand, seinen Menschlich-Wert und seinen Anstieg.
+
 ## [0.11.1] - 2026-11-12
 
 ### Geändert

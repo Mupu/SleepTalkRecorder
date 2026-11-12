@@ -7,6 +7,7 @@ import androidx.room.ForeignKey
 import androidx.room.Ignore
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import me.mupu.sleeptalkrecorder.detection.Verdict
 import me.mupu.sleeptalkrecorder.playback.Stretch
 import me.mupu.sleeptalkrecorder.time.SleepDate
 import java.time.Duration
@@ -122,6 +123,29 @@ enum class AnnotationType {
      * counts for every event that overlaps it; the latest such mark gives the name.
      */
     NAME,
+
+    /**
+     * The stretch is an event of the second way of finding events (`detection.SoundSearch`), of
+     * the annotation's kind (noise until speech recognition says otherwise). [AnnotationEntity.value]
+     * is its human score and [AnnotationEntity.text] how it was sorted ([Sorting.encode]). These
+     * events are kept apart from [EVENT], the first way's, so both ways can be compared.
+     */
+    CANDIDATE,
+
+    /**
+     * How far the second way of finding events searched the sleep: from its start to the end of
+     * the stretch, with the settings in [AnnotationEntity.text] ([SearchMark]). Its [CANDIDATE]s
+     * that start there are stored; [AnnotationEntity.value] is 1 once the whole sleep is searched,
+     * or as much of it as its audio could be read, else 0.
+     */
+    SEARCH,
+
+    /**
+     * What the phone's speech recognition made of one of the second way's events, or of one piece
+     * of a long one, over exactly that stretch, like a [TRANSCRIPT]. It is a type of its own, so it
+     * never counts as a result of a first way's event, whose transcripts stay as they are.
+     */
+    CANDIDATE_TRANSCRIPT,
 }
 
 /** Whether a [TagEntity] is the one the app provides or one of the user's own. */
@@ -289,6 +313,19 @@ data class SleepEvent(
      * when the user's own transcript wins over all of them.
      */
     @Ignore val results: List<TranscriptResult> = emptyList(),
+    /**
+     * How the second way of finding events sorted the event: of its own events, and in a
+     * comparison of both ways, the best of those it holds; null for an event only the first way found.
+     */
+    @Ignore val sorting: Sorting? = null,
+    /** In a comparison of both ways ([compareWays]), which way found the event; null outside one. */
+    @Ignore val ways: WaysFound? = null,
+    /**
+     * Whether, shown as an event of the second way or of a comparison, it overlaps more than one of
+     * the first way's events, so naming, correcting or hiding it could take their marks away; such
+     * edits are made on the first way's events instead.
+     */
+    @Ignore val sharesMarks: Boolean = false,
 ) {
     /** The event as the database reads it, before [withTranscripts] adds the results of the analyses. */
     constructor(
@@ -331,7 +368,23 @@ data class SleepEvent(
         if (name != null) add(EventTag.System.Named)
         if (hidden) add(EventTag.System.Hidden)
         add(EventTag.System.Kind(kindId))
+        sorting?.let { sorting ->
+            when (sorting.verdict) {
+                Verdict.BACKGROUND -> add(EventTag.System.Background)
+                Verdict.UNSURE -> add(EventTag.System.Unsure)
+                Verdict.HUMAN -> Unit
+            }
+            add(EventTag.System.Found(sorting.foundBy))
+        }
+        ways?.let { add(EventTag.System.Ways(it)) }
     }
+
+    /**
+     * Whether the event is left out of the list unless background is chosen: the second way sorted
+     * it as background, and the first way, which lists every event it finds, did not find it.
+     */
+    val background: Boolean
+        get() = sorting?.verdict == Verdict.BACKGROUND && ways != WaysFound.BOTH && ways != WaysFound.ONLY_OLD
 
     /** The stretch of the sleep's audio the event takes. */
     val stretch: Stretch get() = Stretch(start, end)
@@ -348,6 +401,11 @@ data class TranscriptResult(
     val kindId: String,
     /** The words recognised; null for a murmur or no speech. */
     val text: String?,
+    /**
+     * Whether it is the result of an overlapping event of the second way of finding events, shown
+     * beside the event's own results; it never wins over them and is not deleted from here.
+     */
+    val newWay: Boolean = false,
 ) {
     /** Whether it heard a voice in the event: words or a murmur. */
     val isVoice: Boolean get() = EventKinds.isVoice(kindId)

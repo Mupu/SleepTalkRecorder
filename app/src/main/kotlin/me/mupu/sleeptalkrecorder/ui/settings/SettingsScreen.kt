@@ -207,6 +207,9 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenWhats
                 )
             }
 
+            val detection by viewModel.detection.collectAsStateWithLifecycle()
+            detection?.let { SoundModelSettings(it, viewModel) }
+
             SettingsSection(stringResource(R.string.settings_analysis))
             val export by viewModel.exportState.collectAsStateWithLifecycle()
             ExportSetting(export, viewModel.exportPath, onExport = viewModel::exportForAnalysis, onDelete = viewModel::deleteExport)
@@ -227,10 +230,12 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenWhats
                 hint = stringResource(R.string.settings_whats_new_hint, BuildConfig.VERSION_NAME),
                 onClick = onOpenWhatsNew,
             )
+
+            detection?.let { DeveloperSettings(it, viewModel) }
         }
 
         settings.deleting?.let { model ->
-            DeleteModelDialog(model, onConfirm = viewModel::confirmDelete, onDismiss = viewModel::cancelDelete)
+            DeleteModelDialog(model.displayName, model.bytes, onConfirm = viewModel::confirmDelete, onDismiss = viewModel::cancelDelete)
         }
     }
 }

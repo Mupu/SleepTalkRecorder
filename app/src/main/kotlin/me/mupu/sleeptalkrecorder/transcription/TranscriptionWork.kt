@@ -30,6 +30,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -86,6 +87,7 @@ class TranscriptionScheduler(context: Context) {
                     TranscriptionWorker.KEY_SLEEP to request.sleepId,
                     TranscriptionWorker.KEY_FROM to request.from.toMillis(),
                     TranscriptionWorker.KEY_ONLY_PENDING to request.onlyPending,
+                    TranscriptionWorker.KEY_SEARCH_AGAIN to request.searchAgain,
                 ),
             )
             .addTag(TAG)
@@ -149,9 +151,10 @@ fun isPluggedIn(context: Context): Boolean =
         ?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)?.let { it != 0 } ?: false
 
 /**
- * One speech recognition run: the events of one sleep, or every waiting event. It runs as a
- * foreground service with a progress notification when Android allows one, else as normal work
- * that Android may stop after ten minutes; the next run continues.
+ * One speech recognition run: the events of one sleep, or every waiting event, and after them the
+ * second way's search and its own events. It runs as a foreground service with a progress
+ * notification when Android allows one, else as normal work that Android may stop after ten
+ * minutes; the next run continues.
  */
 class TranscriptionWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
@@ -169,6 +172,7 @@ class TranscriptionWorker(context: Context, params: WorkerParameters) : Coroutin
                 sleepId,
                 from = stoppedAt?.from ?: Duration.ofMillis(inputData.getLong(KEY_FROM, 0)),
                 onlyPending = onlyPending,
+                searchAgain = inputData.getBoolean(KEY_SEARCH_AGAIN, false),
             )
         }
         container.transcriptionScheduler.runStarted()
@@ -179,7 +183,11 @@ class TranscriptionWorker(context: Context, params: WorkerParameters) : Coroutin
         val outcome = coroutineScope {
             val shown = launch {
                 var foreground = false
-                runner.progress.filterNotNull().collect { progress ->
+                // The first way's run and then the second way's work, which never overlap.
+                combine(runner.progress, runner.newWayProgress) { first, second ->
+                    first?.let { Shown(it.sleepId, searching = false, it.done, it.total) }
+                        ?: second?.let { Shown(it.sleepId, it.searching, it.done, it.total) }
+                }.filterNotNull().collect { progress ->
                     if (!foreground) {
                         foreground = try {
                             setForeground(notifications.foregroundInfo(progress))
@@ -211,6 +219,7 @@ class TranscriptionWorker(context: Context, params: WorkerParameters) : Coroutin
         internal const val KEY_PAUSE = "pause_on_low_battery"
         internal const val KEY_FROM = "from_ms"
         internal const val KEY_ONLY_PENDING = "only_pending"
+        internal const val KEY_SEARCH_AGAIN = "search_again"
         private const val NO_SLEEP = -1L
         private const val TAG = "Transcription"
     }
@@ -260,6 +269,9 @@ class PauseTranscriptionReceiver : BroadcastReceiver() {
     }
 }
 
+/** What the notification shows: speech recognition of [sleepId], [done] of [total], or the second way [searching] it, [done] percent. */
+private data class Shown(val sleepId: Long, val searching: Boolean, val done: Int, val total: Int)
+
 /** The progress notification of speech recognition, with a Pause action. */
 private class TranscriptionNotifications(private val context: Context) {
 
@@ -271,20 +283,25 @@ private class TranscriptionNotifications(private val context: Context) {
         channelDescription = R.string.notification_channel_transcription_description,
     )
 
-    fun foregroundInfo(progress: TranscriptionProgress) = this.progress.foregroundInfo(notification(progress))
+    fun foregroundInfo(progress: Shown) = this.progress.foregroundInfo(notification(progress))
 
-    fun show(progress: TranscriptionProgress) {
+    fun show(progress: Shown) {
         this.progress.show(notification(progress))
     }
 
-    private fun notification(progress: TranscriptionProgress): Notification {
+    private fun notification(progress: Shown): Notification {
         val texts = this.progress.texts
         return this.progress.build {
             setSmallIcon(R.drawable.ic_record_voice)
-            setContentTitle(texts.getString(R.string.notification_transcription_title))
-            setContentText(
-                texts.resources.getQuantityString(R.plurals.notification_transcription_progress, progress.total, progress.done, progress.total),
-            )
+            if (progress.searching) {
+                setContentTitle(texts.getString(R.string.notification_search_title))
+                setContentText(texts.getString(R.string.percent, progress.done))
+            } else {
+                setContentTitle(texts.getString(R.string.notification_transcription_title))
+                setContentText(
+                    texts.resources.getQuantityString(R.plurals.notification_transcription_progress, progress.total, progress.done, progress.total),
+                )
+            }
             setProgress(progress.total, progress.done, false)
             addAction(
                 Notification.Action.Builder(

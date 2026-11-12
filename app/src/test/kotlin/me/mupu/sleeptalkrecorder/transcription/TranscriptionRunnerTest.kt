@@ -179,6 +179,98 @@ class TranscriptionRunnerTest {
         assertEquals(Outcome.FINISHED, runner.run(TranscriptionRequest.Event(1, event(30))) { error("loaded") })
     }
 
+    /** The second way: searches each sleep it has not searched yet, as [outcome] says, and writes down what came first. */
+    private class FakeSearch(val log: MutableList<String>, var outcome: SearchOutcome = SearchOutcome.DONE, val onSearch: () -> Unit = {}) : EventSearch {
+        val notSearched = mutableListOf(2L, 1L)
+        val searched = mutableListOf<Long>()
+
+        override suspend fun sleepsToSearch() = notSearched.toList()
+
+        override suspend fun search(sleepId: Long, again: Boolean, onProgress: (Float) -> Unit, shouldStop: suspend () -> Boolean): SearchOutcome {
+            onSearch()
+            if (shouldStop()) return SearchOutcome.STOPPED
+            log += "search $sleepId"
+            if (outcome == SearchOutcome.DONE) {
+                notSearched -= sleepId
+                searched += sleepId
+            }
+            return outcome
+        }
+    }
+
+    private val log = mutableListOf<String>()
+
+    /** The first way's events, writing down each result. */
+    private val logged = object : TranscriptStore by store {
+        override suspend fun store(sleepId: Long, event: Stretch, annotations: List<AnnotationEntity>) {
+            log += "old $sleepId"
+            store.store(sleepId, event, annotations)
+        }
+    }
+
+    /** The second way's own events of sleep 1, writing down each result. */
+    private val candidateStore = FakeStore(mapOf(1L to listOf(event(40))))
+    private val candidates = object : TranscriptStore by candidateStore {
+        override suspend fun store(sleepId: Long, event: Stretch, annotations: List<AnnotationEntity>) {
+            log += "new $sleepId"
+            candidateStore.store(sleepId, event, annotations)
+        }
+    }
+
+    @Test
+    fun `the first way's events come first, then the search, then the second way's own events`() = runTest {
+        val search = FakeSearch(log)
+        val runner = TranscriptionRunner(logged, pauses, { battery }, search, candidates) { _, _ -> }
+
+        assertEquals(Outcome.FINISHED, runner.run(TranscriptionRequest.Waiting(pauseOnLowBattery = true)) { FakeAnalysis() })
+        assertEquals(listOf("old 1", "old 1", "old 2", "search 2", "search 1", "new 1"), log)
+        assertNull(runner.progress.value)
+        assertNull(runner.newWayProgress.value)
+    }
+
+    @Test
+    fun `nothing of the second way runs while the first way's events still wait`() = runTest {
+        val search = FakeSearch(log)
+        val runner = TranscriptionRunner(logged, pauses, { battery }, search, candidates) { _, _ -> }
+
+        val outcome = runner.run(TranscriptionRequest.Waiting(pauseOnLowBattery = true)) { FakeAnalysis { battery = BatteryState(percent = 20, charging = false) } }
+
+        assertEquals(Outcome.LOW_BATTERY, outcome)
+        assertEquals(listOf("old 1"), log)
+    }
+
+    @Test
+    fun `without the sound models the search waits and speech recognition goes on`() = runTest {
+        val missing = FakeSearch(log, SearchOutcome.NO_MODEL)
+
+        assertEquals(Outcome.FINISHED, TranscriptionRunner(store, pauses, { battery }, missing) { _, _ -> }.run(TranscriptionRequest.Sleep(1)) { FakeAnalysis() })
+        assertEquals(2, store.stored.size)
+        assertEquals(emptyList<Long>(), missing.searched)
+    }
+
+    @Test
+    fun `a sleep searched before is searched again only when asked, as after its settings changed`() = runTest {
+        val search = FakeSearch(log)
+        search.notSearched.clear()
+        val runner = TranscriptionRunner(store, pauses, { battery }, search) { _, _ -> }
+
+        runner.run(TranscriptionRequest.Sleep(1, onlyPending = true)) { FakeAnalysis() }
+        assertEquals(emptyList<Long>(), search.searched)
+
+        runner.run(TranscriptionRequest.Sleep(1, onlyPending = true, searchAgain = true)) { FakeAnalysis() }
+        assertEquals(listOf(1L), search.searched)
+    }
+
+    @Test
+    fun `a search stops for a low battery like speech recognition`() = runTest {
+        store.stored += listOf(1L to event(10), 1L to event(20), 2L to event(5))
+        val search = FakeSearch(log) { battery = BatteryState(percent = 20, charging = false) }
+        val runner = TranscriptionRunner(store, pauses, { battery }, search) { _, _ -> }
+
+        assertEquals(Outcome.LOW_BATTERY, runner.run(TranscriptionRequest.Waiting(pauseOnLowBattery = true)) { error("loaded") })
+        assertEquals(emptyList<Long>(), search.searched)
+    }
+
     @Test
     fun `an event the analysis fails on is skipped and waits for the next run`() = runTest {
         val analysis = FakeAnalysis()

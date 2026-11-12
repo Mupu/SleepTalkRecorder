@@ -351,11 +351,10 @@
     <string name="setup_recheck">The app checks this again on every start and shows a hint when something is missing.</string>
 
     <!-- First start: speech recognition model. %1$s is the size, for example "671 MB". -->
-    <string name="setup_model_title">Recognise speech</string>
-    <string name="setup_model_text">The app finds out on the phone itself whether something was said and what. For that it downloads a speech recognition model once.</string>
-    <string name="setup_model_name">Speech recognition model</string>
+    <string name="setup_model_title">Recognise speech and sounds</string>
+    <string name="setup_model_text">The app finds out on the phone itself what was said and which sounds are human. For that it downloads these models once, together.</string>
     <string name="setup_model_size">%1$s, Wi-Fi recommended</string>
-    <string name="setup_model_later">Recording works without it; transcripts wait until the model is there. The download goes on in the background, and you can also start it later in the settings.</string>
+    <string name="setup_model_later">Recording works without them; transcripts and the new way of finding events wait until the models are there. The download goes on in the background, and you can also start it later in the settings.</string>
     <string name="model_installed">Installed</string>
     <string name="done">Done</string>
     <string name="required">required</string>
@@ -458,7 +457,7 @@
     <!-- The button before the filter that lists every event that is not hidden. -->
     <string name="tag_filter_all">All</string>
     <string name="tag_filter_title">Show events with</string>
-    <string name="tag_filter_hint">Any of the chosen tags. Hidden events only show with Hidden.</string>
+    <string name="tag_filter_hint">Any of the chosen tags. Hidden events only show with Hidden, background only with Background.</string>
     <!-- Content description of a chosen tag above the list; tapping it removes it from the filter. -->
     <string name="tag_filter_remove">Remove %1$s from the filter</string>
     <string name="tag_filter_clear">Clear</string>
@@ -542,4 +541,65 @@
     <string name="date_pattern_share">d MMM</string>
     <!-- When a shared event began: its date and clock time, "8 Nov, 22:55:41". -->
     <string name="share_time">%1$s, %2$s</string>
+    <!-- The second (new) way of finding events, tested beside the first (old) one. -->
+    <string name="way_menu">Way of finding events</string>
+    <string name="way_title">Which events to show</string>
+    <string name="way_old">Old way</string>
+    <string name="way_old_hint">The loudness search, as before</string>
+    <string name="way_new">New way (test)</string>
+    <string name="way_new_hint">Loudness and listening, sorted by a sound model; background is left out</string>
+    <string name="way_comparison">Comparison</string>
+    <string name="way_comparison_hint">Both ways together, tagged by the way that found each event</string>
+    <string name="way_remembered">Applies to every sleep.</string>
+    <string name="search_again">Search again with current settings</string>
+    <string name="search_again_started">The new way searches this sleep again</string>
+    <string name="new_way_not_searched">The new way has not searched this sleep to its end yet. It runs once speech recognition has done the old way’s events.</string>
+    <!-- While the new way recognises speech in its own events: "New way recognising speech: 3 of 40". -->
+    <string name="new_way_recognising">New way recognising speech: %1$d of %2$d</string>
+    <string name="new_way_partial">The new way searched this sleep only as far as its audio could be read.</string>
+    <!-- A result of the new way's event shown beside an event's own results: "New way · Parakeet TDT 0.6B Ultra". -->
+    <string name="result_new_way">New way · %1$s</string>
+    <string name="edit_in_old_view">Spans several old events: edit them in the old way</string>
+    <string name="new_way_no_models">The new way needs the sound models CED-tiny and CED-mini.</string>
+    <string name="new_way_get_models">Download</string>
+    <!-- Developer mode: what the new way knows about an event, "Found by both · human 0.42 · rise 12.5 dB". -->
+    <string name="event_info">%1$s · human %2$s · rise %3$s dB</string>
+    <string name="found_by_loudness">Found by loudness</string>
+    <string name="found_by_listening">Found by listening</string>
+    <string name="found_by_both">Found by both</string>
+    <string name="tag_background">Background</string>
+    <string name="tag_unsure">Unsure</string>
+    <string name="tag_ways_both">Both ways</string>
+    <string name="tag_ways_only_old">Only old way</string>
+    <string name="tag_ways_only_new">Only new way</string>
+    <string name="tag_found_loudness">Found: loudness</string>
+    <string name="tag_found_listening">Found: listening</string>
+    <string name="tag_found_both">Found: both</string>
+    <!-- While the new way searches a sleep: "Finding events with the new way: 34 %". -->
+    <string name="transcription_searching">Finding events with the new way: %1$d %%</string>
+    <string name="notification_search_title">Finding events</string>
+
+    <!-- Settings: sound models and developer settings -->
+    <string name="settings_sound_models">Sound models</string>
+    <string name="settings_sound_models_hint">The new way of finding events listens with these models on the phone.</string>
+    <string name="sound_model_purpose_tiny">Listens through the whole night for quiet human sounds</string>
+    <string name="sound_model_purpose_mini">Sorts each sound into human, unsure or background</string>
+    <string name="sound_model_purpose_small">A larger sorting model to compare in developer mode</string>
+    <string name="settings_developer">Developer</string>
+    <string name="settings_developer_mode">Developer mode</string>
+    <string name="settings_developer_mode_hint">Shows test settings and what the new way knows about each event</string>
+    <string name="settings_detection_test">Detection (test)</string>
+    <string name="settings_detection_hint">Changes apply to sleeps searched afterwards. The ⋮ menu of a sleep searches it again with them.</string>
+    <string name="settings_search_sensitivity">Loudness sensitivity</string>
+    <string name="settings_search_sensitivity_hint">1 is the most sensitive</string>
+    <string name="settings_listening">Listening pass</string>
+    <string name="settings_listening_hint">CED-tiny hears the night in 2 s windows and adds quiet human sounds</string>
+    <string name="settings_listening_threshold">Listening threshold</string>
+    <string name="settings_listening_threshold_hint">The human score a window needs</string>
+    <string name="settings_background_threshold">Background threshold</string>
+    <string name="settings_background_threshold_hint">Below this human score a sound can be background</string>
+    <string name="settings_onset_vote">Onset rule votes</string>
+    <string name="settings_onset_vote_hint">Background only if the sound also swells slowly (less than 9 dB within 500 ms)</string>
+    <string name="settings_sorting_model">Sorting model</string>
+    <string name="setup_purpose_speech">Writes down what was said</string>
 </resources>

@@ -28,6 +28,45 @@ interface TranscriptStore {
     suspend fun isRecording(): Boolean
 }
 
+/**
+ * The second way of finding events, which runs in the same runs as speech recognition but only once
+ * the first way's events have nothing left to recognise, under the same rules (battery, recordings,
+ * the user's pauses). A search stores its results part by part, so one that is stopped goes on
+ * where it stopped.
+ */
+interface EventSearch {
+    /** The finished sleeps it has not searched to their end yet, the latest first. */
+    suspend fun sleepsToSearch(): List<Long>
+
+    /**
+     * Searches the sleep [sleepId] from where it stopped, or from its start again with [again],
+     * storing each part as soon as it is searched; it tells [onProgress] the share done from 0 to
+     * 1 and asks [shouldStop] now and then.
+     */
+    suspend fun search(sleepId: Long, again: Boolean, onProgress: (Float) -> Unit, shouldStop: suspend () -> Boolean): SearchOutcome
+}
+
+/** How a search of the second way ended. */
+enum class SearchOutcome {
+    /** The sleep is searched to its end, or as far as its audio could be read. */
+    DONE,
+
+    /** A model it needs is not installed; no sleep can be searched until it is. */
+    NO_MODEL,
+
+    /** It was asked to stop; the parts searched so far are kept. */
+    STOPPED,
+
+    /** It failed on this sleep, which is tried again in a later run. */
+    FAILED,
+}
+
+/**
+ * How far the second way is with a sleep: [searching] it, [done] percent of 100, or recognising
+ * speech in its own events, [done] of [total].
+ */
+data class NewWayProgress(val sleepId: Long, val searching: Boolean, val done: Int, val total: Int)
+
 /** The battery's charge in percent and whether the phone is charging. */
 data class BatteryState(val percent: Int, val charging: Boolean)
 
@@ -41,9 +80,16 @@ sealed interface TranscriptionRequest {
 
     /**
      * The events of one sleep from the one at [from] on: all of them again, also those with a
-     * result, because the user asked for it; with [onlyPending] only those without a result.
+     * result, because the user asked for it; with [onlyPending] only those without a result. Then
+     * the second way searches the sleep if it has not to its end, or from its start again with
+     * [searchAgain], and its own events that wait are recognised.
      */
-    data class Sleep(val sleepId: Long, val from: Duration = Duration.ZERO, val onlyPending: Boolean = false) : TranscriptionRequest
+    data class Sleep(
+        val sleepId: Long,
+        val from: Duration = Duration.ZERO,
+        val onlyPending: Boolean = false,
+        val searchAgain: Boolean = false,
+    ) : TranscriptionRequest
 
     /** One event of a sleep, again: the user asked for it, to compare the result of another model. */
     data class Event(val sleepId: Long, val event: Stretch) : TranscriptionRequest
@@ -57,11 +103,19 @@ data class TranscriptionProgress(val sleepId: Long, val done: Int, val total: In
  * soon as it is there, so a run that is stopped continues where it stopped. Runs never overlap:
  * a second one waits until the first has finished, so only one model is ever in memory. Sleeps the
  * user paused are left out from their next event on.
+ *
+ * The first way's events ([store]) come first, exactly as without the second way. Only when none of
+ * them waits does the second way's [search] search the sleeps it has not searched to their end,
+ * and then the second way's own events ([candidates]) that wait are recognised.
  */
 class TranscriptionRunner(
     private val store: TranscriptStore,
     private val pauses: PauseStore,
     private val battery: () -> BatteryState,
+    /** The second way of finding events; null where it does not run. */
+    private val search: EventSearch? = null,
+    /** The second way's own events that speech recognition hears; null where it does not run. */
+    private val candidates: TranscriptStore? = null,
     /** Told when the analysis fails on an event, which then waits for the next run. */
     private val onFailure: (message: String, error: Exception) -> Unit,
 ) {
@@ -88,25 +142,66 @@ class TranscriptionRunner(
     private val running = Mutex()
     private val current = MutableStateFlow<TranscriptionProgress?>(null)
 
-    /** The run in progress, or null. */
+    private val newWay = MutableStateFlow<NewWayProgress?>(null)
+
+    /** The run over the first way's events in progress, or null. */
     val progress: StateFlow<TranscriptionProgress?> = current.asStateFlow()
+
+    /** The second way's work in progress, its search or its own speech recognition, or null. */
+    val newWayProgress: StateFlow<NewWayProgress?> = newWay.asStateFlow()
 
     /**
      * Analyses the events of [request] with the analysis [open] loads, which it loads only if there
-     * is work, and closes at the end; [open] gives null when no model is installed.
+     * is work, and closes at the end; [open] gives null when no model is installed. Then, unless
+     * the request was for one event, the second way searches and its events are recognised.
      */
     suspend fun run(request: TranscriptionRequest, open: suspend () -> EventAnalysis?): Outcome = running.withLock {
-        var analysis: EventAnalysis? = null
         try {
-            work(request) { analysis ?: open()?.also { analysis = it } }
+            val first = recognise(store, request, open) { current.value = it }
+            // A model that is missing holds back nothing the second way's search needs.
+            if (request is TranscriptionRequest.Event || (first != Outcome.FINISHED && first != Outcome.NO_MODEL)) return@withLock first
+            searchNewWay(request)?.let { return@withLock it }
+            val own = candidates ?: return@withLock first
+            val second = when (request) {
+                is TranscriptionRequest.Sleep -> TranscriptionRequest.Sleep(request.sleepId, onlyPending = true)
+                else -> request
+            }
+            val outcome = recognise(own, second, open) { progress ->
+                newWay.value = progress?.let { NewWayProgress(it.sleepId, searching = false, done = it.done, total = it.total) }
+            }
+            if (first == Outcome.NO_MODEL && outcome == Outcome.FINISHED) first else outcome
         } finally {
             current.value = null
+            newWay.value = null
+        }
+    }
+
+    /**
+     * Recognises the events of [request] in [store] with the analysis [open] loads on first use,
+     * which it closes at the end, telling [report] how far it is.
+     */
+    private suspend fun recognise(
+        store: TranscriptStore,
+        request: TranscriptionRequest,
+        open: suspend () -> EventAnalysis?,
+        report: (TranscriptionProgress?) -> Unit,
+    ): Outcome {
+        var analysis: EventAnalysis? = null
+        try {
+            return work(store, request, report) { analysis ?: open()?.also { analysis = it } }
+        } finally {
+            report(null)
             analysis?.close()
         }
     }
 
-    /** Works through [request], with the analysis [analysis] loads on first use. */
-    private suspend fun work(request: TranscriptionRequest, analysis: suspend () -> EventAnalysis?): Outcome {
+    /** Works through [request] in [store], with the analysis [analysis] loads on first use. */
+    private suspend fun work(
+        store: TranscriptStore,
+        request: TranscriptionRequest,
+        report: (TranscriptionProgress?) -> Unit,
+        analysis: suspend () -> EventAnalysis?,
+    ): Outcome {
         // Events the analysis failed on wait for the next run, so this one does not try them forever.
         val failed = HashSet<Pair<Long, Stretch>>()
         while (true) {
@@ -118,7 +213,7 @@ class TranscriptionRunner(
                     request.sleepId to store.eventsOf(request.sleepId, onlyPending = false).filter { it == request.event }
                 is TranscriptionRequest.Waiting -> {
                     if (store.isRecording()) return Outcome.RECORDING
-                    nextWaiting(failed) ?: return Outcome.FINISHED
+                    nextWaiting(store, failed) ?: return Outcome.FINISHED
                 }
             }
             if (events.isEmpty()) return Outcome.FINISHED
@@ -128,7 +223,7 @@ class TranscriptionRunner(
             // where it is, so one that is paused or stopped goes on there instead of starting again.
             val rerun = request is TranscriptionRequest.Sleep && !request.onlyPending
 
-            current.value = TranscriptionProgress(sleepId, 0, events.size)
+            report(TranscriptionProgress(sleepId, 0, events.size))
             for ((index, event) in events.withIndex()) {
                 if (request is TranscriptionRequest.Waiting) {
                     if (request.pauseOnLowBattery && batteryLow()) return Outcome.LOW_BATTERY
@@ -141,11 +236,11 @@ class TranscriptionRunner(
                     if (request is TranscriptionRequest.Waiting) break
                     return Outcome.PAUSED
                 }
-                if (!analyse(opened, sleepId, event)) {
+                if (!analyse(store, opened, sleepId, event)) {
                     if (request is TranscriptionRequest.Event) return Outcome.FAILED
                     failed += sleepId to event
                 }
-                current.value = TranscriptionProgress(sleepId, index + 1, events.size)
+                report(TranscriptionProgress(sleepId, index + 1, events.size))
             }
             if (request !is TranscriptionRequest.Waiting) {
                 if (rerun) pauses.rerunAt(sleepId, null)
@@ -154,8 +249,60 @@ class TranscriptionRunner(
         }
     }
 
-    /** The first sleep that is not paused, with its waiting events that did not fail in this run. */
-    private suspend fun nextWaiting(failed: Set<Pair<Long, Stretch>>): Pair<Long, List<Stretch>>? {
+    /**
+     * Lets the [search] search the sleeps of [request] it has not searched to their end, or the
+     * sleep from its start again when asked. Returns the outcome when the run has to stop there,
+     * else null.
+     */
+    private suspend fun searchNewWay(request: TranscriptionRequest): Outcome? {
+        val search = search ?: return null
+        val sleeps = when (request) {
+            is TranscriptionRequest.Event -> return null
+            is TranscriptionRequest.Sleep ->
+                if (request.searchAgain || request.sleepId in search.sleepsToSearch()) listOf(request.sleepId) else return null
+            is TranscriptionRequest.Waiting -> search.sleepsToSearch()
+        }
+        try {
+            for (sleepId in sleeps) {
+                when (val reason = stopReason(request, sleepId)) {
+                    null -> Unit
+                    // A run over waiting sleeps goes on with the next one that is not paused.
+                    Outcome.PAUSED -> if (request is TranscriptionRequest.Waiting) continue else return reason
+                    else -> return reason
+                }
+                val outcome = search.search(
+                    sleepId,
+                    again = request is TranscriptionRequest.Sleep && request.searchAgain,
+                    onProgress = { share -> newWay.value = NewWayProgress(sleepId, searching = true, done = (share * PERCENT).toInt(), total = PERCENT) },
+                    shouldStop = { stopReason(request, sleepId) != null },
+                )
+                when (outcome) {
+                    // Without its models no sleep is searched.
+                    SearchOutcome.NO_MODEL -> break
+                    SearchOutcome.STOPPED -> when (val reason = stopReason(request, sleepId)) {
+                        Outcome.PAUSED -> if (request is TranscriptionRequest.Waiting) continue else return reason
+                        null -> continue
+                        else -> return reason
+                    }
+                    SearchOutcome.DONE, SearchOutcome.FAILED -> Unit
+                }
+            }
+        } finally {
+            newWay.value = null
+        }
+        return null
+    }
+
+    /** Why a run over [request] stops at [sleepId] now: a low battery, a recording or the user's pause; null to go on. */
+    private suspend fun stopReason(request: TranscriptionRequest, sleepId: Long): Outcome? = when {
+        request is TranscriptionRequest.Waiting && request.pauseOnLowBattery && batteryLow() -> Outcome.LOW_BATTERY
+        request is TranscriptionRequest.Waiting && store.isRecording() -> Outcome.RECORDING
+        sleepId in pauses.paused() -> Outcome.PAUSED
+        else -> null
+    }
+
+    /** The first sleep of [store] that is not paused, with its waiting events that did not fail in this run. */
+    private suspend fun nextWaiting(store: TranscriptStore, failed: Set<Pair<Long, Stretch>>): Pair<Long, List<Stretch>>? {
         val paused = pauses.paused()
         for (sleepId in store.sleepsToTranscribe()) {
             if (sleepId in paused) continue
@@ -165,8 +312,8 @@ class TranscriptionRunner(
         return null
     }
 
-    /** Analyses one event and stores its result; false if the analysis failed. */
-    private suspend fun analyse(analysis: EventAnalysis, sleepId: Long, event: Stretch): Boolean {
+    /** Analyses one event of [store] and stores its result; false if the analysis failed. */
+    private suspend fun analyse(store: TranscriptStore, analysis: EventAnalysis, sleepId: Long, event: Stretch): Boolean {
         val clip = store.clip(sleepId, event)
         val annotations = try {
             analysis.analyse(clip)
@@ -185,5 +332,8 @@ class TranscriptionRunner(
     private companion object {
         /** Below this charge an automatic run pauses until the phone charges. */
         const val LOW_BATTERY_PERCENT = 30
+
+        /** The total a search's progress counts up to. */
+        const val PERCENT = 100
     }
 }

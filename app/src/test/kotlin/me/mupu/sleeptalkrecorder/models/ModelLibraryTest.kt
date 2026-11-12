@@ -26,14 +26,14 @@ class ModelLibraryTest {
     }
 
     private class FakeDownloads : ModelDownloads {
-        override val states = MutableStateFlow(emptyMap<TranscriptionModel, ModelState>())
-        val cancelled = mutableListOf<TranscriptionModel>()
+        override val states = MutableStateFlow(emptyMap<DownloadableModel, ModelState>())
+        val cancelled = mutableListOf<DownloadableModel>()
 
-        override fun start(model: TranscriptionModel) {
+        override fun start(model: DownloadableModel) {
             states.value += model to ModelState.Waiting
         }
 
-        override fun cancel(model: TranscriptionModel) {
+        override fun cancel(model: DownloadableModel) {
             cancelled += model
         }
     }

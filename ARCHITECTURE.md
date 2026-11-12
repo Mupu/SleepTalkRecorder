@@ -11,14 +11,14 @@ Everything lives under `me.mupu.sleeptalkrecorder`:
 |---|---|---|
 | `time` | The time model: the *sleep windows* that name *nights* and *naps*, the timeline of a *recording*, the latest stop time | none |
 | `recording` | The recording session, WAV chunk writer, microphone, foreground service and its notifications | only in `MicrophoneSource`, `Recorder`, `RecordingService`, `RecordingNotifications` |
-| `detection` | The feature track (extraction and file format) and the `EventDetector` with its baseline | none |
+| `detection` | The feature track (extraction and file format), the `EventDetector` with its baseline, and the *new way* of finding events: the `SoundSearch` with its `OnsetRule`, `HighPass` and the `CedTagger` that runs a sound model | none (sherpa-onnx only in `CedTagger`) |
 | `data` | Room database, entities, the `SleepRepository` through which screens read and change sleeps, `SleepRecordings` (the recording session's `RecordingStore`), `SleepTranscripts` (speech recognition's `TranscriptStore`), the `RecordingFiles` of each recording, loading feature tracks for a sleep, and the `AnalysisExport` of every sleep | Room |
 | `playback` | The `SleepTimeline` of a sleep's chunk files, the `SleepAudio` stream made of them, the `CutPlan` of cut playback and the `SleepPlayer` that plays it | only in `SleepPlayer` (Media3) |
 | `share` | Sharing events as a short video or an audio file: the stretch that is shared (`ShareStretch`), the caption sent along (`caption`), the video's still `ShareCard`, the `Mp4Encoder` and `EventShares`, which writes the files and hands them to Android's share sheet | only in `ShareCard` (`Bitmap`, `Canvas`), `Mp4Encoder` (`MediaCodec`, `MediaMuxer`) and `EventShares` (`FileProvider`, intents) |
 | `retention` | Automatic deletion: which sleeps are old enough (`SleepRetention`) and the WorkManager job that deletes them | only in `AutoDeletion` (WorkManager) |
 | `settings` | The user's settings and the `SettingsStore` that keeps them; the app language | DataStore; AppCompat only in `AppLanguages` |
-| `models` | The transcription models: the catalogue of downloadable models (`TranscriptionModel`), the `ModelInstaller` that downloads and checks their files, the `ModelLibrary` with their states and the active one, and the WorkManager job that downloads them | only in `ModelDownloadWorker` (WorkManager) |
-| `transcription` | Speech recognition of events: the `EventAnalysis` interface, the `SpeechRecognition` with its `TranscriptFilter`, the sherpa-onnx `SherpaTranscriber`, the `TranscriptionRunner` that works through the events, the `TranscriptionPauses` the user made, and the WorkManager jobs that run it | only in `TranscriptionWork` (WorkManager, notifications, battery) |
+| `models` | The downloadable models: the catalogues of transcription models (`TranscriptionModel`) and *sound models* (`SoundModel`), the `ModelInstaller` that downloads and checks their files, the `ModelLibrary` with their states and the active transcription model, and the WorkManager job that downloads them | only in `ModelDownloadWorker` (WorkManager) |
+| `transcription` | Speech recognition of events: the `EventAnalysis` interface, the `SpeechRecognition` with its `TranscriptFilter`, the sherpa-onnx `SherpaTranscriber`, the `TranscriptionRunner` that works through the events (the old way's first, then the new way's `EventSearch` and its own events), the `TranscriptionPauses` the user made, and the WorkManager jobs that run it | only in `TranscriptionWork` (WorkManager, notifications, battery) |
 | `notifications` | The ids of all notifications and the progress notification that model downloads and speech recognition share | Android notifications, WorkManager's `ForegroundInfo` |
 | `readiness` | Whether the phone lets a whole night be recorded: the `Requirement`s it misses, the `VendorStep`s of its maker, and the `SystemPage`s that fix them | only in `PhoneReadiness` |
 | `whatsnew` | The changelogs bundled into the app: their `Changelog` parser, the `BundledChangelogs` of each app language and `WhatsNew`, which decides whether an update brought news the user has not seen | only in `BundledChangelogs.fromAssets` (assets) |
@@ -34,7 +34,7 @@ speech recognition and owns the `Updater`. Logic that can be tested without a de
 timeline and its audio stream, the cut plan, the stretches events are shared with and their caption, the selection of events, the timeline view, the tag filter and the tag window's choice, the
 sensitivity sheet's re-scan, the numbers of the stats screen, the settings,
 which sleeps automatic deletion removes, the model downloads and states, the transcript filter,
-the speech recognition run, which transcript each event shows and which results of models it compares, reading the changelogs, and finding,
+the speech recognition run, which transcript each event shows and which results of models it compares, the new way's search part by part and its sorting, the comparison of both ways and how the new way's transcripts are shown, reading the changelogs, and finding,
 verifying and timing an update) is plain Kotlin behind small interfaces (`PcmSource`,
 `RecordingStore`, `Clocks`, `ByteSource`, `ModelDownloads`, `TranscriptStore`, `PauseStore`, `Transcriber`,
 `ReleaseSource`, `ApkInspector`, `PackageInstall`) and
@@ -62,7 +62,8 @@ hours and cannot pass each other; tapping a thumb or its time opens the same tim
 times are stored as one setting, so they are never half changed.
 
 The first-start setup is a sequence of `SetupStep`s (the language, the permissions page, "Install
-unknown apps" for updates, then the speech recognition model), each finished once with a setting
+unknown apps" for updates, then the recommended models: the speech recognition model with CED-tiny
+and CED-mini, offered as one download with a line on what each is for), each finished once with a setting
 of its own; `MainActivity` shows the first unfinished step instead of the app, so a setup left
 halfway continues where it stopped. A build that does not update itself leaves out the updates
 step.
@@ -208,7 +209,7 @@ Room (`SleepDatabase`) holds five tables:
   a kind, `SENSITIVITY` with a start threshold in `value`: the one the detector chose for the
   sleep, or one the user set for the stretch,
   `MICROPHONE_UNAVAILABLE` from the recorder, `TRANSCRIPT` with the kind speech recognition or
-  the user gives an event and its words in `text`, `HIDDEN` from the user over an event they hid, `TAG` from the user over an event they gave the tag `tag_id`, `NAME` from the user with the name they gave an event in `text`), and `origin` (`DEVICE`, `SERVER` or `USER`),
+  the user gives an event and its words in `text`, `HIDDEN` from the user over an event they hid, `TAG` from the user over an event they gave the tag `tag_id`, `NAME` from the user with the name they gave an event in `text`, `CANDIDATE` and `SEARCH` and `CANDIDATE_TRANSCRIPT` from the *new way* of finding events, see [The new way of finding events](#the-new-way-of-finding-events)), and `origin` (`DEVICE`, `SERVER` or `USER`),
   `producer` and `producer_version` say who stated it. Gaps between recordings take no time on
   this axis and need no annotation: they follow from the recordings' start instants and lengths.
 
@@ -228,8 +229,9 @@ Tags and names follow the same rule: an event has a tag while a `TAG` mark of it
 event (`SleepEvent.tagIds`), and its name is that of the latest `NAME` mark that overlaps it.
 Deleting an own tag deletes its marks through the foreign key. Tags and hiding are independent:
 a hidden event keeps its tags. *System tags* are not stored but follow from the event
-(`SleepEvent.tags`, `EventTag.System`): named, hidden and each kind the filter offers;
-a new kind of system tag is one more subtype there. Automatic deletion keeps a sleep with an
+(`SleepEvent.tags`, `EventTag.System`): named, hidden and each kind the filter offers, and for
+the new way's events background, unsure, which way found an event in a comparison and, in
+developer mode, what found it; a new kind of system tag is one more subtype there. Automatic deletion keeps a sleep with an
 event that has a tag or a name (`SleepSummary.taggedCount`, hidden events included) while
 "Keep tagged sleeps" is on, which it is by default. Version 1 had a `FAVOURITE` mark with the
 name in its `text`; the migration to version 2 (`Migration1To2`) turned each into a `TAG` mark of
@@ -349,6 +351,81 @@ stretches in which the microphone was unavailable are hatched. `SleepLoudness` k
 them; the playhead is a layer of its own, and the view model publishes the playing position apart
 from the rest of the screen's state, so playback redraws the playhead and the clock and nothing
 else.
+
+### The new way of finding events
+
+During a test phase events are found in two ways side by side. The *old way* is the loudness
+detector above; the *new way*, `SoundSearch`, searches more eagerly and sorts what it finds, as the
+prototype measurements chose (loudness search, listening pass, sorting, onset vote):
+
+1. **Loudness**: the `EventDetector` at the most sensitive setting (no user sensitivities) gives
+   candidates. The `OnsetRule` judges each stretch of a candidate before stretches are joined
+   (9 dB within 500 ms); a candidate is sudden when one of them is, and its rise is the largest.
+2. **Listening**: CED-tiny hears the whole sleep in 2 s windows a second apart, high-passed at
+   200 Hz (`HighPass`, the same 4th-order Butterworth sections SciPy gives). Windows whose human
+   score (`HumanScore`: the highest probability of the AudioSet classes of voice, breath, snoring
+   and coughs) reaches 0.18 are joined; those that overlap no loudness candidate become candidates
+   of their own, a loudness candidate they overlap counts as found by both.
+3. **Sorting**: each candidate's clip (the candidate, or its loudest 9 s, with 0.5 s around it, at
+   least 0.5 s) is brought to -25 dBFS RMS and tagged by CED-mini as it is and high-passed at 200
+   and 400 Hz; its score is the best human score. It is *background* when the score is below 0.06
+   and (onset vote) it rose slowly, *human* from 0.5 on, and *unsure* in between.
+
+The models run through sherpa-onnx's `AudioTagging` (`CedTagger`), which computes CED's filterbank
+itself; its scores differ a little from those of the PC prototype the thresholds were chosen with.
+Nothing is deleted: every candidate is stored as a `CANDIDATE` annotation of the producer `sorting`
+(kind noise, human score in `value`, verdict, what found it and rise in `text`, `Sorting`). A sleep
+is searched in parts of 15 minutes (`SoundSearch.searchPart`), each stored in one transaction
+with the `SEARCH` mark (`SearchMark`): it reaches from the sleep's start to where the search got,
+holds the settings the sleep is searched with, and its `value` is 1 once the sleep is searched to
+its end. A part holds the candidates that start in it; the listening pass hears two windows before
+the part and on past its end as far as a sound heard or a loudness candidate of the part goes, so
+the parts give the same candidates as one pass, and a search that Android stops goes on with the
+next part, with the settings it began with. Audio that cannot be read ends the search there: the
+sleep keeps what was found and is marked done and `partial`. The old way's `EVENT`s and their
+transcripts stay exactly as they were, so library, stats and automatic deletion count the old
+way. A recording that continues a sleep removes both ways' results.
+
+The sleep's ⋮ menu chooses which events the sleep screen shows, for every sleep (`Settings.eventWay`,
+the old way by default): the old way's, the new way's, or a comparison (`compareWays`) that merges
+the events of both where they overlap and tags each as found by both, only the old or only the new
+way. Background events are left out of the list, of cut playback and of the timeline's colours
+unless Background is chosen in the filter; in a comparison only those the old way did not find.
+The line under the app bar counts the events of the way shown. User marks keep to their stretches
+in every view, as they match by overlap; since naming, correcting and hiding replace the marks
+that overlap, these edits are greyed out, with a note, on a new-way or comparison event that
+overlaps more than one old-way event (`withSharedMarks`), and made in the old way instead. Tags
+only add or remove the one tag, so they can be given everywhere.
+
+The new way runs in the speech recognition jobs, after them (`TranscriptionRunner` with its
+`EventSearch`, `SoundSearches`, and the store of its own events, `CandidateTranscripts`): first
+the old way's events are recognised exactly as before, newest sleep first; only when none of them
+waits does the search take every finished sleep not searched to its end by the current producer
+version, latest first, under the same rules (it stops for a low battery, a recording or the
+user's pause and goes on with its next part next time); then the new way's own events are
+recognised. One sleep that fails is logged and tried again next time, and the others go on.
+Without the sound models nothing of the new way runs. So it follows the speech recognition
+setting: with speech recognition off it does not run. It reads the sleep's audio, so it takes
+minutes per night. Its progress has a line of its own on the sleep screen in the new and
+comparison views ("Finding events with the new way: 34 %"), while the speech recognition status
+of the app bar counts the old way's events as before; the notification shows whichever runs.
+
+The new way's speech recognition never touches the old way's transcripts. A candidate that lies
+wholly within an old-way event with a transcript shows that transcript and is not recognised.
+Every other candidate is heard in pieces of at most a minute (`piecesOf`), each kept as a
+`CANDIDATE_TRANSCRIPT` over exactly that piece, a type no query of the old way reads; the
+candidate shows its pieces joined (`withCandidateTranscripts`). On the sleep screen an old-way
+event also lists the results of the candidates that overlap it after its own, marked as the new
+way's (`withNewWayResults`), like the results of other models; its own transcript stays the one
+it shows, and the new way's results cannot be deleted from its correction.
+
+*Developer mode* (a setting, off by default) shows the section "Detection (test)" in the settings
+with the new way's knobs (`SearchSettings`: loudness sensitivity, listening on/off and its
+threshold, background threshold, onset vote, sorting model). They apply to sleeps searched
+afterwards; a change searches nothing again, but "Search again with current settings" in the
+sleep's ⋮ menu runs the new way over the open sleep now, as a speech recognition job for that
+sleep. In developer mode every event of the new way shows what found it, its human score and its
+rise, and the filter offers what found it as system tags.
 
 ### Sensitivity
 
@@ -470,7 +547,9 @@ notices when WorkManager stops it), or only when the user continues or starts a 
 Speech is recognised on the phone with sherpa-onnx, whose native libraries are the only part of
 the speech recognition the APK carries; release builds keep only the arm64 libraries. The models
 themselves (Parakeet TDT 0.6B Ultra by default, Whisper small as an alternative) are downloaded
-on demand into `noBackupFilesDir/models/<model>/`, never bundled.
+on demand into `noBackupFilesDir/models/<model>/`, never bundled. The *sound models* of the new
+way (`SoundModel`: CED-tiny, CED-mini and CED-small, Apache-2.0, the int8 files of the sherpa-onnx
+releases, 6 to 23 MB) are downloaded the same way and listed in the settings of their own.
 
 `TranscriptionModel` lists each model's files with their size and SHA-256, downloaded as single
 files from the Hugging Face repository the sherpa-onnx project publishes the model in, pinned to

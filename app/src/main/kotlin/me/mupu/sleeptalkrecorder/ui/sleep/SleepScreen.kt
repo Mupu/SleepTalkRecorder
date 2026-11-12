@@ -22,7 +22,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -34,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -49,6 +53,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -65,6 +70,7 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -76,7 +82,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.mupu.sleeptalkrecorder.R
+import me.mupu.sleeptalkrecorder.data.EventWay
 import me.mupu.sleeptalkrecorder.data.SleepEvent
+import me.mupu.sleeptalkrecorder.data.Sorting
+import me.mupu.sleeptalkrecorder.detection.FoundBy
 import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.data.TagEntity
 import me.mupu.sleeptalkrecorder.models.TranscriptionModel
@@ -106,6 +115,7 @@ import me.mupu.sleeptalkrecorder.ui.tags.TagFilterBar
 import java.text.NumberFormat
 import java.time.Duration
 import java.time.ZoneId
+import kotlinx.coroutines.launch
 
 /**
  * One sleep: its name and times, the zoomable loudness timeline with its overview, the player with
@@ -189,6 +199,10 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
     // Back ends selection mode before it leaves the screen.
     BackHandler(enabled = state.selected.isNotEmpty(), onBack = viewModel::clearSelection)
 
+    var choosingWay by rememberSaveable { mutableStateOf(false) }
+    val searchAgainStarted = stringResource(R.string.search_again_started)
+    val scope = rememberCoroutineScope()
+
     val sleep = state.sleep
     val title = sleep?.let { sleepTitle(resources, it.date) }.orEmpty()
     Scaffold(
@@ -202,7 +216,14 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     onHide = viewModel::hideSelected,
                 )
             } else {
-                SleepAppBar(title, state, transcription, modelChange, viewModel, onBack, onOpenStats)
+                SleepAppBar(
+                    title, state, transcription, modelChange, viewModel, onBack, onOpenStats,
+                    onChooseWay = { choosingWay = true },
+                    onSearchAgain = {
+                        viewModel.searchAgain()
+                        scope.launch { snackbars.showSnackbar(searchAgainStarted) }
+                    },
+                )
             }
         },
         snackbarHost = { SnackbarHost(snackbars) },
@@ -210,11 +231,17 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
         Column(Modifier.fillMaxSize().padding(padding)) {
             if (sleep != null) {
                 Text(
-                    listOfNotNull(sleepSubtitle(sleep, zone), eventSummary(sleep)).joinToString(" · "),
+                    listOfNotNull(sleepSubtitle(sleep, zone), eventSummary(sleep, state.wayTotals)).joinToString(" · "),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
+            }
+            state.newWay?.takeIf { sleep?.isRunning == false && (!it.searched || it.progress != null || it.partial) }?.let { newWay ->
+                NewWayHint(newWay, onOpenModels, Modifier.fillMaxWidth().padding(start = 16.dp, top = 4.dp, end = 8.dp))
+            }
+            if (choosingWay) {
+                WayDialog(state.way, onChoose = viewModel::showWay, onDismiss = { choosingWay = false })
             }
             modelChange?.let { change ->
                 ModelChangeHint(
@@ -281,7 +308,13 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                 }
                 HorizontalDivider()
                 if (state.events.isNotEmpty()) {
-                    TagFilterBar(state.filter, tags, filterKinds, onOpen = { filtering = true }, onRemove = viewModel::toggleFilterTag, onClear = viewModel::clearFilter)
+                    TagFilterBar(
+                        state.filter, tags, filterKinds,
+                        onOpen = { filtering = true },
+                        onRemove = viewModel::toggleFilterTag,
+                        onClear = viewModel::clearFilter,
+                        extraTags = state.extraTags,
+                    )
                 }
                 if (state.listedEvents.isNotEmpty()) ListedSummary(state.listedEvents)
                 EventList(
@@ -311,8 +344,10 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     expanded = expanded,
                     onToggleTranscript = { id -> expanded = if (id in expanded) expanded - id else expanded + id },
                     recognising = recognising,
-                    onRecogniseAgain = if (transcription == TranscriptionStatus.Off) null else { event -> choosingModel = event },
+                    // Only the first way's events are recognised again on their own.
+                    onRecogniseAgain = if (transcription == TranscriptionStatus.Off || state.way != EventWay.OLD) null else { event -> choosingModel = event },
                     canRecogniseAgain = transcription.canRun,
+                    developerMode = state.developerMode,
                 )
                 naming?.let { event ->
                     NameEventDialog(
@@ -351,6 +386,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                     onClearFilter = viewModel::clearFilter,
                     onCloseFilter = { filtering = false },
                     onApplied = viewModel::clearSelection,
+                    extraTags = state.extraTags,
                 )
                 share?.let { step -> EventShareSheet(viewModel.sharing, step, state.loudness, position) }
                 sensitivity?.let { sheet ->
@@ -380,6 +416,8 @@ private fun SleepAppBar(
     viewModel: SleepViewModel,
     onBack: () -> Unit,
     onOpenStats: () -> Unit,
+    onChooseWay: () -> Unit,
+    onSearchAgain: () -> Unit,
 ) {
     AppBar(
         title,
@@ -411,6 +449,9 @@ private fun SleepAppBar(
                             onClick = viewModel::runSpeechRecognition,
                         )
                     },
+                    MenuEntry(R.string.way_menu, R.drawable.ic_filter_list, onClick = onChooseWay),
+                    MenuEntry(R.string.search_again, R.drawable.ic_center_focus_strong, enabled = transcription !is TranscriptionStatus.Running, onClick = onSearchAgain)
+                        .takeIf { state.developerMode && state.sleep?.isRunning == false && transcription != TranscriptionStatus.Off },
                 ),
             )
         },
@@ -426,7 +467,7 @@ private fun EventSelectionBar(selected: List<SleepEvent>, onClose: () -> Unit, o
     SelectionBar(selected.size, totalLength(selected), onClose) {
         AppBarIcon(R.drawable.ic_share, stringResource(R.string.share_event), onShare)
         AppBarIcon(R.drawable.ic_label_outline, stringResource(R.string.tags_button), onTag)
-        IconButton(onClick = onHide, enabled = selected.any { !it.hidden }) {
+        IconButton(onClick = onHide, enabled = selected.any { !it.hidden && !it.sharesMarks }) {
             Icon(painterResource(R.drawable.ic_visibility_off), contentDescription = stringResource(R.string.hide_event))
         }
     }
@@ -463,16 +504,18 @@ private fun MoreMenu(entries: List<MenuEntry>) {
 /**
  * How many events the sleep has that are not hidden and how long they last together, whatever the
  * filter lists, as in the library: "12 events · 3 min"; that they are still being found, or null
- * while the sleep is recorded.
+ * while the sleep is recorded. With [wayTotals], those of the way shown, else the first way's.
  */
 @Composable
-private fun eventSummary(sleep: SleepSummary): String? {
-    val count = pluralStringResource(R.plurals.event_count, sleep.eventCount, sleep.eventCount)
+private fun eventSummary(sleep: SleepSummary, wayTotals: Pair<Int, Duration>?): String? {
+    val events = wayTotals?.first ?: sleep.eventCount
+    val length = wayTotals?.second ?: Duration.ofMillis(sleep.eventMillis)
+    val count = pluralStringResource(R.plurals.event_count, events, events)
     return when {
         sleep.isRunning -> null
         !sleep.eventsFound -> stringResource(R.string.finding_events)
-        sleep.eventCount == 0 -> count
-        else -> stringResource(R.string.events_total, count, formatDuration(LocalResources.current, Duration.ofMillis(sleep.eventMillis)))
+        events == 0 -> count
+        else -> stringResource(R.string.events_total, count, formatDuration(LocalResources.current, length))
     }
 }
 
@@ -643,6 +686,7 @@ private fun EventList(
     recognising: Map<Stretch, TranscriptionModel>,
     onRecogniseAgain: ((SleepEvent) -> Unit)?,
     canRecogniseAgain: Boolean,
+    developerMode: Boolean,
 ) {
     val listState = rememberLazyListState()
     LaunchedEffect(currentEventId) {
@@ -688,6 +732,7 @@ private fun EventList(
                 recognisingWith = recognising[event.stretch],
                 onRecogniseAgain = onRecogniseAgain,
                 canRecogniseAgain = canRecogniseAgain,
+                developerMode = developerMode,
             )
         }
         if (sleep != null && events.isEmpty()) {
@@ -735,6 +780,7 @@ private fun EventRow(
     recognisingWith: TranscriptionModel?,
     onRecogniseAgain: ((SleepEvent) -> Unit)?,
     canRecogniseAgain: Boolean,
+    developerMode: Boolean,
 ) {
     val clock = LocalClockFormatter.current
     val resources = LocalResources.current
@@ -791,6 +837,7 @@ private fun EventRow(
                     style = MaterialTheme.typography.bodySmall.merge(Numbers),
                     color = colors.onSurfaceVariant,
                 )
+                if (developerMode) event.sorting?.let { SortingInfo(it) }
                 TranscriptLine(
                     event,
                     transcriptExpanded,
@@ -805,6 +852,7 @@ private fun EventRow(
                 // Moved left by its padding, so its icon lines up with the text above.
                 TextButton(
                     onClick = { onHide(event, false) },
+                    enabled = !event.sharesMarks,
                     contentPadding = ButtonDefaults.TextButtonWithIconContentPadding,
                     modifier = Modifier.offset(x = -ButtonDefaults.TextButtonWithIconContentPadding.calculateLeftPadding(LayoutDirection.Ltr)),
                 ) {
@@ -834,16 +882,20 @@ private fun EventRow(
         }
         MoreMenu(
             listOfNotNull(
-                MenuEntry(R.string.name_event_menu, R.drawable.ic_title) { onName(event) },
+                MenuEntry(R.string.name_event_menu, R.drawable.ic_title, enabled = !event.sharesMarks) { onName(event) },
                 MenuEntry(R.string.share_event, R.drawable.ic_share) { onShare(event) },
-                MenuEntry(R.string.hide_event, R.drawable.ic_visibility_off) { onHide(event, true) }.takeUnless { event.hidden },
+                MenuEntry(R.string.hide_event, R.drawable.ic_visibility_off, enabled = !event.sharesMarks) { onHide(event, true) }.takeUnless { event.hidden },
                 onSensitivity?.let { MenuEntry(R.string.sensitivity_here, R.drawable.ic_tune) { it(event) } },
                 onRecogniseAgain?.let {
                     MenuEntry(R.string.recognise_again, R.drawable.ic_subtitles, enabled = canRecogniseAgain && recognisingWith == null) { it(event) }
                 },
-                MenuEntry(R.string.correct_text, R.drawable.ic_edit) { onCorrect(event) }.takeIf { event.isVoice },
-                MenuEntry(R.string.not_speech_noise, R.drawable.ic_voice_over_off) { onMarkSpeech(event, false) }.takeIf { event.isVoice },
-                MenuEntry(R.string.mark_speech, R.drawable.ic_record_voice) { onMarkSpeech(event, true) }.takeUnless { event.isSpeech },
+                MenuEntry(R.string.correct_text, R.drawable.ic_edit, enabled = !event.sharesMarks) { onCorrect(event) }.takeIf { event.isVoice },
+                MenuEntry(R.string.not_speech_noise, R.drawable.ic_voice_over_off, enabled = !event.sharesMarks) { onMarkSpeech(event, false) }
+                    .takeIf { event.isVoice },
+                MenuEntry(R.string.mark_speech, R.drawable.ic_record_voice, enabled = !event.sharesMarks) { onMarkSpeech(event, true) }
+                    .takeUnless { event.isSpeech },
+                // Why the entries above are greyed out, and where to make these edits instead.
+                MenuEntry(R.string.edit_in_old_view, R.drawable.ic_warning, enabled = false) {}.takeIf { event.sharesMarks },
             ),
         )
     }
@@ -870,6 +922,107 @@ private fun HiddenTag() {
             .padding(horizontal = 6.dp, vertical = 1.dp),
     )
 }
+
+/** Developer mode: what the second way knows about an event, "Found by both · human 0.42 · rise 12.5 dB". */
+@Composable
+private fun SortingInfo(sorting: Sorting) {
+    val found = stringResource(
+        when (sorting.foundBy) {
+            FoundBy.LOUDNESS -> R.string.found_by_loudness
+            FoundBy.LISTENING -> R.string.found_by_listening
+            FoundBy.BOTH -> R.string.found_by_both
+        },
+    )
+    val locale = LocalResources.current.configuration.locales[0]
+    Text(
+        stringResource(R.string.event_info, found, "%.2f".format(locale, sorting.score), "%.1f".format(locale, sorting.riseDb)),
+        style = MaterialTheme.typography.bodySmall.merge(Numbers),
+        color = MaterialTheme.colorScheme.tertiary,
+    )
+}
+
+/**
+ * Where the second way of finding events stands while its events are shown but it has not
+ * searched the sleep: it runs with speech recognition, or it waits for its models, which the
+ * button downloads in the settings.
+ */
+@Composable
+private fun NewWayHint(state: NewWayState, onOpenModels: () -> Unit, modifier: Modifier = Modifier) {
+    val progress = state.progress
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            when {
+                progress?.searching == true -> stringResource(R.string.transcription_searching, progress.done)
+                progress != null -> stringResource(R.string.new_way_recognising, (progress.done + 1).coerceAtMost(progress.total), progress.total)
+                state.modelsMissing && !state.searched -> stringResource(R.string.new_way_no_models)
+                state.partial -> stringResource(R.string.new_way_partial)
+                else -> stringResource(R.string.new_way_not_searched)
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        if (state.modelsMissing && !state.searched && progress == null) {
+            TextButton(onClick = onOpenModels) { Text(stringResource(R.string.new_way_get_models)) }
+        }
+    }
+}
+
+/** Chooses which way's events the sleep screen shows, for every sleep. */
+@Composable
+private fun WayDialog(selected: EventWay, onChoose: (EventWay) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.way_title)) },
+        text = {
+            Column(Modifier.selectableGroup()) {
+                for (way in EventWay.entries) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(way == selected, role = Role.RadioButton) {
+                                onChoose(way)
+                                onDismiss()
+                            }
+                            .padding(vertical = 8.dp),
+                    ) {
+                        RadioButton(selected = way == selected, onClick = null)
+                        Column(Modifier.padding(start = 12.dp)) {
+                            Text(stringResource(way.label), style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                stringResource(way.hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                Text(
+                    stringResource(R.string.way_remembered),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
+}
+
+private val EventWay.label: Int
+    get() = when (this) {
+        EventWay.OLD -> R.string.way_old
+        EventWay.NEW -> R.string.way_new
+        EventWay.COMPARISON -> R.string.way_comparison
+    }
+
+private val EventWay.hint: Int
+    get() = when (this) {
+        EventWay.OLD -> R.string.way_old_hint
+        EventWay.NEW -> R.string.way_new_hint
+        EventWay.COMPARISON -> R.string.way_comparison_hint
+    }
 
 /**
  * Shows the speed of what plays now and switches it to the next one on every tap; while a single

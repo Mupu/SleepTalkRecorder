@@ -82,14 +82,14 @@ internal fun ModelRow(
     }
 }
 
-/** Asks whether to delete [model], naming the space it frees. */
+/** Asks whether to delete the model called [name], naming the [bytes] it frees. */
 @Composable
-internal fun DeleteModelDialog(model: TranscriptionModel, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+internal fun DeleteModelDialog(name: String, bytes: Long, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(painterResource(R.drawable.ic_delete), contentDescription = null) },
         title = { Text(stringResource(R.string.delete_model_title)) },
-        text = { Text(stringResource(R.string.delete_model_text, model.displayName, fileSize(model.bytes))) },
+        text = { Text(stringResource(R.string.delete_model_text, name, fileSize(bytes))) },
         confirmButton = {
             TextButton(onClick = onConfirm) {
                 Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)

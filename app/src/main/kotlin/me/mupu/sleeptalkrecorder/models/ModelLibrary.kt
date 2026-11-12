@@ -44,22 +44,25 @@ enum class DownloadFailure {
 /** A model as the settings list it. */
 data class ModelStatus(val model: TranscriptionModel, val state: ModelState, val active: Boolean)
 
+/** A sound model as the settings list it. */
+data class SoundModelStatus(val model: SoundModel, val state: ModelState)
+
 /** The downloads that run in the background, by model; the app's are WorkManager jobs. */
 interface ModelDownloads {
     /** Every model with a queued, running or failed download, as [ModelState.Waiting], [ModelState.Downloading] or [ModelState.Failed]. */
-    val states: Flow<Map<TranscriptionModel, ModelState>>
+    val states: Flow<Map<DownloadableModel, ModelState>>
 
     /** Starts downloading [model], unless its download is already queued or running. */
-    fun start(model: TranscriptionModel)
+    fun start(model: DownloadableModel)
 
     /** Stops the download of [model] and throws away what it downloaded so far. */
-    fun cancel(model: TranscriptionModel)
+    fun cancel(model: DownloadableModel)
 }
 
 /**
- * The transcription models: which are installed or downloading, which one is active, and the
- * actions that change that. The active model is a setting; it only ever names an installed model
- * unless none is installed, in which case transcripts wait.
+ * The transcription models and the sound models: which are installed or downloading, which
+ * transcription model is active, and the actions that change that. The active model is a setting;
+ * it only ever names an installed model unless none is installed, in which case transcripts wait.
  */
 class ModelLibrary(
     private val installer: ModelInstaller,
@@ -82,11 +85,23 @@ class ModelLibrary(
         }
     }.flowOn(Dispatchers.IO)
 
+    /** Every sound model with its state, in catalogue order. */
+    val soundModels: Flow<List<SoundModelStatus>> = combine(downloads.states, revision) { running, _ ->
+        SoundModel.entries.map { model -> SoundModelStatus(model, if (isInstalled(model)) ModelState.Installed else running[model] ?: ModelState.NotInstalled) }
+    }.flowOn(Dispatchers.IO)
+
     /** Downloads [model] in the background; a partial earlier download is continued. */
-    fun install(model: TranscriptionModel) = downloads.start(model)
+    fun install(model: DownloadableModel) = downloads.start(model)
 
     /** Stops [model]'s download. */
-    fun cancel(model: TranscriptionModel) = downloads.cancel(model)
+    fun cancel(model: DownloadableModel) = downloads.cancel(model)
+
+    /** Deletes the sound model [model]'s files. */
+    suspend fun delete(model: SoundModel) {
+        downloads.cancel(model)
+        withContext(Dispatchers.IO) { installer.delete(model.id) }
+        revision.update { it + 1 }
+    }
 
     /** Makes [model] the one transcripts use, if it is installed. */
     suspend fun activate(model: TranscriptionModel) {
@@ -111,6 +126,7 @@ class ModelLibrary(
         }
     }
 
-    private suspend fun isInstalled(model: TranscriptionModel) =
+    /** Whether every file of [model] is downloaded and checked. */
+    suspend fun isInstalled(model: DownloadableModel) =
         withContext(Dispatchers.IO) { installer.isInstalled(model.id, model.files) }
 }

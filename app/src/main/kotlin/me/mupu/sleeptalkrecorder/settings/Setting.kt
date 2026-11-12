@@ -3,6 +3,7 @@ package me.mupu.sleeptalkrecorder.settings
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -112,6 +113,27 @@ class DurationSetting internal constructor(
 
     override fun write(preferences: MutablePreferences, value: Duration) {
         preferences[preferencesKey] = value.coerceIn(range).toMillis()
+    }
+}
+
+/** A number within [range]. */
+fun floatSetting(key: String, default: Float, range: ClosedFloatingPointRange<Float>): FloatSetting = FloatSetting(key, default, range)
+
+/** A [Setting] for a number; [range] is what the settings screen offers. */
+class FloatSetting internal constructor(
+    key: String,
+    default: Float,
+    /** The lowest and highest value the setting accepts. */
+    val range: ClosedFloatingPointRange<Float>,
+) : Setting<Float>(default) {
+
+    private val preferencesKey = floatPreferencesKey(key)
+
+    override fun read(preferences: Preferences): Float =
+        preferences[preferencesKey]?.takeUnless { it.isNaN() }?.coerceIn(range) ?: default
+
+    override fun write(preferences: MutablePreferences, value: Float) {
+        preferences[preferencesKey] = value.coerceIn(range)
     }
 }
 

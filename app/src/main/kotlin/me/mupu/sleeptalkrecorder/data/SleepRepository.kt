@@ -5,12 +5,15 @@ import android.database.sqlite.SQLiteException
 import android.util.Log
 import androidx.room.withTransaction
 import me.mupu.sleeptalkrecorder.data.Producers.DETECTOR
+import me.mupu.sleeptalkrecorder.data.Producers.SORTING
+import me.mupu.sleeptalkrecorder.detection.SortedCandidate
 import me.mupu.sleeptalkrecorder.detection.SensitivityOverride
 import me.mupu.sleeptalkrecorder.detection.SleepTrack
 import me.mupu.sleeptalkrecorder.detection.replacedBy
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
 import java.time.Duration
+import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
@@ -93,6 +96,96 @@ class SleepRepository(
 
     /** How far speech recognition got through a sleep's events; published only when it changed. */
     fun transcriptionCount(sleepId: Long): Flow<TranscriptionCount> = dao.transcriptionCount(sleepId).distinctUntilChanged()
+
+    /**
+     * The events the second way of finding events found in a sleep, background ones too, in order,
+     * each with how it was sorted and the kind and words it shows ([withCandidateTranscripts]);
+     * none until the second way searched the sleep, those of its parts searched so far while it
+     * searches.
+     */
+    fun candidates(sleepId: Long): Flow<List<SleepEvent>> = combine(
+        dao.candidates(sleepId),
+        events(sleepId),
+        dao.candidateTranscriptFlow(sleepId),
+        dao.annotations(sleepId, AnnotationType.TRANSCRIPT),
+        combine(dao.kinds(), activeModel, ::Pair),
+    ) { rows, old, own, transcripts, (kinds, active) ->
+        val user = transcripts.filter { it.origin == AnnotationOrigin.USER }
+        withCandidateTranscripts(rows.map { it.sorted() }, old, own, user, kinds.associateBy { it.id }, active)
+    }
+        .conflate()
+        .flowOn(Dispatchers.Default)
+        .distinctUntilChanged()
+
+    /** How far the second way searched a sleep; null until it began. */
+    fun searchMark(sleepId: Long): Flow<SearchMark?> =
+        dao.searchMarkFlow(sleepId, SORTING.id).map { mark -> mark?.takeIf { it.producer == SORTING }?.let(SearchMark::of) }.distinctUntilChanged()
+
+    /** How far the current second way searched a sleep, or null when it has not begun or an older version did. */
+    suspend fun currentSearchMark(sleepId: Long): SearchMark? =
+        dao.searchMark(sleepId, SORTING.id)?.takeIf { it.producer == SORTING }?.let(SearchMark::of)
+
+    /** The instant a sleep ended; null while it is recorded or once it no longer exists. */
+    suspend fun endOf(sleepId: Long): Instant? = dao.findSleep(sleepId)?.endedAt
+
+    /** The finished sleeps the current second way has not searched to their end, the latest first. */
+    suspend fun sleepsNotSearched(): List<Long> = dao.sleepsNotSearched(SORTING.id, SORTING.version)
+
+    /**
+     * Stores what the second way found in one part of a sleep, over [track], and [mark], how far
+     * it has searched now. With [fresh] its earlier results go first, as when it starts the sleep
+     * from its start; else the candidates of an earlier attempt at this part ([from] on) are
+     * replaced. Only stored while the sleep is still finished at [endedAt], as when the search began.
+     *
+     * Returns whether it was stored.
+     */
+    suspend fun storeSearchPart(
+        sleepId: Long,
+        endedAt: Instant,
+        track: SleepTrack,
+        from: Duration,
+        sorted: List<SortedCandidate>,
+        mark: SearchMark,
+        fresh: Boolean,
+    ): Boolean {
+        val candidates = sorted.map { found ->
+            val sorting = Sorting(found.verdict, found.candidate.foundBy, found.score, found.candidate.riseDb)
+            AnnotationEntity(
+                sleepId = sleepId,
+                type = AnnotationType.CANDIDATE,
+                start = track.positionOf(found.candidate.hops.start),
+                end = track.positionOf(found.candidate.hops.end),
+                kindId = EventKinds.NOISE,
+                value = found.score.toDouble(),
+                text = sorting.encode(),
+                origin = AnnotationOrigin.DEVICE,
+                producer = SORTING,
+            )
+        }
+        val search = AnnotationEntity(
+            sleepId = sleepId,
+            type = AnnotationType.SEARCH,
+            start = Duration.ZERO,
+            end = mark.searchedTo,
+            value = if (mark.done) 1.0 else 0.0,
+            text = mark.text(),
+            origin = AnnotationOrigin.DEVICE,
+            producer = SORTING,
+        )
+        return database.withTransaction {
+            if (dao.findSleep(sleepId)?.endedAt != endedAt) return@withTransaction false
+            if (fresh) dao.deleteResults(sleepId, AnnotationOrigin.DEVICE, SORTING.id) else dao.deleteCandidatesFrom(sleepId, SORTING.id, from)
+            dao.deleteSearchMarks(sleepId, SORTING.id)
+            dao.insertAnnotations(candidates + search)
+            // Once the sleep is searched, the transcripts of the second way's events follow their
+            // pieces, so those of events found again unchanged stay; the first way's are not touched.
+            if (mark.done) {
+                val pieces = dao.candidateStretches(sleepId).flatMapTo(HashSet()) { piecesOf(it) }
+                dao.deleteAnnotations(dao.candidateTranscripts(sleepId).filter { it.origin != AnnotationOrigin.USER && it.stretch !in pieces }.map { it.id })
+            }
+            true
+        }
+    }
 
     /** The event kinds the tag filter offers as system tags. */
     fun filterKinds(): Flow<List<EventKindEntity>> = dao.filterKinds()

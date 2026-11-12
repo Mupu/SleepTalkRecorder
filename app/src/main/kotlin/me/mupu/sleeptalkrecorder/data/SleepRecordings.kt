@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.room.withTransaction
 import me.mupu.sleeptalkrecorder.data.Producers.DETECTOR
 import me.mupu.sleeptalkrecorder.data.Producers.RECORDER
+import me.mupu.sleeptalkrecorder.data.Producers.SORTING
 import me.mupu.sleeptalkrecorder.recording.ChunkedWavWriter
 import me.mupu.sleeptalkrecorder.recording.NewRecording
 import me.mupu.sleeptalkrecorder.recording.RecordingStore
@@ -40,6 +41,7 @@ class SleepRecordings(
                 // positions of everything else stay, because the new audio follows the old.
                 dao.reopenSleep(last.id)
                 dao.deleteResults(last.id, AnnotationOrigin.DEVICE, DETECTOR.id)
+                dao.deleteResults(last.id, AnnotationOrigin.DEVICE, SORTING.id)
                 last
             } else {
                 val new = SleepEntity(startedAt = startedAt, endedAt = null, date = windows.dateOf(startedAt, zone))

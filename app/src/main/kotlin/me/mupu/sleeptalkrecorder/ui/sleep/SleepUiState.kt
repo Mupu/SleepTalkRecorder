@@ -1,11 +1,14 @@
 package me.mupu.sleeptalkrecorder.ui.sleep
 
 import me.mupu.sleeptalkrecorder.data.AnnotationEntity
+import me.mupu.sleeptalkrecorder.data.EventTag
+import me.mupu.sleeptalkrecorder.data.EventWay
 import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.playback.PlaybackKind
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
+import me.mupu.sleeptalkrecorder.transcription.NewWayProgress
 import me.mupu.sleeptalkrecorder.ui.tags.TagFilter
 import java.time.Duration
 
@@ -56,10 +59,41 @@ data class SleepUiState(
     val previousEvent: SleepEvent? = null,
     /** The listed event the player steps on to; null if there is none. */
     val nextEvent: SleepEvent? = null,
-    /** Whether the sensitivity can be set: the sleep is finished, its events found and its loudness read. */
+    /**
+     * Whether the sensitivity can be set: the sleep is finished, its events found and its loudness
+     * read, and the first way's events are shown, which the sensitivity belongs to.
+     */
     val sensitivityAvailable: Boolean = false,
     /** The events selected together, in order; selection mode while there are any. */
     val selected: List<SleepEvent> = emptyList(),
+    /** Which way's events are shown. */
+    val way: EventWay = EventWay.OLD,
+    /** Whether developer mode is on: events show what the second way knows, and the sleep can be searched again. */
+    val developerMode: Boolean = false,
+    /** Where the second way stands for this sleep while its events are shown; null while the first way's are. */
+    val newWay: NewWayState? = null,
+    /** The system tags the filter offers beyond the kinds, named and hidden, for the way shown. */
+    val extraTags: List<EventTag.System> = emptyList(),
+) {
+    /**
+     * How many events the sleep has that are neither hidden nor background with the way shown, and
+     * how long they last together; null for the first way, whose numbers the sleep itself carries.
+     */
+    val wayTotals: Pair<Int, Duration>? get() = if (way == EventWay.OLD) null else events
+        .filter { !it.hidden && !it.background }
+        .let { shown -> shown.size to shown.fold(Duration.ZERO) { sum, event -> sum + (event.end - event.start) } }
+}
+
+/** Where the second way of finding events stands for a sleep. */
+data class NewWayState(
+    /** Whether it searched the sleep to its end; the events of the parts searched so far are shown before. */
+    val searched: Boolean,
+    /** Whether a sound model it needs is not installed, so it cannot search. */
+    val modelsMissing: Boolean,
+    /** Its search or speech recognition while it works on the sleep; null otherwise. */
+    val progress: NewWayProgress? = null,
+    /** Whether the sleep's audio could not be read to its end, so it was searched only in part. */
+    val partial: Boolean = false,
 )
 
 /** The sensitivity sheet while it is open, for the whole sleep or around one event. */

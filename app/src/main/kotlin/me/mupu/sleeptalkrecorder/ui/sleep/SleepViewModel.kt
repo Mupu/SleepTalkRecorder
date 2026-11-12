@@ -6,6 +6,11 @@ import me.mupu.sleeptalkrecorder.data.AnnotationOrigin
 import me.mupu.sleeptalkrecorder.data.EventKindEntity
 import me.mupu.sleeptalkrecorder.data.EventKinds
 import me.mupu.sleeptalkrecorder.data.EventTag
+import me.mupu.sleeptalkrecorder.data.EventWay
+import me.mupu.sleeptalkrecorder.data.WaysFound
+import me.mupu.sleeptalkrecorder.data.compareWays
+import me.mupu.sleeptalkrecorder.data.withNewWayResults
+import me.mupu.sleeptalkrecorder.data.withSharedMarks
 import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.SleepEventOf
 import me.mupu.sleeptalkrecorder.data.SleepRepository
@@ -13,6 +18,7 @@ import me.mupu.sleeptalkrecorder.data.SleepSummary
 import me.mupu.sleeptalkrecorder.data.TranscriptResult
 import me.mupu.sleeptalkrecorder.detection.Detection
 import me.mupu.sleeptalkrecorder.detection.EventDetector
+import me.mupu.sleeptalkrecorder.detection.FoundBy
 import me.mupu.sleeptalkrecorder.detection.SleepTrack
 import me.mupu.sleeptalkrecorder.playback.CutPlan
 import me.mupu.sleeptalkrecorder.playback.PlaybackKind
@@ -47,6 +53,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
@@ -113,14 +122,46 @@ class SleepViewModel(
         }
     }
 
+    /** Which way's events are shown, the same for every sleep. */
+    private val way = settings.flow(Settings.eventWay).stateIn(viewModelScope, SharingStarted.Eagerly, Settings.eventWay.default)
+
+    private val developerMode = settings.flow(Settings.developerMode).stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** The first way's events of the sleep as stored, with the second way's results over them added after their own. */
+    private val oldEvents = combine(repository.events(sleepId), repository.candidates(sleepId), ::withNewWayResults)
+
+    /** The events of the way shown: the first way's, the second's, or both compared. */
+    private val wayEvents: Flow<List<SleepEvent>> = way.flatMapLatest { shown ->
+        when (shown) {
+            EventWay.OLD -> oldEvents
+            // Edits of an event that overlaps several of the first way's would reach their marks.
+            EventWay.NEW -> combine(repository.candidates(sleepId), oldEvents, ::withSharedMarks)
+            EventWay.COMPARISON -> combine(oldEvents, repository.candidates(sleepId)) { old, new -> withSharedMarks(compareWays(old, new), old) }
+        }
+    }
+
     /**
      * The sleep, its events and the stretches without the microphone. Every stored annotation
      * reads them anew (speech recognition stores a few a second), so they are combined off the
      * main thread and published only when they changed.
      */
-    private val sleepAndEvents = combine(repository.sleep(sleepId), repository.events(sleepId), unavailable) { sleep, events, unavailable ->
+    private val sleepAndEvents = combine(repository.sleep(sleepId), wayEvents, unavailable) { sleep, events, unavailable ->
         Triple(sleep, if (sleep?.eventsFound == true) events else emptyList(), unavailable)
     }.distinctUntilChanged().flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, Triple<SleepSummary?, List<SleepEvent>, List<Stretch>>(null, emptyList(), emptyList()))
+
+    /** Where the second way stands for the sleep while its events are shown; null while the first way's are. */
+    private val newWay = combine(
+        way,
+        repository.searchMark(sleepId),
+        transcriptions.soundModelsReady,
+        transcriptions.newWayProgress(sleepId),
+    ) { shown, mark, ready, progress ->
+        if (shown == EventWay.OLD) {
+            null
+        } else {
+            NewWayState(searched = mark?.done == true, modelsMissing = !ready, progress = progress, partial = mark?.partial == true)
+        }
+    }.distinctUntilChanged()
 
     /**
      * The events the list shows, each with the settings' lead-in and tail as far as they reach
@@ -152,7 +193,12 @@ class SleepViewModel(
         if (openEventId != null) {
             viewModelScope.launch {
                 timeline.first { it != null }
-                val event = sleepAndEvents.first { (_, events, _) -> events.any { it.id == openEventId } }.second.first { it.id == openEventId }
+                // Tagged events are the first way's; with another way shown, its event over the same
+                // stretch opens, or the tagged one itself when that way has none there.
+                val tagged = oldEvents.first { events -> events.any { it.id == openEventId } }.first { it.id == openEventId }
+                fun match(events: List<SleepEvent>) =
+                    events.firstOrNull { it.id == openEventId } ?: events.firstOrNull { it.start < tagged.end && it.end > tagged.start }
+                val event = withTimeoutOrNull(OPEN_WAIT_MILLIS) { sleepAndEvents.mapNotNull { (_, events, _) -> match(events) }.first() } ?: tagged
                 // A hidden event is listed, and so played, only while hidden events are chosen.
                 if (event.hidden) filter.value = TagFilter(setOf(EventTag.System.Hidden))
                 when (openAction) {
@@ -232,11 +278,12 @@ class SleepViewModel(
 
     val state: StateFlow<SleepUiState> = combine(
         combine(sleepAndEvents, selection, ::Pair),
-        combine(timeline, loudness, ::Pair),
+        combine(timeline, loudness, combine(way, developerMode, newWay, ::Triple), ::Triple),
         combine(playback, current, neighbours, ::Triple),
         combine(eventPlayed, cut, cutPlan, ::Triple),
         listed,
-    ) { (sleepAndEvents, selection), (timeline, loudness), (playback, current, neighbours), (played, cut, plan), listed ->
+    ) { (sleepAndEvents, selection), (timeline, loudness, shown), (playback, current, neighbours), (played, cut, plan), listed ->
+        val (way, developerMode, newWay) = shown
         val (sleep, events, unavailable) = sleepAndEvents
         val player = timeline?.let {
             PlayerUiState(
@@ -255,7 +302,7 @@ class SleepViewModel(
             player = player,
             loudness = loudness,
             events = events,
-            timelineEvents = events.filterNot { it.hidden },
+            timelineEvents = events.filterNot { it.hidden || it.background },
             filter = listed.filter,
             listedEvents = listed.events,
             unavailable = unavailable,
@@ -263,8 +310,12 @@ class SleepViewModel(
             currentEvent = current,
             previousEvent = neighbours.previous,
             nextEvent = neighbours.next,
-            sensitivityAvailable = loudness != null && sleep?.eventsFound == true && !sleep.isRunning,
+            sensitivityAvailable = loudness != null && sleep?.eventsFound == true && !sleep.isRunning && way == EventWay.OLD,
             selected = selection.of(events),
+            way = way,
+            developerMode = developerMode,
+            newWay = newWay,
+            extraTags = extraTags(way, developerMode),
         )
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SleepUiState())
 
@@ -441,7 +492,7 @@ class SleepViewModel(
 
     /** Hides the selected events, which a snackbar undoes, and ends selection mode. */
     fun hideSelected() {
-        val events = selectedEvents().filterNot { it.hidden }
+        val events = selectedEvents().filterNot { it.hidden || it.sharesMarks }
         clearSelection()
         if (events.isNotEmpty()) hide(events)
     }
@@ -491,6 +542,18 @@ class SleepViewModel(
     /** Makes the event of [change] what it was before the user marked it. */
     fun undoSpeechMark(change: SpeechMarked) {
         viewModelScope.launch { repository.restoreUserTranscripts(sleepId, change.event, change.previous) }
+    }
+
+    /** Shows the events of [shown] for every sleep; the filter starts empty again, since its tags belong to a way. */
+    fun showWay(shown: EventWay) {
+        filter.value = TagFilter()
+        clearSelection()
+        viewModelScope.launch { settings.set(Settings.eventWay, shown) }
+    }
+
+    /** Lets the second way search the sleep again with the current settings, then recognises its new events. */
+    fun searchAgain() {
+        viewModelScope.launch { transcriptions.searchAgain(sleepId) }
     }
 
     /** Recognises speech in every event of the sleep again, now, whatever the settings say. */
@@ -617,6 +680,9 @@ class SleepViewModel(
 
         /** The columns the sensitivity chart is computed in, about one per two pixels of a phone. */
         const val CHART_COLUMNS = 400
+
+        /** How long an event opened from the library waits for the events of the way shown, in milliseconds. */
+        const val OPEN_WAIT_MILLIS = 3_000L
     }
 
     /** The open sensitivity sheet: what it was opened for and the setting the user made so far. */
@@ -649,6 +715,18 @@ private data class PlaybackControls(
     val failed: Boolean,
     val playsStretch: Boolean,
 )
+
+/**
+ * The system tags the filter offers beyond the kinds, named and hidden, for the events of [way]:
+ * how the second way sorted them, which way found them in a comparison, and in [developerMode]
+ * what in the second way found them.
+ */
+internal fun extraTags(way: EventWay, developerMode: Boolean): List<EventTag.System> {
+    if (way == EventWay.OLD) return emptyList()
+    val ways = if (way == EventWay.COMPARISON) WaysFound.entries.map { EventTag.System.Ways(it) } else emptyList()
+    val found = if (developerMode) FoundBy.entries.map { EventTag.System.Found(it) } else emptyList()
+    return ways + listOf(EventTag.System.Background, EventTag.System.Unsure) + found
+}
 
 /** The events the list shows, and the stretch around each that cut playback plays, in the same order. */
 private data class ListedEvents(val filter: TagFilter, val events: List<SleepEvent>, val played: List<Stretch>)
