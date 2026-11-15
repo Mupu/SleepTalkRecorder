@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.14.0] - 2026-11-15
+
+### Added
+
+- While a sleep or an event plays, the screen stays on, so listening is no longer cut off by the screen timeout. Once you pause or playback ends, the screen turns off after the phone's normal timeout again; listening in the share window does not keep it on.
+
 ## [0.13.1] - 2026-11-12
 
 ### Fixed

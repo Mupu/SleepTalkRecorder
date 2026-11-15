@@ -65,6 +65,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.keepScreenOn
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
@@ -134,6 +135,7 @@ import kotlinx.coroutines.launch
  * transcript then shows beside the others; with only one model installed that leads to the
  * settings through [onOpenModels].
  * Sharing an event opens [ShareSheet], and the audio file it writes goes to Android's share sheet.
+ * While the sleep or an event plays, the screen stays on.
  */
 @Composable
 fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -> Unit, onOpenModels: () -> Unit) {
@@ -203,9 +205,14 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
     val searchAgainStarted = stringResource(R.string.search_again_started)
     val scope = rememberCoroutineScope()
 
+    // Listening to a long sleep outlasts the screen timeout. Only playback keeps the screen on, not
+    // the short stretch the share step plays, so after a pause the normal timeout applies again.
+    val keepScreenOn = state.player?.playing == true && share == null
+
     val sleep = state.sleep
     val title = sleep?.let { sleepTitle(resources, it.date) }.orEmpty()
     Scaffold(
+        modifier = if (keepScreenOn) Modifier.keepScreenOn() else Modifier,
         topBar = {
             if (state.selected.isNotEmpty()) {
                 EventSelectionBar(

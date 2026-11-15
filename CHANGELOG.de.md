@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.14.0] - 2026-11-15
+
+### Hinzugefügt
+
+- Während ein Schlaf oder ein Ereignis abgespielt wird, bleibt der Bildschirm an, sodass das Zuhören nicht mehr abbricht, weil der Bildschirm von selbst ausgeht. Sobald du pausierst oder die Wiedergabe endet, geht der Bildschirm wieder nach der normalen Zeit des Handys aus; das Anhören im Teilen-Fenster lässt ihn nicht an.
+
 ## [0.13.1] - 2026-11-12
 
 ### Behoben
