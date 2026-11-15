@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.14.1] - 2026-11-16
+
+### Fixed
+
+- With auto zoom on, the timeline now moves once when playback reaches the next event, straight to that event, instead of first jumping along with the playhead and then to the event.
+
 ## [0.14.0] - 2026-11-15
 
 ### Added

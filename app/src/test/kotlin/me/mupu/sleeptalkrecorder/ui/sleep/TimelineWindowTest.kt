@@ -84,4 +84,21 @@ class TimelineWindowTest {
         assertEquals(window, window.following(minutes(15)))
         assertEquals(TimelineWindow(minutes(20), minutes(30), hour), window.following(minutes(21)))
     }
+
+    @Test
+    fun `auto zoom frames a new event at once and follows the playhead through one it framed`() {
+        val window = TimelineWindow(minutes(10), minutes(12), hour)
+        val event = minutes(30)..minutes(40)
+
+        assertEquals(window.framing(minutes(30), minutes(40)), window.autoZoomed(minutes(29), event, eventIsNew = true, playing = true, cut = true))
+        assertEquals(window.following(minutes(35)), window.autoZoomed(minutes(35), event, eventIsNew = false, playing = true, cut = true))
+    }
+
+    @Test
+    fun `between events auto zoom follows full playback but waits for the next event in cut playback`() {
+        val window = TimelineWindow(minutes(10), minutes(12), hour)
+
+        assertEquals(window.following(minutes(29)), window.autoZoomed(minutes(29), null, eventIsNew = false, playing = true, cut = false))
+        assertEquals(window, window.autoZoomed(minutes(29), null, eventIsNew = false, playing = true, cut = true))
+    }
 }

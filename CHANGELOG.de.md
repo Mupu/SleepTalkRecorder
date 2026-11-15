@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.14.1] - 2026-11-16
+
+### Behoben
+
+- Mit Auto-Zoom bewegt sich die Zeitleiste jetzt nur einmal, wenn die Wiedergabe das nächste Ereignis erreicht, direkt zu diesem Ereignis, statt erst mit der Abspielposition mitzuspringen und dann zum Ereignis.
+
 ## [0.14.0] - 2026-11-15
 
 ### Hinzugefügt

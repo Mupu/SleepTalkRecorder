@@ -31,6 +31,9 @@ data class PlayerUiState(
     val hasAudio: Boolean get() = duration > Duration.ZERO
 }
 
+/** Where the playhead is and the event current there (see [currentEvent]); null between events. */
+data class Playhead(val position: Duration, val event: SleepEvent?)
+
 /** Everything the sleep screen shows. */
 data class SleepUiState(
     /** The sleep, or null while loading or once it is gone. */

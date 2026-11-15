@@ -59,6 +59,23 @@ data class TimelineWindow(val start: Duration, val end: Duration, val total: Dur
     fun following(position: Duration): TimelineWindow =
         if (position in start..end) this else clamped(position.toMillis() - span.toMillis() / 10, span.toMillis())
 
+    /**
+     * The window auto zoom shows with the playhead at [position] and [event] (its stretch on the
+     * clock, null between events) current: the event's [framing] once it [eventIsNew]ly became
+     * current, else, while [playing], this window [following] the playhead, which keeps a long
+     * event in view that does not fit its framing and moves on between events. Deciding both in
+     * one step moves the window once when playback reaches the next event.
+     *
+     * [cut] playback plays nothing between events but jumps, landing a moment before the next
+     * event's lead-in; there the window waits for that event instead of following the playhead.
+     */
+    fun autoZoomed(position: Duration, event: ClosedRange<Duration>?, eventIsNew: Boolean, playing: Boolean, cut: Boolean): TimelineWindow =
+        when {
+            event != null && eventIsNew -> framing(event.start, event.endInclusive)
+            playing && (event != null || !cut) -> following(position)
+            else -> this
+        }
+
     private fun spanWithin(spanMillis: Long): Long {
         val totalMillis = total.toMillis()
         return spanMillis.coerceIn(minOf(MIN_SPAN.toMillis(), totalMillis), totalMillis)

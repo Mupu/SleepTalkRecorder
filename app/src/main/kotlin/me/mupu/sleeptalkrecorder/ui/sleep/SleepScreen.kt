@@ -54,6 +54,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -151,6 +152,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
     // Read only where it is drawn or shown, so the moving playhead recomposes nothing else.
     val positionState = viewModel.position.collectAsStateWithLifecycle()
     val position = remember(positionState) { { positionState.value } }
+    val playheadState = viewModel.playhead.collectAsStateWithLifecycle()
     val resources = LocalResources.current
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
@@ -271,15 +273,22 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                 var filtering by rememberSaveable { mutableStateOf(false) }
 
                 val current = state.currentEvent
-                LaunchedEffect(autoZoom, current?.id) {
-                    if (autoZoom && current != null) window = window.framing(timeline.clockOf(current.start), timeline.clockOf(current.end))
-                }
-                LaunchedEffect(autoZoom, player.playing, timeline) {
-                    if (autoZoom && player.playing) {
-                        snapshotFlow { positionState.value }.collect { at ->
-                            val followed = window.following(timeline.clockOf(at))
-                            if (followed != window) window = followed
-                        }
+                val playing by rememberUpdatedState(player.playing)
+                val cut by rememberUpdatedState(player.cut)
+                LaunchedEffect(autoZoom, timeline) {
+                    if (!autoZoom) return@LaunchedEffect
+                    // Null at first, so the event at the playhead is framed as soon as auto zoom turns on.
+                    var lastEventId: Long? = null
+                    snapshotFlow { playheadState.value }.collect { (at, event) ->
+                        val zoomed = window.autoZoomed(
+                            position = timeline.clockOf(at),
+                            event = event?.let { timeline.clockOf(it.start)..timeline.clockOf(it.end) },
+                            eventIsNew = event?.id != lastEventId,
+                            playing = playing,
+                            cut = cut,
+                        )
+                        lastEventId = event?.id
+                        if (zoomed != window) window = zoomed
                     }
                 }
 

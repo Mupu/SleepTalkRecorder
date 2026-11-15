@@ -672,8 +672,11 @@ the jump itself happens. It also fades in after every seek, in full playback too
 The sleep screen highlights the event at the playhead in the list and scrolls it into view, also
 when the playhead lands there by a tap or a drag on the timeline; the event counts from the start
 of its lead-in to the end of its tail as cut playback plays them. Auto zoom, on when the screen
-opens, frames that event on the timeline with four times its length (30 s to 2 min) and keeps the
-playhead in view while playing; panning or zooming by hand, also with the overview, switches it
+opens, frames that event on the timeline with four times its length (30 s to 2 min) as it becomes
+current and otherwise keeps the playhead in view while playing. The view model publishes the
+position together with the event at it (`Playhead`), and cut playback, which lands a moment before
+the next event's lead-in, does not follow the playhead between events, so reaching the next event
+moves the timeline once, straight to that event's framing; panning or zooming by hand, also with the overview, switches it
 off, its button on again.
 
 A long press on an event row starts selection mode: while any event is selected, a tap selects

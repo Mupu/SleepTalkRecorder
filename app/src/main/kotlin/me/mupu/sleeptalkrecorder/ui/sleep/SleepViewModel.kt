@@ -266,10 +266,17 @@ class SleepViewModel(
         .map { PlaybackControls(it.playing, it.speed, it.speedOf, it.failed, playsStretch = it.until != null) }
         .distinctUntilChanged()
 
+    /**
+     * The [position] with the event at it, published as one value, so that auto zoom never sees the
+     * playhead in the next event's lead-in while the event before is still current.
+     */
+    val playhead: StateFlow<Playhead> =
+        combine(listed, position) { listed, position -> Playhead(position, currentEvent(listed.events, listed.played, position)) }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), Playhead(Duration.ZERO, null))
+
     /** The event at the playhead, published only when another one is current. */
-    private val current = combine(listed, position) { listed, position -> currentEvent(listed.events, listed.played, position) }
-        .distinctUntilChanged()
-        .flowOn(Dispatchers.Default)
+    private val current = playhead.map { it.event }.distinctUntilChanged()
 
     /** The listed events the player's buttons step to, published only when they change. */
     private val neighbours = combine(listed, position) { listed, position -> neighbourEvents(listed.events, listed.played, position) }
