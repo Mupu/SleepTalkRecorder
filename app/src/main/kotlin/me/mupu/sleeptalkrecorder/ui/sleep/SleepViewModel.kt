@@ -263,7 +263,7 @@ class SleepViewModel(
 
     /** What the player does, without its position, so that a moving position changes none of it. */
     private val playback = player.state
-        .map { PlaybackControls(it.playing, it.speed, it.speedOf, it.failed, playsStretch = it.until != null) }
+        .map { PlaybackControls(it.playing, it.speed, it.kind, it.boost, it.failed, playsStretch = it.until != null) }
         .distinctUntilChanged()
 
     /**
@@ -297,7 +297,8 @@ class SleepViewModel(
                 duration = it.duration,
                 playing = playback.playing,
                 speed = playback.speed,
-                speedOf = playback.speedOf,
+                kind = playback.kind,
+                boost = playback.boost,
                 failed = playback.failed,
                 cut = cut,
                 cutIsEmpty = plan?.stretches?.isEmpty() == true,
@@ -588,6 +589,12 @@ class SleepViewModel(
     fun nextSpeed() = player.nextSpeed()
 
     /**
+     * Switches what plays now, a single event or the sleep, to its next volume boost, after the
+     * strongest back to off; like the speeds, the boosts apply only until the screen closes.
+     */
+    fun nextBoost() = player.nextBoost()
+
+    /**
      * Opens the sensitivity sheet for [event] and [SENSITIVITY_MARGIN] on either side of it, or,
      * with null, for the whole sleep.
      */
@@ -718,7 +725,8 @@ enum class OpenEventAction {
 private data class PlaybackControls(
     val playing: Boolean,
     val speed: Float,
-    val speedOf: PlaybackKind,
+    val kind: PlaybackKind,
+    val boost: Int,
     val failed: Boolean,
     val playsStretch: Boolean,
 )

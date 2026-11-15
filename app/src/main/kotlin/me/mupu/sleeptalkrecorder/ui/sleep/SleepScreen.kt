@@ -319,6 +319,7 @@ fun SleepScreen(viewModel: SleepViewModel, onBack: () -> Unit, onOpenStats: () -
                         canSkipForward = state.nextEvent != null,
                         onSkip = viewModel::skipEvent,
                         onNextSpeed = viewModel::nextSpeed,
+                        onNextBoost = viewModel::nextBoost,
                         onCutChange = viewModel::setCut,
                     )
                 }
@@ -566,6 +567,7 @@ private fun Player(
     canSkipForward: Boolean,
     onSkip: (forward: Boolean) -> Unit,
     onNextSpeed: () -> Unit,
+    onNextBoost: () -> Unit,
     onCutChange: (Boolean) -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
@@ -593,7 +595,9 @@ private fun Player(
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
         PlaybackMode(cut = player.cut, enabled = player.hasAudio, onCutChange = onCutChange, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(8.dp))
-        SpeedChip(player.speed, player.speedOf, enabled = player.hasAudio, onClick = onNextSpeed)
+        SpeedChip(player.speed, player.kind, enabled = player.hasAudio, onClick = onNextSpeed)
+        Spacer(Modifier.width(8.dp))
+        BoostChip(player.boost, player.kind, enabled = player.hasAudio, onClick = onNextBoost)
     }
 
     val problem = when {
@@ -1045,13 +1049,13 @@ private val EventWay.hint: Int
  * event plays on its own, that is the event speed, which the chip says.
  */
 @Composable
-private fun SpeedChip(speed: Float, speedOf: PlaybackKind, enabled: Boolean, onClick: () -> Unit) {
+private fun SpeedChip(speed: Float, kind: PlaybackKind, enabled: Boolean, onClick: () -> Unit) {
     val resources = LocalResources.current
     val number = NumberFormat.getNumberInstance(resources.configuration.locales[0]).apply {
         maximumFractionDigits = 2
     }
-    val hint = stringResource(if (speedOf == PlaybackKind.EVENT) R.string.speed_hint_event else R.string.speed_hint)
-    val label = when (speedOf) {
+    val hint = stringResource(if (kind == PlaybackKind.EVENT) R.string.speed_hint_event else R.string.speed_hint)
+    val label = when (kind) {
         PlaybackKind.SLEEP -> stringResource(R.string.speed_value, number.format(speed))
         PlaybackKind.EVENT -> stringResource(R.string.speed_value_event, number.format(speed))
     }
@@ -1060,6 +1064,24 @@ private fun SpeedChip(speed: Float, speedOf: PlaybackKind, enabled: Boolean, onC
         enabled = enabled,
         label = { Text(label) },
         leadingIcon = { Icon(painterResource(R.drawable.ic_speed), contentDescription = null) },
+        modifier = Modifier.semantics { contentDescription = hint },
+    )
+}
+
+/**
+ * Shows the volume boost of what plays now and switches it to the next one on every tap. Its label
+ * stays short beside the speed button, which already says when the event's own values apply; the
+ * button's description says it too.
+ */
+@Composable
+private fun BoostChip(boost: Int, kind: PlaybackKind, enabled: Boolean, onClick: () -> Unit) {
+    val hint = stringResource(if (kind == PlaybackKind.EVENT) R.string.boost_hint_event else R.string.boost_hint)
+    val label = if (boost == 1) stringResource(R.string.boost_off) else stringResource(R.string.boost_value, boost)
+    AssistChip(
+        onClick = onClick,
+        enabled = enabled,
+        label = { Text(label) },
+        leadingIcon = { Icon(painterResource(R.drawable.ic_volume_up), contentDescription = null) },
         modifier = Modifier.semantics { contentDescription = hint },
     )
 }

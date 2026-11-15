@@ -3,6 +3,12 @@
 Was sich in jeder Version für die Nutzer geändert hat. Die App zeigt diese Datei unter „Neuigkeiten“.
 Format: [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen: [SemVer](https://semver.org/lang/de/).
 
+## [0.15.0] - 2026-11-16
+
+### Hinzugefügt
+
+- Eine Verstärkung der Lautstärke beim Abspielen, damit Flüstern zu hören ist: Die Taste neben dem Tempo schaltet zwischen aus, 2×, 4× und 8× lauter, und laute Stellen wie ein Husten werden kurz leiser gestellt, damit sie nicht knacken. Wie das Tempo behalten der Schlaf und ein einzeln abgespieltes Ereignis jeweils ihre eigene Verstärkung, eine Änderung folgt beim Abspielen nach einem Augenblick, und sie gilt nur, bis du den Schlaf verlässt; geteilte Videos und Audiodateien bleiben, wie sie aufgenommen sind.
+
 ## [0.14.1] - 2026-11-16
 
 ### Behoben

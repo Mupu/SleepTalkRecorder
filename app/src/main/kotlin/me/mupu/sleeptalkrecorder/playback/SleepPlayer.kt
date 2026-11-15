@@ -24,7 +24,9 @@ import androidx.media3.extractor.wav.WavExtractor
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.time.Duration
+import kotlin.math.abs
 import kotlin.math.roundToLong
+import kotlin.math.sign
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -42,8 +44,10 @@ data class PlaybackState(
     val position: Duration = Duration.ZERO,
     /** Playing speed; 1 is the recorded speed, and the pitch stays the same at every speed. */
     val speed: Float = 1f,
-    /** Whose speed [speed] is: a stretch played on its own has a speed of its own. */
-    val speedOf: PlaybackKind = PlaybackKind.SLEEP,
+    /** Whose speed [speed] and [boost] are: a stretch played on its own has its own of both. */
+    val kind: PlaybackKind = PlaybackKind.SLEEP,
+    /** The volume boost, a gain from [PlaybackBoosts.STEPS]; 1 is off. */
+    val boost: Int = 1,
     /** Whether the last attempt to play failed, for example on a damaged file. */
     val failed: Boolean = false,
     /** Where playback pauses on its own while a stretch is played with [SleepPlayer.playRange]. */
@@ -60,8 +64,8 @@ data class PlaybackState(
  * jump only decides how long the silence between two stretches lasts. The processor also fades in
  * after every seek, in full playback too, so playback never starts with a click.
  *
- * A stretch played on its own ([playRange]) plays at the event speed, everything else at the
- * sleep speed ([PlaybackSpeeds]).
+ * A stretch played on its own ([playRange]) plays at the event speed and with the event boost,
+ * everything else at the sleep speed and with the sleep boost ([PlaybackSpeeds], [PlaybackBoosts]).
  *
  * The player lives on the main thread; call [release] when it is no longer needed.
  */
@@ -88,6 +92,7 @@ class SleepPlayer(
     private var sampleRate = 0
     private var plan: CutPlan? = null
     private var speeds = PlaybackSpeeds()
+    private var boosts = PlaybackBoosts()
 
     private val mutableState = MutableStateFlow(PlaybackState())
 
@@ -187,23 +192,35 @@ class SleepPlayer(
      */
     fun nextSpeed() {
         speeds = speeds.next(playingKind())
-        applySpeed()
+        applyKind()
         publish()
     }
 
-    /** Whose speed applies now: that of a stretch played on its own while one plays, else the sleep's. */
-    private fun playingKind(): PlaybackKind = if (mutableState.value.until != null) PlaybackKind.EVENT else PlaybackKind.SLEEP
-
-    /** Sets where playback pauses on its own, or with null that it plays on, and the speed that goes with it. */
-    private fun setUntil(until: Duration?) {
-        mutableState.value = mutableState.value.copy(until = until)
-        applySpeed()
+    /**
+     * Switches the volume boost of what plays now, a stretch on its own or the sleep, to the next
+     * one, after the strongest back to off; the other keeps its boost. Playback goes on.
+     */
+    fun nextBoost() {
+        boosts = boosts.next(playingKind())
+        applyKind()
+        publish()
     }
 
-    /** Plays at the speed of what plays now, with the recorded pitch. */
-    private fun applySpeed() {
-        val speed = speeds.of(playingKind())
+    /** Whose speed and boost apply now: those of a stretch played on its own while one plays, else the sleep's. */
+    private fun playingKind(): PlaybackKind = if (mutableState.value.until != null) PlaybackKind.EVENT else PlaybackKind.SLEEP
+
+    /** Sets where playback pauses on its own, or with null that it plays on, and the speed and boost that go with it. */
+    private fun setUntil(until: Duration?) {
+        mutableState.value = mutableState.value.copy(until = until)
+        applyKind()
+    }
+
+    /** Plays at the speed, with the recorded pitch, and with the boost of what plays now. */
+    private fun applyKind() {
+        val kind = playingKind()
+        val speed = speeds.of(kind)
         if (player.playbackParameters.speed != speed) player.setPlaybackSpeed(speed)
+        fader.boost = boosts.of(kind).toFloat()
     }
 
     /** Stops playing and frees the player. */
@@ -241,7 +258,8 @@ class SleepPlayer(
             playing = playing,
             position = position,
             speed = speeds.of(kind),
-            speedOf = kind,
+            kind = kind,
+            boost = boosts.of(kind),
         )
     }
 
@@ -354,6 +372,8 @@ private class FaderRenderersFactory(context: Context, private val fader: CutFade
  * Multiplies each 16-bit sample with the gain its position has in cut playback ([envelope]; full
  * playback has none), and fades the sound in wherever the stream continues somewhere else than
  * where it stopped, after a seek or a jump, so that playback never starts in the middle of a wave.
+ * On top it amplifies by the volume [boost], limited so that loud parts do not clip
+ * ([BoostLimiter]).
  *
  * ExoPlayer runs it on its playback thread before the speed is changed, so it sees the samples of
  * the stream at their own rate. After every flush (a seek, a change of speed) ExoPlayer tells it
@@ -365,6 +385,23 @@ private class CutFader : BaseAudioProcessor() {
     /** The gains of cut playback; set from the main thread, read on the playback thread. */
     @Volatile
     var envelope: CutEnvelope? = null
+
+    /**
+     * The volume boost, 1 for none; set from the main thread, read on the playback thread. A
+     * change glides in by [BOOST_GLIDE] per fade instead of stepping the gain in the middle of a
+     * wave, and reaches the ear only after the audio ExoPlayer has already processed.
+     */
+    @Volatile
+    var boost = 1f
+
+    /** The boost the last sample was amplified with, on its way to [boost]. */
+    private var appliedBoost = 1f
+
+    /** Limits boosted samples; made for the sample rate of the stream. */
+    private var limiter = BoostLimiter(1)
+
+    /** The samples of one frame, one per channel, while they pass the [limiter]. */
+    private var samples = ShortArray(0)
 
     /** The position in the stream of the next sample to arrive. */
     private var frame = 0L
@@ -378,13 +415,21 @@ private class CutFader : BaseAudioProcessor() {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
         fadeFrames = CutPlan.fadeFrames(inputAudioFormat.sampleRate)
+        limiter = BoostLimiter(inputAudioFormat.sampleRate)
+        samples = ShortArray(inputAudioFormat.channelCount)
         return inputAudioFormat
     }
 
     override fun onFlush(streamMetadata: AudioProcessor.StreamMetadata) {
         val continuesAt = (streamMetadata.positionOffsetUs * inputAudioFormat.sampleRate / MICROS_PER_SECOND.toDouble()).roundToLong()
-        // A flush for a change of speed continues where the stream was and needs no fade.
-        if (continuesAt != frame) onset = continuesAt
+        // A flush for a change of speed continues where the stream was and needs no fade, and the
+        // limiter keeps following it. Elsewhere, as after a jump to an event played on its own,
+        // the boost of what plays now applies from the first sample and the limiter starts afresh.
+        if (continuesAt != frame) {
+            onset = continuesAt
+            appliedBoost = boost
+            limiter.reset()
+        }
         frame = continuesAt
     }
 
@@ -394,14 +439,16 @@ private class CutFader : BaseAudioProcessor() {
         val output = replaceOutputBuffer(inputBuffer.remaining()).order(ByteOrder.nativeOrder())
         val input = inputBuffer.order(ByteOrder.nativeOrder())
         val envelope = envelope
+        val boost = boost
+        val glide = BOOST_GLIDE / fadeFrames
         for (i in 0 until frames) {
             val at = frame + i
             val fadeIn = if (at - onset >= fadeFrames) 1f else (at - onset).toFloat() / fadeFrames
-            val gain = fadeIn * (envelope?.gainAt(at) ?: 1f)
-            repeat(channels) {
-                val sample = input.getShort()
-                output.putShort(if (gain == 1f) sample else (sample * gain).toInt().toShort())
-            }
+            appliedBoost = if (abs(boost - appliedBoost) <= glide) boost else appliedBoost + glide * sign(boost - appliedBoost)
+            val gain = fadeIn * (envelope?.gainAt(at) ?: 1f) * appliedBoost
+            for (channel in 0 until channels) samples[channel] = input.getShort()
+            limiter.process(samples, gain, appliedBoost)
+            for (sample in samples) output.putShort(sample)
         }
         frame += frames
         output.flip()
@@ -410,5 +457,8 @@ private class CutFader : BaseAudioProcessor() {
     private companion object {
         const val BYTES_PER_SAMPLE = 2
         const val MICROS_PER_SECOND = 1_000_000L
+
+        /** How far the boost moves during one fade ([CutPlan.fadeFrames]): from off to 8× in seven fades. */
+        const val BOOST_GLIDE = 1f
     }
 }

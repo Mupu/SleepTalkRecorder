@@ -116,3 +116,7 @@ Playing a sleep from start to end without skipping.
 **Lead-in**:
 The few seconds played before an event in cut playback, so the listener notices the jump.
 _Avoid_: Pre-roll, padding (in the UI)
+
+**Volume boost**:
+Playing louder by 2×, 4× or 8× so whispers can be heard, with a limiter that keeps loud parts from clipping; the sleep and single events each have their own, and shares are never boosted.
+_Avoid_: Gain, amplification (in the UI)

@@ -73,6 +73,11 @@
     <!-- The speed of single events, kept apart from that of the sleep, for example "1.25× event". -->
     <string name="speed_value_event">%1$s× event</string>
     <string name="speed_hint_event">Speed of single events (until you leave this sleep)</string>
+    <!-- Volume boost, a gain such as "4×"; loud parts are limited so they do not clip. -->
+    <string name="boost_value">%1$d×</string>
+    <string name="boost_off">Off</string>
+    <string name="boost_hint">Volume boost (until you leave this sleep)</string>
+    <string name="boost_hint_event">Volume boost of single events (until you leave this sleep)</string>
     <string name="sleep_no_audio">This sleep holds no audio that can be played.</string>
     <string name="playback_failed">Part of this sleep cannot be played. Its files may be damaged.</string>
     <string name="zoom_in">Zoom in</string>

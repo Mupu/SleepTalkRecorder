@@ -5,6 +5,7 @@ import me.mupu.sleeptalkrecorder.data.EventTag
 import me.mupu.sleeptalkrecorder.data.EventWay
 import me.mupu.sleeptalkrecorder.data.SleepEvent
 import me.mupu.sleeptalkrecorder.data.SleepSummary
+import me.mupu.sleeptalkrecorder.playback.PlaybackBoosts
 import me.mupu.sleeptalkrecorder.playback.PlaybackKind
 import me.mupu.sleeptalkrecorder.playback.SleepTimeline
 import me.mupu.sleeptalkrecorder.playback.Stretch
@@ -17,10 +18,12 @@ data class PlayerUiState(
     /** How long the whole sleep plays; zero if it has no playable audio. */
     val duration: Duration,
     val playing: Boolean,
-    /** The speed of what plays now; see [speedOf]. */
+    /** The speed of what plays now; see [kind]. */
     val speed: Float,
-    /** Whether [speed] is that of the sleep or that of single events, which are kept apart. */
-    val speedOf: PlaybackKind,
+    /** Whether [speed] and [boost] are those of the sleep or those of single events, which are kept apart. */
+    val kind: PlaybackKind,
+    /** The volume boost of what plays now, a gain from [PlaybackBoosts.STEPS]; 1 is off. */
+    val boost: Int,
     val failed: Boolean,
     /** Whether only the listed events are played (cut playback) rather than the whole sleep. */
     val cut: Boolean,

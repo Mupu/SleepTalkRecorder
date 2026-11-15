@@ -639,7 +639,14 @@ sizes, so a sleep of any length fits) followed by the samples of every chunk fil
 plays, served to a Media3 ExoPlayer by a data source of its own. All recordings share the
 microphone's PCM format, so the stream is one audio track without gaps, and a position in it is
 the position in the sleep down to the sample. Speed changes keep the pitch. The sleep and a stretch played on its
-own (`PlaybackSpeeds`) each have their own speed, which lasts as long as the player. The player belongs to
+own (`PlaybackSpeeds`) each have their own speed, which lasts as long as the player. They also each
+have their own volume boost (`PlaybackBoosts`: off, 2×, 4× or 8×), for whispers, which lasts as
+long; shared files are never boosted. `CutFader` (below) applies it with a `BoostLimiter`: a peak
+follower on the boosted signal (attack about 1 ms, release 150 ms, shared by all channels) turns
+the gain down as far as the peak lies above -1 dBFS, so a loud sound keeps its shape instead of
+being clipped; only the first milliseconds of a sudden one are clamped at full scale. While playing,
+a new boost glides in within about 100 ms once the audio already buffered has played; after a jump
+or seek it applies from the first sample. The player belongs to
 the sleep screen's `ViewModel` and pauses when the screen is no longer visible, because there is
 no notification to control it.
 

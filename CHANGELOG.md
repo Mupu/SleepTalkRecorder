@@ -3,6 +3,12 @@
 What changed for users in each release. The app shows this file under "What's new".
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.15.0] - 2026-11-16
+
+### Added
+
+- A volume boost for playback, so whispers can be heard: the button beside the speed switches between off, 2×, 4× and 8× louder, and loud parts such as a cough are turned down for a moment so they do not crackle. Like the speed, the sleep and a single event played on its own each keep their own boost, a change follows within a moment while playing, and it applies only until you leave the sleep; shared videos and audio files stay as recorded.
+
 ## [0.14.1] - 2026-11-16
 
 ### Fixed

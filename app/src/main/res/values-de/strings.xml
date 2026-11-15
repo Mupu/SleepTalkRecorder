@@ -63,6 +63,10 @@
     <string name="speed_hint">Tempo (bis du diesen Schlaf verlässt)</string>
     <string name="speed_value_event">%1$s× Ereignis</string>
     <string name="speed_hint_event">Tempo einzelner Ereignisse (bis du diesen Schlaf verlässt)</string>
+    <string name="boost_value">%1$d×</string>
+    <string name="boost_off">Aus</string>
+    <string name="boost_hint">Lautstärke verstärken (bis du diesen Schlaf verlässt)</string>
+    <string name="boost_hint_event">Lautstärke einzelner Ereignisse verstärken (bis du diesen Schlaf verlässt)</string>
     <string name="sleep_no_audio">Dieser Schlaf enthält kein Audio, das sich abspielen lässt.</string>
     <string name="playback_failed">Ein Teil dieses Schlafs lässt sich nicht abspielen. Seine Dateien sind vielleicht beschädigt.</string>
     <string name="zoom_in">Vergrößern</string>
